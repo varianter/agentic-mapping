@@ -8,3 +8,8 @@ node_modules/
 .kanbot/state.json
 .kanbot/logs/
 .kanbot/daemon.pid
+
+# Server storage and SQLite sidecars
+data/
+*.sqlite
+*.sqlite-*

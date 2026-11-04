@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy legacy exporter to GitHub Pages
 
 on:
   push:
@@ -25,7 +25,8 @@ jobs:
       - name: Collect static files
         run: |
           mkdir _site
-          cp -r index.html guide.html client styles.css img _site/
+          cp legacy.html _site/index.html
+          cp -r client styles.css _site/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

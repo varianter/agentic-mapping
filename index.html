@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Capture sheets · Agentic mapping</title>
 <link rel="stylesheet" href="styles.css">
-<script type="module" src="app.js"></script>
+<script type="module" src="client/app.js"></script>
 </head>
 <body>
 <div class="app" id="app" data-sidebar="open">
@@ -130,7 +130,7 @@
     </div>
   </form>
 </dialog>
-<!-- One grid; app.js clones it per dimension and prefixes field names (ind_, team_, org_). -->
+<!-- One grid; client/app.js clones it per dimension and prefixes field names (ind_, team_, org_). -->
 <template id="matrix-template">
   <div class="matrix dim-panel" role="tabpanel">
     <div class="corner"><strong class="dim-name"></strong><span class="hint dim-hint"></span></div>

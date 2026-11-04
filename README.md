@@ -34,3 +34,5 @@ Data is stored per origin, so always use the same address and port. If you switc
 ## Deploy
 
 Pushing to `main` publishes the static files to GitHub Pages via `.github/workflows/pages.yml`. Nothing is built; Bun is only for local serving.
+
+See the [preview branches feasibility report](docs/preview-branches.md) for the proposed deployment design, local reproduction and hosted checks still needed.

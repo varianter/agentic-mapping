@@ -32,13 +32,15 @@ assumed to merge directories into the existing site.
 Use a single trusted publisher, with its workflow and tools taken from `main`.
 Start with maintainer dispatch on `main` and scheduled reconciliation; automatic
 event triggers are a later implementation decision. Maintain an explicit,
-maintainer-controlled allowlist of same-repository PRs and resolve each PR's
-current branch/head SHA. A branch without a PR needs a PR before previewing.
+maintainer-controlled allowlist of `{PR number, approved head SHA}` entries for
+same-repository PRs and resolve each PR's current branch/head SHA. Publish only
+when the current head matches the approved SHA; a new push withdraws that preview
+until its new SHA is approved. A branch without a PR needs a PR before previewing.
 
 | Concern | Proposed behavior |
 | --- | --- |
 | Create | After maintainer approval, assemble an allowlisted PR's static files at `previews/pr-<number>/`; use numeric IDs, never raw branch names as filesystem paths. |
-| Update | Resolve the current head SHA on every reconciliation and replace that preview directory; show its SHA and publication time in an inventory. |
+| Update | After approval of a new head SHA, replace that preview directory on reconciliation; show its SHA and publication time in an inventory. |
 | Remove | Omit a preview when the PR closes/merges, the branch disappears or approval is withdrawn; rebuild the inventory too. A scheduled reconciliation catches missed events. |
 | Discover URLs | Generate `previews/index.html` with links, PR numbers and exact SHAs. Use the publisher's actual Pages base URL plus `previews/pr-<number>/`; expose the index through the deployment summary. PR comments are optional future automation. |
 | Preserve production | Collect the latest `main` static files at the artifact root on every run, then add all approved previews. Keep the normal production entry points at `/agentic-mapping/`. |
@@ -190,3 +192,39 @@ hosted deployment correctness or browser coverage beyond this Chromium version.
 No GitHub access or live deployment was performed for this report. Local serving
 cannot establish Pages settings, permissions, artifact replacement, caching,
 environment approvals or deployment concurrency semantics.
+
+### Recommendation and prerequisites
+
+Have a maintainer approve or reject the trusted-preview design and its shared
+storage constraint before commissioning automation. Proceed only if disposable
+profiles are practical for reviewers; if untrusted previews or normal production
+browser profiles are required, reject this subdirectory design and investigate
+separate origins in a new issue.
+
+Before implementation, confirm the actual Pages source is **GitHub Actions**,
+the effective base URL/custom domain, environment rules and who may approve
+preview SHAs. Define the approval inventory's trusted storage and access rules.
+Plan one replacement publisher for both production and previews; keeping the
+current production-only publisher would let the next `main` push erase previews.
+Confirm current artifact/site limits can accommodate the approved preview count.
+
+### Human-run hosted checklist (all unverified)
+
+Use a scratch Pages project with the same project-path layout, synthetic files
+and a disposable browser profile. Implementing a test publisher and changing
+repository settings require a separately approved follow-up; this PR supplies
+only the report. Record URLs, source SHAs, workflow runs and observations for:
+
+- [ ] Settings: Actions is the Pages source; `github-pages` accepts only the intended trusted publisher/ref and approvals; `page_url` matches the expected base URL and scheme.
+- [ ] First publish: one artifact contains production plus two approved previews; repeat all local page, navigation, module, CSS, logo and storage checks using the actual hosted base URL.
+- [ ] Routing: directory URLs with/without trailing slash resolve correctly; direct `index.html`/`guide.html`, fragment links, missing paths and `.nojekyll` handling behave as expected.
+- [ ] Discovery: the preview index and deployment summary link to both previews and identify their exact deployed SHAs; production remains at its existing URL.
+- [ ] Updates: push a new preview revision; it is withheld until SHA approval, then its content/inventory update while production and the other preview match the intended snapshots. Check cache refresh and stale tabs explicitly.
+- [ ] Production changes: publish a new `main` revision while previews exist; production updates and both approved preview snapshots survive.
+- [ ] Removal: close/merge a PR, delete its branch or withdraw approval; reconciliation removes only that preview and its inventory entry. Check that scheduled reconciliation repairs a missed event and the removed URL no longer serves its content after cache expiry.
+- [ ] Concurrent events: request two preview updates, a removal and a `main` publish close together; the last successful site matches current approved state, with no older run restoring removed/stale content. Record any pending-run coalescing and deployment serialization behavior.
+- [ ] Failure/retry: fail assembly and then a test deployment; establish whether the last good combined site remains available, how partial/failed deployments are reported, and whether a fresh full reconciliation recovers it. Test rollback by assembling approved source SHAs again.
+- [ ] Permissions: an unauthorized branch/ref, unapproved SHA and fork PR cannot publish, gain the publishing token or execute candidate code in a privileged job; symlink/path-escape inputs are rejected. Confirm environment protections actually enforce this policy.
+
+Until these checks pass, the verdict is **locally compatible, hosted feasibility
+conditional**. No workflow or application change is part of this spike.

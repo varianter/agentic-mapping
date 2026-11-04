@@ -40,3 +40,7 @@ node --check client/app.js && node --check client/db.js
 ## Deploy
 
 Pushing to `main` publishes the static files to GitHub Pages via `.github/workflows/pages.yml`. Nothing is built; Bun is only for local serving.
+
+## Storage design
+
+The [storage and access decision](docs/storage-decision.md) compares Bun/Hono with SQLite against Workers with D1, and proposes permissions, data migration and follow-up implementation slices. It is a documentation spike; sheets still save only in this browser.

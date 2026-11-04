@@ -339,6 +339,13 @@ export function initEditor(storage, { localMode }) {
     await renderList();
   }
 
+  async function retryStorage() {
+    if (!current) return openFromHash();
+    if (dirty) return save();
+    await renderList();
+    setStatus(savedMessage);
+  }
+
   // ---------- PDF ----------
 
   async function downloadPdf() {
@@ -395,7 +402,7 @@ export function initEditor(storage, { localMode }) {
 
   document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]')?.dataset.action;
-    const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: () => current ? (dirty ? save() : renderList()) : openFromHash(), reload: reloadSaved, 'issue-access': generatePrivateLink, 'revoke-access': revokePrivateLink, export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
+    const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: retryStorage, reload: reloadSaved, 'issue-access': generatePrivateLink, 'revoke-access': revokePrivateLink, export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
     if (handlers[action]) runAction(action, handlers[action]);
   });
 

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interviewer guide · Agentic mapping</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .guide { max-width: 1240px; margin: 0 auto; padding: 72px 80px; display: flex; flex-direction: column; gap: 52px; }
+  .guide h1 { margin: 0; font-size: 56px; line-height: 1.05; letter-spacing: -0.015em; font-weight: 600; }
+  .guide h2 { margin: 0; font-size: 36px; line-height: 1.15; font-weight: 600; }
+  .guide section, .guide header { display: flex; flex-direction: column; gap: 20px; }
+  .lead { margin: 0; font-size: 24px; line-height: 1.4; max-width: 980px; }
+  .sub { margin: 0; font-size: 18px; line-height: 1.45; color: var(--grey-600); }
+  .back { font-size: 16px; }
+
+  .model { display: grid; grid-template-columns: 220px repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .level { background: var(--white); border-radius: var(--radius-lg); padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }
+  .level strong { font-size: 22px; }
+  .level span { color: var(--grey-600); }
+  .q { display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+  .q strong { font-size: 20px; }
+  .q span { font-size: 15px; color: var(--grey-600); }
+  .slot { border: 2px dashed var(--grey-300); border-radius: var(--radius-md); min-height: 64px; }
+
+  .dims-intro { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+  .dims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .dim { background: var(--white); border-radius: var(--radius-lg); padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+  .dim-label { background: var(--ink); color: var(--white); border-radius: var(--radius-pill); padding: 6px 16px; font-size: 16px; font-weight: 600; }
+  .dim p { margin: 0; font-size: 16px; line-height: 1.4; color: var(--grey-600); }
+
+  .callout { background: var(--ink); color: var(--white); border-radius: var(--radius-lg); padding: 24px 28px; display: flex; gap: 28px; align-items: center; }
+  .callout strong { font-size: 22px; flex: none; }
+  .callout p { margin: 0; font-size: 18px; line-height: 1.45; }
+
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .steps li { background: var(--white); border-radius: var(--radius-lg); padding: 24px 28px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .steps .time { background: var(--yellow); border-radius: var(--radius-pill); padding: 8px 0; text-align: center; font-size: 18px; font-weight: 600; }
+  .steps h3 { margin: 0 0 8px; font-size: 24px; }
+  .steps p { margin: 0; font-size: 18px; line-height: 1.45; }
+
+  .rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .rules div { border: 4px solid var(--ink); border-radius: var(--radius-lg); padding: 28px; display: flex; flex-direction: column; gap: 10px; }
+  .rules strong { font-size: 24px; }
+  .rules p { margin: 0; font-size: 17px; line-height: 1.45; }
+
+  @media (max-width: 900px) {
+    .guide { padding: 32px 16px; gap: 36px; }
+    .guide h1 { font-size: 40px; }
+    .guide h2 { font-size: 28px; }
+    .lead { font-size: 20px; }
+    .model { grid-template-columns: minmax(0, 1fr); }
+    .model > .spacer, .slot { display: none; }
+    .callout { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .steps li { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .steps .time { justify-self: start; padding: 8px 16px; }
+    .rules, .dims { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media print {
+    @page { size: A4 portrait; margin: 12mm; }
+    .back { display: none; }
+    .guide { padding: 0; gap: 28px; zoom: 0.62; }
+  }
+</style>
+</head>
+<body>
+<main class="guide">
+  <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px">
+    <img src="img/variant-logo-dark.svg" alt="Variant" width="126" height="30">
+    <a class="back" href="index.html">← Capture sheets</a>
+  </div>
+
+  <header>
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+      <span class="pill">Round 1 of 2</span>
+      <span class="lbl" style="font-size: 14px">Fag · Agentic product development</span>
+    </div>
+    <h1>What did you need to learn? A 15-minute mapping</h1>
+    <p class="lead">We don’t bring a list of tools or methods. We want to hear what you had to learn to work well with agents, what you’re still missing, and what took you by surprise. Put together, the answers become a learning path for developers, designers and product people, and a map of the unknown unknowns.</p>
+  </header>
+
+  <section>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h2>The model: three levels, three questions, three dimensions</h2>
+      <p class="sub">The same three questions at each level, asked for the individual, the team and the organization. What goes in the boxes comes from them.</p>
+    </div>
+    <div class="model">
+      <div class="spacer"></div>
+      <div class="level"><strong>Getting started</strong><span>The first weeks of working with agents</span></div>
+      <div class="level"><strong>Getting good</strong><span>Working this way every day, at the quality clients expect</span></div>
+      <div class="level"><strong>Next level</strong><span>What they are reaching for now</span></div>
+
+      <div class="q"><strong>What to learn</strong></div>
+      <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+
+      <div class="q"><strong>Why it matters</strong><span>What goes wrong without it</span></div>
+      <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+
+      <div class="q"><strong>How you found out</strong><span>Where the unknown showed up</span></div>
+      <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    </div>
+    <div class="dims-intro">
+      <p class="sub">Working with agents changes things on three axes, and what you need to learn differs on each. Fill in the grid once per dimension.</p>
+      <div class="dims">
+        <div class="dim"><span class="dim-label">Individual</span><p>How they work on their own: their habits, judgement and craft with agents.</p></div>
+        <div class="dim"><span class="dim-label">Team</span><p>How the team works together: reviews, handovers, shared rules and roles.</p></div>
+        <div class="dim"><span class="dim-label">Organization</span><p>What the organization enables or gets in the way of: access, policy, clients, how work is bought and measured.</p></div>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>Unknown unknowns</strong>
+      <p>The third row and the last block are where these show up: things nobody told them they needed, found by hitting a wall, a bug, a confused client or a colleague who worked differently.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Run of show</h2>
+    <ol class="steps">
+      <li><span class="time">0–2 min</span><div><h3>Context</h3><p>“What is your role, and what are you working on right now?”<br>“What does really good look like to you, when someone works with agents in your discipline?”</p></div></li>
+      <li><span class="time">2–8 min</span><div><h3>Looking back</h3><p>“What did you have to learn to get where you are? What came first?”<br>For each thing: “What goes wrong if you skip it? How did you find out you needed it?”<br>Then widen it: “What did your team have to learn? And the organization around you?”</p></div></li>
+      <li><span class="time">8–12 min</span><div><h3>Looking ahead</h3><p>“What would the next level look like for you?”<br>“What do you think you need to learn to get there? What would the team, or the organization, need to change?”<br>“What do you suspect you’re still missing?”</p></div></li>
+      <li><span class="time">12–15 min</span><div><h3>Surprises and advice</h3><p>“What surprised you most along the way?”<br>“Someone in your discipline starts tomorrow. What should they learn first, and what can wait?”<br>“Who else should I talk to?”</p></div></li>
+    </ol>
+  </section>
+
+  <section class="rules" aria-label="Ground rules">
+    <div><strong>Don’t lead</strong><p>Don’t offer examples or name tools. If they stall, ask about one recent piece of work instead.</p></div>
+    <div><strong>Their words</strong><p>Write down what they say, as they say it. Don’t teach or argue; save disagreements for the group session.</p></div>
+    <div><strong>Sort afterwards</strong><p>Categories come from the answers, not from us. Group the notes across conversations once they’re all in.</p></div>
+  </section>
+</main>
+</body>
+</html>

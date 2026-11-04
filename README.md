@@ -35,6 +35,16 @@ Imports preserve IDs, fields and timestamps and assign ownership to the signed-i
 
 ## Deploy and back up
 
+### GitHub Pages and the storage host
+
+The working app moves to the Bun host's HTTPS address; GitHub Pages keeps only the old-browser export page. Pages does not store shared sheets or forward saves to the Bun host. Export existing notes on Pages, then open the Bun app and use **Import JSON** to upload them to your account.
+
+At the Bun address, the browser sends authenticated `POST` (create/import), `PUT` (autosave) and `DELETE` requests to that same host's `/api/sheets` endpoints. The running Bun process checks ownership and revisions and writes to the SQLite file at `DATABASE_PATH` before acknowledging success. Another device reads those saved sheets from the same API using the same interviewer account; it sees updates when loading or reloading a sheet, without live synchronization.
+
+The [Pages workflow](.github/workflows/pages.yml) updates only the static exporter after a push to `main` or a manual workflow run. It does not deploy the Bun app or update its database. The operator must deploy code updates to the Bun host separately and restart the service with the same durable `DATABASE_PATH`; sheet edits reach storage through the API without a commit, workflow run or redeployment. This PR does not provision a host or configure automatic Bun deployments.
+
+### Bun deployment and backups
+
 Run one Bun instance behind an HTTPS reverse proxy with process supervision, a durable SQLite volume, a private environment file and named interviewer accounts. Preserve the public Host header and set `APP_ORIGIN`. Bind/firewall the Bun port so remote access goes through HTTPS; Basic authentication must never cross a public HTTP connection. Rate-limit authentication attempts at the proxy. Back up before upgrades; there is no automatic host provisioning in this repository.
 
 GitHub Pages cannot run this API and now serves only migration/export. Deploy this checkout on the selected Bun host, run `bun install --frozen-lockfile --production`, configure the environment above and start `bun start`. The server serves only allowlisted public files, never source, credentials, databases or backups. Restart/redeploy with the same `DATABASE_PATH` to retain notes. Do not run independent replicas or place the database on an ephemeral disk.

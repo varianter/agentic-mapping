@@ -34,6 +34,7 @@ You run the technical review of one PR branch. The repo owns how to review; you 
 - Never call `gh`, `git push`, or anything that talks to GitHub. kanbot posts your review.
 - Read-only. Don't edit files, commit or change git state. Bash is for reading, diffing and running checks.
 - Don't review the plan or ask for scope beyond it.
+- Always review text in the diff (README, docs, comments, UI copy, PR body) for clean, minimal and simple writing. Flag restating, process narration, PR history ("this PR…"), duplicated content and detail a reader doesn't need to act.
 
 ## Output
 

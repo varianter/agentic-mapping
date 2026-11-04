@@ -3,3 +3,8 @@ node_modules/
 *.log
 .env
 .env.*
+
+# kanbot
+.kanbot/state.json
+.kanbot/logs/
+.kanbot/daemon.pid

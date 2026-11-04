@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=./config.schema.json
+
+provider: codex
+repo: varianter/agentic-mapping
+baseBranch: main
+identity:
+  mode: app
+  app:
+    id: 5610540
+    slug: kanbot-varianter
+merge:
+  onApproval: true
+review:
+  copilot: true
+codex:
+  networkAccess: true
+project:
+  owner: varianter
+  number: 38

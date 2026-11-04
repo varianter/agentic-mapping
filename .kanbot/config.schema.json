@@ -1,0 +1,341 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"type": "object",
+	"properties": {
+		"provider": {
+			"default": "claude",
+			"description": "Agent CLI that runs workers.",
+			"type": "string",
+			"enum": [
+				"claude",
+				"codex"
+			]
+		},
+		"repo": {
+			"type": "string",
+			"pattern": "^[^/]+\\/[^/]+$",
+			"description": "GitHub repo as owner/name."
+		},
+		"baseBranch": {
+			"default": "main",
+			"description": "Branch agents work from.",
+			"type": "string"
+		},
+		"project": {
+			"default": null,
+			"description": "GitHub Project board. Set by `kanbot board create`.",
+			"anyOf": [
+				{
+					"type": "object",
+					"properties": {
+						"owner": {
+							"type": "string"
+						},
+						"number": {
+							"type": "integer",
+							"minimum": -9007199254740991,
+							"maximum": 9007199254740991
+						}
+					},
+					"required": [
+						"owner",
+						"number"
+					]
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"columns": {
+			"description": "Names of the board's Status options.",
+			"default": {},
+			"type": "object",
+			"properties": {
+				"ideas": {
+					"default": "Ideas",
+					"type": "string"
+				},
+				"planning": {
+					"default": "Planning",
+					"type": "string"
+				},
+				"ready": {
+					"default": "Ready",
+					"type": "string"
+				},
+				"inProgress": {
+					"default": "In Progress",
+					"type": "string"
+				},
+				"review": {
+					"default": "Review",
+					"type": "string"
+				},
+				"done": {
+					"default": "Done",
+					"type": "string"
+				}
+			}
+		},
+		"concurrency": {
+			"default": 3,
+			"description": "Max concurrent agent workers. Each exploratory variant is one worker.",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 9007199254740991
+		},
+		"wip": {
+			"description": "Work-in-progress limits.",
+			"default": {},
+			"type": "object",
+			"properties": {
+				"awaitingHuman": {
+					"default": null,
+					"description": "When this many items wait on you (`kanbot status`), no new Ready card starts. Started work runs on. null: no limit.",
+					"anyOf": [
+						{
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 9007199254740991
+						},
+						{
+							"type": "null"
+						}
+					]
+				}
+			}
+		},
+		"pollSeconds": {
+			"default": 60,
+			"description": "Seconds between board polls.",
+			"type": "integer",
+			"minimum": 10,
+			"maximum": 9007199254740991
+		},
+		"priority": {
+			"default": [
+				"fix",
+				"review",
+				"plan",
+				"implement"
+			],
+			"description": "Order in which waiting jobs get free slots.",
+			"type": "array",
+			"items": {
+				"type": "string",
+				"enum": [
+					"fix",
+					"review",
+					"plan",
+					"implement"
+				]
+			}
+		},
+		"maxAttempts": {
+			"default": 2,
+			"description": "Attempts per job before the issue is labeled needs-human.",
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 9007199254740991
+		},
+		"timeoutMinutes": {
+			"description": "Per-job timeout in minutes.",
+			"default": {},
+			"type": "object",
+			"properties": {
+				"plan": {
+					"default": 20,
+					"type": "number"
+				},
+				"implement": {
+					"default": 90,
+					"type": "number"
+				},
+				"review": {
+					"default": 30,
+					"type": "number"
+				},
+				"fix": {
+					"default": 45,
+					"type": "number"
+				}
+			}
+		},
+		"implementers": {
+			"description": "Deprecated: implement always uses `implementer`. While set, maps a type:<key> label to an agent, with `default` as the fallback. Use capabilities instead.",
+			"type": "object",
+			"propertyNames": {
+				"type": "string"
+			},
+			"additionalProperties": {
+				"type": "string"
+			}
+		},
+		"capabilities": {
+			"description": "Needs mapped to the repo's own skills or agents. Reserved: verify (prove acceptance criteria), review (technical review), preview (something a human can try). Other names are yours.",
+			"type": "object",
+			"propertyNames": {
+				"type": "string",
+				"pattern": "^[a-z][a-z0-9-]*$"
+			},
+			"additionalProperties": {
+				"anyOf": [
+					{
+						"type": "string",
+						"minLength": 1,
+						"description": "Skill or agent name, short for `{ use: <name> }`."
+					},
+					{
+						"type": "object",
+						"properties": {
+							"use": {
+								"type": "string",
+								"minLength": 1,
+								"description": "Skill in .agents/skills or agent in .kanbot/agents that does the work."
+							},
+							"when": {
+								"description": "When it applies, e.g. `Changes to UI users see`.",
+								"type": "string"
+							},
+							"required": {
+								"default": false,
+								"description": "A miss when it applies blocks acceptance review.",
+								"type": "boolean"
+							}
+						},
+						"required": [
+							"use"
+						]
+					}
+				]
+			}
+		},
+		"review": {
+			"default": {},
+			"type": "object",
+			"properties": {
+				"copilot": {
+					"default": false,
+					"description": "Wait for GitHub Copilot's code review and have the fixer address its comments. Needs a paid Copilot plan; each review uses credits.",
+					"type": "boolean"
+				},
+				"copilotOnPush": {
+					"default": false,
+					"description": "Have Copilot review again after every push. One review per push.",
+					"type": "boolean"
+				},
+				"copilotWaitMinutes": {
+					"default": 15,
+					"description": "Minutes to wait for Copilot's review before going on without it.",
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 9007199254740991
+				}
+			}
+		},
+		"identity": {
+			"default": {},
+			"type": "object",
+			"properties": {
+				"mode": {
+					"default": "user",
+					"description": "Who kanbot talks as. `user`: your account. `app`: a kanbot GitHub App, so its comments and PRs show as a bot. Commits are always yours.",
+					"type": "string",
+					"enum": [
+						"user",
+						"app"
+					]
+				},
+				"app": {
+					"default": null,
+					"description": "Set by `kanbot app create`. The private key lives in ~/.kanbot/apps/<id>.pem.",
+					"anyOf": [
+						{
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "integer",
+									"minimum": -9007199254740991,
+									"maximum": 9007199254740991,
+									"description": "GitHub App ID."
+								},
+								"slug": {
+									"type": "string",
+									"description": "App slug, as in github.com/apps/<slug>."
+								}
+							},
+							"required": [
+								"id",
+								"slug"
+							]
+						},
+						{
+							"type": "null"
+						}
+					]
+				}
+			}
+		},
+		"merge": {
+			"default": {},
+			"type": "object",
+			"properties": {
+				"onApproval": {
+					"default": false,
+					"description": "Merge a kanbot PR when a collaborator approves it, checks pass and agent review is done. Merges as you. Needs identity.mode app to approve your own kanbot PRs.",
+					"type": "boolean"
+				},
+				"method": {
+					"default": "squash",
+					"description": "Merge method used for approved PRs.",
+					"type": "string",
+					"enum": [
+						"squash",
+						"merge",
+						"rebase"
+					]
+				}
+			}
+		},
+		"codex": {
+			"default": {},
+			"type": "object",
+			"properties": {
+				"networkAccess": {
+					"default": false,
+					"description": "Let codex workers reach the network (package installs).",
+					"type": "boolean"
+				}
+			}
+		},
+		"notify": {
+			"default": {},
+			"type": "object",
+			"properties": {
+				"desktop": {
+					"default": true,
+					"description": "Show desktop notifications.",
+					"type": "boolean"
+				},
+				"webhook": {
+					"default": null,
+					"description": "POSTs {title, message, url} as JSON, e.g. an ntfy.sh topic URL.",
+					"anyOf": [
+						{
+							"type": "string",
+							"format": "uri"
+						},
+						{
+							"type": "null"
+						}
+					]
+				}
+			}
+		}
+	},
+	"required": [
+		"repo"
+	],
+	"title": "kanbot config"
+}

@@ -23,6 +23,8 @@ Open http://localhost:4321 and enter the configured username/password in the bro
 - `PORT`: defaults to `4321`.
 - `APP_ORIGIN`: public origin, for example `https://mapping.example.com` (no trailing slash); set it behind a reverse proxy so write requests can be checked against the browser’s Origin header.
 
+Keep production account files, passwords, tokens and private keys outside the checkout; never commit them or put them in browser code. Git ignores `.env*`, `data/`, `secrets/`, `interviewers.json` and common key files as a safeguard; arbitrary filenames still require care. Test passwords are synthetic and are never deployment credentials. If a real secret is ever committed, revoke/rotate it immediately; deleting the file does not remove it from Git history.
+
 ## Existing notes and recovery
 
 Export each browser’s existing IndexedDB notes from the **old origin**, then select **Import JSON** on the server. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.

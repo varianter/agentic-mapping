@@ -4,6 +4,14 @@ node_modules/
 .env
 .env.*
 
+# Local credentials and private key material
+secrets/
+interviewers.json
+*.key
+*.pem
+*.p12
+*.pfx
+
 # kanbot
 .kanbot/state.json
 .kanbot/logs/

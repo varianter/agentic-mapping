@@ -98,7 +98,7 @@ test('serves only public assets, never source, credentials or databases', async 
   for (const path of ['/', '/index.html', '/guide.html', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg', '/legacy.html']) {
     expect((await request(app, path)).status).toBe(200);
   }
-  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/package.json', '/data/sheets.sqlite', '/bun.lock', '/.git/config', '/docs/storage-decision.md']) {
+  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/sheets.sqlite', '/bun.lock', '/.git/config', '/docs/storage-decision.md']) {
     expect((await request(app, path)).status).toBe(404);
   }
   expect(() => createApp({ databasePath: ':memory:', users: {} })).toThrow();

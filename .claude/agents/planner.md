@@ -4,7 +4,7 @@ description: Turns a board issue into a small, user-centred, testable plan and
   iterates on it with the human through issue comments.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, Agent
 model: opus
-effort: high
+effort: medium
 skills:
   - project-conventions
   - project-memory

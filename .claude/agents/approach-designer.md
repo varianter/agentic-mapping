@@ -5,7 +5,7 @@ description: Given a problem, the codebase context and a number N, produces N
   Use for issues labelled explore:N.
 tools: Read, Grep, Glob, Skill
 model: opus
-effort: high
+effort: medium
 skills:
   - approach-designer
 ---

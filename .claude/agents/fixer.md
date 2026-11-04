@@ -4,7 +4,7 @@ description: Addresses review findings, human PR review comments, failing CI and
   merge conflicts on a PR branch, commits the fixes, and reports per item.
 tools: Read, Grep, Glob, Edit, Write, NotebookEdit, Bash, Skill, Agent
 model: sonnet
-effort: high
+effort: medium
 skills:
   - project-conventions
   - project-memory

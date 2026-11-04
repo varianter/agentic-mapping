@@ -1,5 +1,5 @@
 {
-	"version": "0.9.0",
+	"version": "0.9.2",
 	"files": {
 		".agents/skills/approach-designer/SKILL.md": "d932ed30a58cb32dd91ec03ddd2b1c6c59f77714",
 		".agents/skills/issue-splitting/SKILL.md": "8d8651621721c530522d83edb9530b622df275df",
@@ -20,14 +20,14 @@
 		".github/pull_request_template.md": "b8060c2599769dd12477081b6ec51733a2a82c7b",
 		".github/workflows/ci.yml": "dce7bcf80cef91c10923829eb5893d2b311b58e5",
 		".github/workflows/kanbot-merged.yml": "8daaea63e23cf1e0d37821bfadaf60018a448de2",
-		".kanbot/agents/acceptance-reviewer.md": "a75b6ea429e07b8fa829255273c3bc2046b39287",
-		".kanbot/agents/approach-designer.md": "29b6706de1a26727554f42b13e30c85d3964d854",
-		".kanbot/agents/explorer.md": "f475f55e968481cffc0ba9b008fb1d46725bd618",
-		".kanbot/agents/fixer.md": "b2501c05aa4d84380b6c38633a81aae0d2c0a62a",
-		".kanbot/agents/implementer.md": "ae332034ff49477d5e65d8c2dbc8b78987a22f9e",
-		".kanbot/agents/plan-critic.md": "9a625f48630fdc522fd81135dbbed019279c1be6",
-		".kanbot/agents/planner.md": "4380ba094ad19147873e887dd01ac46600bd4e92",
-		".kanbot/agents/reviewer.md": "66bdd434d40a8be22a2c6c6f63dffa22f46efe85",
+		".kanbot/agents/acceptance-reviewer.md": "2cae9734be746623e454e5af3c293e608935cd88",
+		".kanbot/agents/approach-designer.md": "67010e1e3ce816aa339f598ba5cf607807fdcae7",
+		".kanbot/agents/explorer.md": "e7644d5fa6b1b723db70a7f0172c2878eccdc3dd",
+		".kanbot/agents/fixer.md": "ed3495ac33fc275b67e37fe742ba324255eca436",
+		".kanbot/agents/implementer.md": "1ffa49da3d8d6658843ce89210c14e395ac62e66",
+		".kanbot/agents/plan-critic.md": "8d91e58a5ca5fed6b8f2911b59358078fa73fd9f",
+		".kanbot/agents/planner.md": "aeb3f850b7fac3bf2f2219991abd97bf75a76d9c",
+		".kanbot/agents/reviewer.md": "a27770636a71cf7c1d3c8cde7fc8560816aac2bd",
 		"AGENTS.md": "f820c2f5a9d3bc299eed35a6012bbc5d19615aef",
 		"CLAUDE.md": "43c994c2d3617f947bcb5adf1933e21dabe46bb5"
 	}

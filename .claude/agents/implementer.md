@@ -4,7 +4,7 @@ description: Implements an approved plan on the current branch. Hands the how to
   the repo's own skills and agents, and owns the result.
 tools: Read, Grep, Glob, Edit, Write, NotebookEdit, Bash, Skill, Agent
 model: sonnet
-effort: high
+effort: medium
 skills:
   - project-conventions
   - project-memory

@@ -5,7 +5,7 @@ description: Second review pass on a PR branch. Checks every acceptance
   Read-only.
 tools: Read, Grep, Glob, Bash, Skill, Agent
 model: opus
-effort: high
+effort: medium
 skills:
   - project-conventions
   - project-memory

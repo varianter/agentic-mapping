@@ -4,7 +4,7 @@ description: First review pass on a PR branch. Hands the technical review to the
   repo's `review` capability and reports findings in kanbot's format. Read-only.
 tools: Read, Grep, Glob, Bash, Skill, Agent
 model: opus
-effort: high
+effort: medium
 skills:
   - project-conventions
   - project-memory

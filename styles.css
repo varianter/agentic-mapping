@@ -174,7 +174,8 @@ a:hover { color: var(--link-hover); }
 .sheet-list .untitled .sheet-name { font-style: italic; font-weight: 400; }
 .sheet-list-empty { padding: 0 8px; color: #C9C9C9; font-size: 14px; }
 
-.sidebar-foot { padding: 0 8px; font-size: 14px; }
+.sidebar-foot { display: grid; gap: 12px; padding: 0 8px; font-size: 14px; }
+.sidebar-foot .btn { color: var(--white); border-color: var(--white); font-size: 14px; }
 .sidebar-foot a { color: var(--white); }
 .sidebar-foot a:hover { color: var(--yellow); }
 

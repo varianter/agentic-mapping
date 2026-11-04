@@ -24,6 +24,11 @@
       <ul class="sheet-list" id="sheet-list"></ul>
       <div class="sidebar-foot">
         <a href="guide.html">Interviewer guide</a>
+        <a href="legacy.html">Export old browser sheets</a>
+        <button type="button" class="btn" data-action="retry" data-needs-sheet>Retry save</button>
+        <button type="button" class="btn" data-action="export" data-needs-sheet>Download JSON</button>
+        <button type="button" class="btn" data-action="reload" data-needs-sheet>Reload saved</button>
+        <label class="btn">Import JSON<input id="import-json" type="file" accept="application/json,.json" class="visually-hidden"></label>
       </div>
     </div>
   </aside>
@@ -47,7 +52,7 @@
 
     <div class="empty" id="empty" hidden>
       <h2>No capture sheets yet</h2>
-      <p>Make one for each conversation. Everything you type is saved in this browser as you go.</p>
+      <p>Make one for each conversation. Everything you type is saved to your interviewer account on the server as you go.</p>
       <button type="button" class="btn" data-variant="primary" data-action="new">New sheet</button>
     </div>
 
@@ -123,7 +128,7 @@
 <dialog id="confirm-delete">
   <form method="dialog">
     <h2>Delete this sheet?</h2>
-    <p id="confirm-delete-text">It will be removed from this browser. This can’t be undone.</p>
+    <p id="confirm-delete-text">It will be removed from the server for all your devices. This can’t be undone.</p>
     <div class="actions">
       <button class="btn" value="cancel" autofocus>Cancel</button>
       <button class="btn" data-variant="danger" value="delete">Delete sheet</button>

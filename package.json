@@ -4,9 +4,16 @@
   "type": "module",
   "scripts": {
     "start": "bun server.ts",
-    "dev": "bun --watch server.ts"
+    "dev": "bun --watch server.ts",
+    "test": "bun test",
+    "check": "node --check client/app.js && node --check client/db.js && node --check client/legacy.js",
+    "backup": "bun scripts/backup.ts",
+    "test:browser": "bun tests/browser.mjs"
   },
   "dependencies": {
     "hono": "^4.13.16"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
   }
 }

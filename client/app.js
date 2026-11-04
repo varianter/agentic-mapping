@@ -1,4 +1,5 @@
-import { allSheets, getSheet, putSheet, deleteSheet } from './db.js';
+import { allSheets, getSheet, createSheet, putSheet, deleteSheet } from './db.js';
+import { downloadJson } from './legacy.js';
 
 const app = document.getElementById('app');
 const form = document.getElementById('sheet');
@@ -12,6 +13,11 @@ const narrow = matchMedia('(max-width: 900px)');
 
 let current = null; // the sheet being edited
 let saveTimer = null;
+let dirty = false;
+let saving = null;
+let conflicted = false;
+let navigating = false;
+let actionPending = false;
 
 // ---------- Dimensions: one 3x3 grid each, shown as tabs ----------
 
@@ -124,22 +130,49 @@ function setStatus(text, state = '') {
 async function save() {
   clearTimeout(saveTimer);
   saveTimer = null;
-  if (!current) return;
-  current.fields = readForm();
-  current.updatedAt = Date.now();
+  if (saving) return saving;
+  if (!dirty || !current) return;
+  if (conflicted) throw new Error('Download your draft, then reload the saved sheet and merge your notes.');
+  saving = (async () => {
+    while (dirty && current) {
+      const sheet = current;
+      const fields = readForm();
+      dirty = false;
+      setStatus('Saving…');
+      try {
+        const saved = await putSheet({ ...sheet, fields });
+        sheet.revision = saved.revision;
+        sheet.updatedAt = saved.updatedAt;
+        sheet.fields = fields;
+      } catch (error) {
+        dirty = true;
+        conflicted = [404, 409].includes(error.status);
+        throw error;
+      }
+    }
+    setStatus('Saved to server');
+    renderList().catch(reportError);
+  })();
   try {
-    await putSheet(current);
-    renderList();
-    setStatus(`Saved ${new Date(current.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
-  } catch (err) {
-    setStatus(`Couldn’t save: ${err?.message ?? err}`, 'error');
+    await saving;
+  } finally {
+    saving = null;
   }
 }
 
+function reportError(error) {
+  setStatus(`Couldn’t complete: ${error?.message ?? error}${dirty ? ' Your draft is unsaved; retry or download JSON.' : ''}`, 'error');
+}
+
 function scheduleSave() {
-  setStatus('Saving…');
+  dirty = true;
+  setStatus('Unsaved changes…');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(save, 400);
+  if (conflicted) {
+    setStatus('Unsaved conflict: download JSON, then reload the saved sheet and merge your notes.', 'error');
+    return;
+  }
+  saveTimer = setTimeout(() => save().catch(reportError), 400);
 }
 
 form.addEventListener('input', (e) => {
@@ -152,10 +185,13 @@ form.addEventListener('input', (e) => {
 });
 form.addEventListener('submit', (e) => e.preventDefault());
 
-// Don't lose the last keystrokes when the tab is hidden or closed.
-addEventListener('pagehide', () => saveTimer && save());
+addEventListener('beforeunload', (event) => {
+  if (!dirty && !saving) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && saveTimer) save();
+  if (document.visibilityState === 'hidden' && dirty) save().catch(reportError);
 });
 
 // ---------- Sidebar list ----------
@@ -205,62 +241,130 @@ function markCurrent() {
 
 // ---------- Opening / creating / deleting ----------
 
+function updateControls() {
+  const busy = navigating || actionPending;
+  form.inert = busy;
+  for (const button of document.querySelectorAll('[data-action]')) {
+    button.disabled = busy || (button.hasAttribute('data-needs-sheet') && !current);
+  }
+  document.getElementById('import-json').disabled = busy;
+}
+
 function showSheet(sheet) {
   current = sheet;
   fillForm(sheet?.fields);
   form.hidden = !sheet;
   empty.hidden = !!sheet;
-  for (const btn of document.querySelectorAll('[data-needs-sheet]')) btn.disabled = !sheet;
-  setStatus(sheet ? 'Saved' : '');
+  updateControls();
+  dirty = false;
+  conflicted = false;
+  setStatus(sheet ? 'Saved to server' : '');
   markCurrent();
 }
 
 async function openFromHash() {
-  if (saveTimer) await save();
-  const id = location.hash.slice(1);
-  const sheet = id ? await getSheet(id) : null;
-  if (sheet) {
-    showSheet(sheet);
-    if (narrow.matches) setSidebar(false);
-    await renderList();
+  if (navigating) {
+    if (current) history.replaceState(null, '', `#${current.id}`);
     return;
   }
-  // No (valid) sheet in the URL: open the most recently edited one.
-  const sheets = await renderList();
-  const latest = sheets.toSorted((a, b) => b.updatedAt - a.updatedAt)[0];
-  if (latest) location.replace(`#${latest.id}`);
-  else showSheet(null);
+  navigating = true;
+  updateControls();
+  try {
+    await save();
+    const id = location.hash.slice(1);
+    if (id) {
+      try {
+        const sheet = await getSheet(id);
+        showSheet(sheet);
+        if (narrow.matches) setSidebar(false);
+      } catch (error) {
+        if (error.status !== 404) throw error;
+        showSheet(null);
+        setStatus('Sheet unavailable. Choose one from your list or create a new sheet.', 'error');
+      }
+      await renderList();
+      return;
+    }
+    const sheets = await renderList();
+    const latest = sheets.toSorted((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (latest) {
+      history.replaceState(null, '', `#${latest.id}`);
+      showSheet(latest);
+    } else showSheet(null);
+  } catch (error) {
+    if (current) history.replaceState(null, '', `#${current.id}`);
+    throw error;
+  } finally {
+    navigating = false;
+    updateControls();
+  }
 }
 
 async function newSheet() {
-  if (saveTimer) await save();
+  await save();
   const now = Date.now();
-  const sheet = {
+  const sheet = await createSheet({
     id: crypto.randomUUID(),
     fields: { date: new Date().toISOString().slice(0, 10) },
     createdAt: now,
     updatedAt: now,
-  };
-  await putSheet(sheet);
-  history.pushState(null, '', `#${sheet.id}`); // no hashchange, so we control timing
-  await openFromHash();
-  form.elements.name.focus();
+  });
+  history.pushState(null, '', `#${sheet.id}`);
+  showSheet(sheet);
+  await renderList();
 }
 
 async function removeCurrent() {
   if (!current) return;
+  const target = current;
   document.getElementById('confirm-delete-text').textContent =
-    `“${displayName(current)}” will be removed from this browser. This can’t be undone.`;
+    `“${displayName(target)}” will be removed from the server for all your devices. This can’t be undone.`;
   confirmDelete.showModal();
-  confirmDelete.addEventListener('close', async () => {
-    if (confirmDelete.returnValue !== 'delete') return;
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    await deleteSheet(current.id);
-    current = null;
+  await new Promise((resolve) => confirmDelete.addEventListener('close', resolve, { once: true }));
+  if (confirmDelete.returnValue !== 'delete' || current !== target) return;
+  await save();
+  await deleteSheet(target);
+  showSheet(null);
+  history.replaceState(null, '', location.pathname);
+  await openFromHash();
+}
+
+async function importSheets(file) {
+  if (!file) return;
+  await save();
+  const sheets = JSON.parse(await file.text());
+  if (!Array.isArray(sheets)) throw new Error('Choose a capture-sheet JSON export.');
+  let imported = 0;
+  try {
+    for (const sheet of sheets) {
+      await createSheet(sheet);
+      imported++;
+    }
+  } catch (error) {
+    throw new Error(`Imported ${imported} of ${sheets.length}. ${error.message} Keep the original export; identical imports can be retried.`);
+  } finally {
+    await renderList();
+  }
+  await openFromHash();
+  setStatus(`Imported ${imported} sheets to server. Original browser data is unchanged.`);
+}
+
+async function reloadSaved() {
+  if (!current) return;
+  if ((dirty || saving) && !confirm('Discard your unsaved draft and reload the server copy? Download JSON first to keep your notes.')) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (saving) await saving.catch(() => {});
+  try {
+    const saved = await getSheet(current.id);
+    showSheet(saved);
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    showSheet(null);
     history.replaceState(null, '', location.pathname);
-    await openFromHash();
-  }, { once: true });
+    setStatus('Sheet unavailable. Create a new sheet or import your downloaded draft.', 'error');
+  }
+  await renderList();
 }
 
 // ---------- PDF ----------
@@ -301,16 +405,39 @@ document.getElementById('sidebar').addEventListener('keydown', (e) => {
 
 // ---------- Wiring ----------
 
+async function runAction(action, handler) {
+  if (actionPending || navigating) return;
+  actionPending = true;
+  updateControls();
+  try {
+    await handler();
+  } catch (error) {
+    reportError(error);
+  } finally {
+    actionPending = false;
+    updateControls();
+    if (action === 'new' && current) form.elements.name.focus();
+  }
+}
+
 document.addEventListener('click', (e) => {
   const action = e.target.closest('[data-action]')?.dataset.action;
-  if (action === 'new') newSheet();
-  else if (action === 'delete') removeCurrent();
-  else if (action === 'pdf') downloadPdf();
+  const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: save, reload: reloadSaved, export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
+  if (handlers[action]) runAction(action, handlers[action]);
 });
 
-addEventListener('hashchange', openFromHash);
+document.getElementById('import-json').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  runAction('import', () => importSheets(file));
+  event.target.value = '';
+});
+addEventListener('hashchange', () => {
+  if (actionPending) {
+    history.replaceState(null, '', current ? `#${current.id}` : location.pathname);
+    return;
+  }
+  openFromHash().catch(reportError);
+});
 
 setSidebar(initialSidebar());
-// Ask the browser not to evict this site's storage under pressure.
-navigator.storage?.persist?.();
-openFromHash().catch((err) => setStatus(`Couldn’t open storage: ${err?.message ?? err}`, 'error'));
+openFromHash().catch(reportError);

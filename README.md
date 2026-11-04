@@ -1,6 +1,6 @@
 # Agentic mapping: capture sheets
 
-Capture sheets and an interviewer guide in plain HTML, CSS and browser JavaScript. Sheets autosave to SQLite through Bun/Hono and are available on other devices using the same interviewer account. No frontend build step.
+Capture sheets and an interviewer guide in plain HTML, CSS and browser JavaScript. At `/`, anonymous visitors edit complete models saved in IndexedDB in their browser; signed-in interviewers edit private registered interviews saved to SQLite through Bun/Hono. No frontend build step.
 
 ## Run
 
@@ -16,7 +16,7 @@ unset MAPPING_PASSWORD
 bun start
 ```
 
-Open http://localhost:4321 and enter the configured username/password in the browser’s sign-in prompt. Add other usernames/hashes to the JSON object for separate accounts; each can access only their own sheets. Keep usernames stable: they identify sheet owners. No default account is provided; startup fails without valid configuration. Browser Basic authentication stays cached until the browser session is closed; use separate profiles on shared devices.
+Open http://localhost:4321 to start filling out a model immediately, without signing in. Choose **Sign in for registered interviews**, then enter the configured username/password in the explicit browser prompt; sign-in returns to `/` in server mode. Existing named accounts remain owner-scoped; enforcing exactly one admin and migrating existing ownership is a separate planned slice. Keep usernames stable: they identify sheet owners. No default account is provided; startup fails without valid configuration. Browser Basic authentication stays cached until the browser session is closed; use separate profiles on shared devices.
 
 - `INTERVIEWER_USERS_FILE`: path to a private JSON object of usernames and Argon2id password hashes. Keep it server-side; use a JSON file because Bun expands dollar signs in `.env` values, including password hashes.
 - `DATABASE_PATH`: SQLite file, defaults to `./data/sheets.sqlite`; production must use an absolute path on a durable disk outside the checkout.
@@ -26,15 +26,23 @@ Open http://localhost:4321 and enter the configured username/password in the bro
 
 Keep production account files, passwords, tokens and private keys outside the checkout; never commit them or put them in browser code. Git ignores `.env*`, `data/`, `secrets/`, `interviewers.json` and common key files as a safeguard; arbitrary filenames still require care. Test passwords are synthetic and are never deployment credentials. If a real secret is ever committed, revoke/rotate it immediately; deleting the file does not remove it from Git history.
 
+## Anonymous browser models
+
+The server selects local mode for anonymous requests to `/` and `/index.html`, and server mode after verifying Basic authentication. Local mode makes no interview API requests. Interview CRUD and participant-link management still require authentication; anonymous editing grants no access to registered interviews. `/participant` remains a separate, restricted bearer-link editor.
+
+In local mode the full model opens immediately, including every input and all three dimensions. Use **New sheet** for another model, reopen models under **This browser’s models**, or delete one without affecting the others. **Saved in this browser** means the IndexedDB transaction committed, in the separate `agentic-mapping-local` database. Local models belong to this browser profile and origin: another profile, device, port or site address cannot see them. They do not synchronize to an account when signing in. Clearing browser/site data removes them; private browsing or browser eviction can also remove storage. Download PDF and JSON backups before clearing data or changing origin.
+
+If browser storage is blocked, full or fails, **Retry storage** retries opening or saving after recovery. A failed create/save keeps the draft editable in the tab; **Download PDF** prints the current inputs even if saving fails, and **Download JSON** keeps a recovery copy. Do not close the tab until saving succeeds or you have downloaded the draft. Local JSON import is not included. Another tab’s newer revision blocks stale saves/deletes; a deleted model is never recreated by a delayed save. Download your draft, then use **Reload saved** and reconcile manually. Unknown model URLs show unavailable rather than another model.
+
 ## Existing notes and recovery
 
-Export each browser’s existing IndexedDB notes from the **old origin**, then select **Import JSON** on the server. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.
+Export each browser’s existing IndexedDB notes from the **old origin**, then sign in and select **Import JSON** in server mode. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.
 
 Imports preserve IDs, fields and timestamps and assign ownership to the signed-in interviewer. Identical retries are safe; conflicting IDs stop import without overwriting anything. A partial import reports its count; keep the export, resolve collisions and retry. Verify the imported notes before removing any originals or private JSON files.
 
-**Saved to server** means a committed save. On a network failure, use **Retry save** or **Download JSON** in the sidebar before closing the tab. Unsaved drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
+**Saved to server** means a committed save. On a network failure, use **Retry storage** or **Download JSON** in the sidebar before closing the tab. Unsaved server drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
 
-**Download PDF** opens the browser’s A4 landscape print dialog. Choose **Save as PDF**.
+**Download PDF** opens the browser’s A4 landscape print dialog with the current form values, including unsaved drafts when storage fails. Choose **Save as PDF**.
 
 ## Finish an interview through a private link
 
@@ -47,6 +55,10 @@ At `/participant`, choose **Save answers** to save, then wait for **Saved to ser
 Missing, invalid, expired, revoked or replaced links show **Link unavailable**, with no interview fallback. An already-open tab loses server access on its next read/save; revocation cannot recall answers already seen or copied. Unsaved input can still be downloaded after denial. Participant mode never loads the interviewer list or browser database, even in a signed-in interviewer's browser.
 
 The credential travels in the private link's URL fragment (the part after `#`), which stays in the address bar for reloads. Browser history, bookmarks and clipboard can therefore retain the intentionally delivered link: share it privately and close the tab after use. It is never sent in an HTTP URL, stored in localStorage/IndexedDB, included in draft downloads or written to the database as plaintext. Authentication uses a bearer header; SQLite stores only a SHA-256 hash of a random 256-bit credential. Share only placeholders such as `https://mapping.example.com/participant#<credential>` in documentation or issue comments.
+
+## Deployment stages
+
+This slice restores anonymous editing on the existing Bun host. Enforcing one admin with registered-interview CRUD and an existing-data ownership migration, managed storage with a local test database, and Vercel hosting with isolated previews remain separate planned work. No Vercel deployment or managed database is configured here. Anonymous IndexedDB data stays at the current origin; a future hostname change requires downloading copies first.
 
 ## Deploy and back up
 
@@ -86,10 +98,10 @@ bunx playwright install chromium       # once; Linux CI also uses --with-deps
 bun run test:browser
 ```
 
-API tests cover persistence, permissions, conflicts, imports, exposure, participant scope/expiry/revocation/replacement and backup/restore. Browser tests cover autosave, two-device access, private-link handoff, failures, conflicts, migration, deletion and print layout; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
+API tests cover persistence, permissions, conflicts, imports, exposure, participant scope/expiry/revocation/replacement and backup/restore. Browser tests cover local profile isolation and multi-model persistence, storage opening/create/save/commit failures, stale-tab revisions, full-model PDF, server autosave, two-device access, private-link handoff, conflicts, migration and deletion; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
 
 - `server.ts`, `server/app.ts`: authenticated API, SQLite and public-file allowlist.
-- `client/app.js`, `client/db.js`: UI and server storage adapter.
+- `client/app.js`, `client/db.js`, `client/local-db.js`: shared editor and server/browser storage adapters.
 - `client/boot.js`, `client/participant.js`, `client/form.js`: isolated participant entrypoint and shared grids/tabs.
 - `client/legacy.js`, `legacy.html`: browser-data export and JSON recovery.
 - `scripts/backup.ts`: consistent SQLite snapshot.

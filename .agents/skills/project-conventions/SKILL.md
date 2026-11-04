@@ -23,8 +23,8 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 
 - Language and runtime: plain HTML, CSS and vanilla JavaScript ES modules in the browser. No framework, no bundler, no TypeScript in the app.
 - Main parts:
-  - `index.html` + `app.js`: capture sheet app (tabs, sidebar list, autosave, delete, PDF via print).
-  - `db.js`: small promise wrapper around IndexedDB (one `sheets` store).
+  - `index.html` + `client/app.js`: capture sheet app (tabs, sidebar list, autosave, delete, PDF via print).
+  - `client/db.js`: small promise wrapper around IndexedDB (one `sheets` store).
   - `guide.html`: static interviewer guide.
   - `styles.css`: Variant tokens, layout and `@media print` styles for both pages.
   - `server.ts`: Hono static file server on Bun, local use only.
@@ -36,26 +36,26 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 | ------------ | -------------------------------------------------------------------- |
 | Install      | `bun install`                                                        |
 | Run locally  | `bun start` (or `bun dev` to restart on `server.ts` changes), open http://localhost:4321. `PORT` overrides the port. |
-| Syntax check | `node --check app.js && node --check db.js`                          |
+| Syntax check | `node --check client/app.js && node --check client/db.js`              |
 | Test         | None yet. There is no test runner or test files.                     |
-| Lint         | None yet. CI runs `bun run --if-present lint`, which is a no-op.     |
+| Lint         | None configured.                                                    |
 | Format       | None configured. Match surrounding style by hand.                    |
 | Typecheck    | None.                                                                |
 | Build        | None. Files are served as-is.                                        |
 
-Verify changes by running the syntax check and exercising the change in a browser via `bun start`: create a sheet, type, reload (autosave), switch tabs, delete, and check print preview when touching layout. If you add a `test` or `lint` script to `package.json`, CI picks it up automatically; record it here.
+Verify changes by running the syntax check and exercising the change in a browser via `bun start`: create a sheet, type, reload (autosave), switch tabs, delete, and check print preview when touching layout. No test or lint CI workflow is configured. If you add a `test` or `lint` script to `package.json`, record it here and configure CI to run it.
 
 ## Layout
 
 ```
 index.html        capture sheet page (markup + <template id="matrix-template">)
-app.js            all UI logic for index.html
-db.js             IndexedDB wrapper: allSheets, getSheet, putSheet, deleteSheet
+client/app.js     browser UI logic for index.html
+client/db.js      browser IndexedDB wrapper: allSheets, getSheet, putSheet, deleteSheet
 guide.html        interviewer guide (static, no JS)
 styles.css        shared styles, tokens, print layout
 img/              Variant logos (SVG)
 server.ts         local Hono static server (not deployed)
-.github/workflows pages.yml (deploy), ci.yml (install/lint/test), kanbot-merged.yml
+.github/workflows pages.yml (deploy), kanbot-merged.yml
 ```
 
 ## Code conventions

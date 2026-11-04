@@ -17,7 +17,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 - What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. Interviewers fill in a 3×3 grid per dimension (Individual, Team, Organization), anonymous models autosave to browser IndexedDB, authenticated interviews autosave to server SQLite, and both can be downloaded as PDF or JSON.
 - Primary users: Variant interviewers running mapping sessions.
 - Language of what users see: English.
-- The old GitHub Pages origin hosts only the IndexedDB exporter. The app requires a Bun host with configured interviewer accounts and a durable SQLite path (see README); `/` is anonymous/local until explicit sign-in. Single-admin enforcement and Vercel hosting remain separate work.
+- The old GitHub Pages origin hosts only the IndexedDB exporter. The app requires a Bun host with configured interviewer accounts and a durable SQLite path (see README); `/` is anonymous/local until explicit sign-in.
 
 ## Stack
 
@@ -81,13 +81,13 @@ tests/            Bun API tests and Playwright browser checks
 - Accessibility: keep roles, `aria-*` attributes, keyboard support on tabs and visible labels (`.visually-hidden` text) intact.
 - Tests: use Bun tests for API/persistence and Playwright for browser saves/recovery; keep fixtures synthetic and use temporary databases.
 - Commits: Conventional Commits (`feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`) with a scope.
-- Do not: add a framework, frontend bundler/build step or browser runtime npm dependencies; serve arbitrary repository files or credentials; fall back silently from server mode to browser-only saves. The server marks `/` and `/index.html` with the verified mode; `/sign-in` explicitly challenges and redirects to `/`. Local mode must never call interview APIs, import JSON or manage participant links. Keep drafts editable, printable and downloadable on storage failure.
+- Do not: add a framework, frontend bundler/build step or browser runtime npm dependencies; serve arbitrary repository files or credentials; fall back silently from server mode to browser-only saves. The server marks `/` with the verified mode; `/sign-in` challenges and redirects to `/`. Local mode never calls interview APIs. Keep drafts printable on storage failure.
 
 ## Decisions
 
 - 2026-11-04: PR #10 human review requested implementation beyond the documentation spike. Use the existing Bun/Hono runtime with SQLite and named interviewer accounts; retain Pages as an old-origin exporter.
 - 2026-11-04: Issue #6 accepted link-only possession and the default 27 grid fields plus `good`, `surprised`, `missing`, `advice`; owners issue/replace/revoke seven-day links. `tests/participant.test.ts` and `tests/participant-browser.mjs` cover the restricted API and fresh-browser handoff; the existing check/browser commands include the new modules and checks.
-- 2026-11-04: Issue #12 restores full anonymous editing at `/` with profile/origin-local IndexedDB, preserving authenticated server CRUD and participant isolation. `tests/local-browser.mjs` runs within `bun run test:browser`; it covers model persistence/isolation, atomic conflicts, retryable storage faults and draft PDF/JSON recovery. Browser authenticated setup visits `/sign-in` before `/` because the home route no longer challenges.
+- 2026-11-04: Issue #12 restores full anonymous editing at `/` with profile/origin-local IndexedDB, preserving authenticated server CRUD and participant isolation. `tests/local-browser.mjs` runs in `bun run test:browser`; browser auth setup visits `/sign-in` first.
 
 ## Gotchas
 

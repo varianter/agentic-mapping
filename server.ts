@@ -6,4 +6,4 @@ const { app } = createApp({
   publicOrigin: process.env.APP_ORIGIN,
 });
 
-export default { port: Number(process.env.PORT ?? 4321), fetch: app.fetch };
+export default { hostname: process.env.BIND_ADDRESS ?? '127.0.0.1', port: Number(process.env.PORT ?? 4321), fetch: app.fetch };

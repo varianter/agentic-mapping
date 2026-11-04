@@ -21,3 +21,8 @@ interviewers.json
 data/
 *.sqlite
 *.sqlite-*
+
+# Generated deployment and browser-test artifacts
+_site/
+test-results/
+playwright-report/

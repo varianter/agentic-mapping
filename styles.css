@@ -198,6 +198,19 @@ a:hover { color: var(--link-hover); }
 .save-status { font-size: 14px; color: var(--grey-600); }
 .save-status[data-state="error"] { color: var(--danger); font-weight: 600; }
 
+[data-participant-only] { display: none !important; }
+body[data-participant] [data-participant-only]:not([hidden]) { display: flex !important; }
+body[data-participant] [data-interviewer] { display: none !important; }
+body[data-participant] .app { grid-template-columns: minmax(0, 1fr); }
+body[data-participant] .who { grid-template-columns: minmax(0, 1fr); }
+body[data-participant] .reflect { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.participant-actions { flex-wrap: wrap; gap: 8px; }
+#private-link-value { width: 100%; min-width: 0; font: inherit; }
+
+@media (max-width: 600px) {
+  body[data-participant] .reflect { grid-template-columns: minmax(0, 1fr); }
+}
+
 .empty {
   margin: auto;
   padding: 48px 24px;

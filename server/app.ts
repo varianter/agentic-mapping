@@ -5,11 +5,24 @@ import { HTTPException } from 'hono/http-exception';
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createHash, randomBytes } from 'node:crypto';
 
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'legacy.html', 'client/app.js', 'client/db.js', 'client/legacy.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ['/participant', 'index.html'],
+  ...['index.html', 'guide.html', 'styles.css', 'legacy.html', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/legacy.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
+const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
+const PARTICIPANT_FIELDS = new Set([
+  ...['ind', 'team', 'org'].flatMap((dimension) => ['learn', 'why', 'found'].flatMap((question) => ['start', 'good', 'next'].map((level) => `${dimension}_${question}_${level}`))),
+  'good', 'surprised', 'missing', 'advice',
+]);
+const hashCredential = (credential: string) => createHash('sha256').update(credential).digest('hex');
+const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+function participantView(row: any) {
+  const fields = JSON.parse(row.fields);
+  return { fields: Object.fromEntries(Object.entries(fields).filter(([key, value]) => PARTICIPANT_FIELDS.has(key) && typeof value === 'string')), revision: row.revision };
+}
 const root = resolve(import.meta.dir, '..');
 const validId = (id: unknown) => typeof id === 'string' && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id);
 const validRevision = (revision: unknown) => Number.isSafeInteger(revision) && Number(revision) > 0;
@@ -29,6 +42,9 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     throw new Error('Configure INTERVIEWER_USERS_FILE with a JSON object of named users and Argon2id password hashes.');
   }
   if (publicOrigin && new URL(publicOrigin).origin !== publicOrigin) throw new Error('APP_ORIGIN must be an origin without a trailing slash.');
+  if (publicOrigin && new URL(publicOrigin).protocol !== 'https:' && !(new URL(publicOrigin).protocol === 'http:' && localHost(new URL(publicOrigin).hostname))) {
+    throw new Error('APP_ORIGIN must use HTTPS outside localhost.');
+  }
   if (databasePath !== ':memory:') mkdirSync(dirname(resolve(databasePath)), { recursive: true, mode: 0o700 });
   const db = new Database(databasePath, { create: true });
   db.exec(`PRAGMA journal_mode = WAL;
@@ -37,16 +53,26 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
       id TEXT PRIMARY KEY, owner TEXT NOT NULL, fields TEXT NOT NULL,
       createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1
     );
-    CREATE INDEX IF NOT EXISTS sheets_owner ON sheets(owner);`);
+    CREATE INDEX IF NOT EXISTS sheets_owner ON sheets(owner);
+    CREATE TABLE IF NOT EXISTS participant_links (
+      sheetId TEXT PRIMARY KEY, credentialHash TEXT NOT NULL UNIQUE, expiresAt INTEGER NOT NULL
+    );`);
   const app = new Hono<{ Variables: { owner: string } }>();
   app.use('*', async (c, next) => {
+    const url = new URL(c.req.url);
+    if (url.protocol !== 'https:' && !localHost(url.hostname) && !publicOrigin?.startsWith('https:')) {
+      c.res = c.json({ error: 'HTTPS required.' }, 403);
+    } else {
+      await next();
+    }
+    // Set headers on the final response, including files and authentication errors.
     c.header('Cache-Control', 'no-store');
     c.header('Referrer-Policy', 'no-referrer');
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('X-Frame-Options', 'DENY');
-    await next();
+    if (publicOrigin?.startsWith('https:')) c.header('Strict-Transport-Security', 'max-age=31536000');
   });
-  app.use('*', basicAuth({
+  const interviewerAuth = basicAuth({
     realm: 'Agentic mapping',
     verifyUser: async (username, password, c) => {
       const hash = Object.hasOwn(users, username) ? users[username] : users[Object.keys(users)[0]];
@@ -55,7 +81,14 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
       c.set('owner', username);
       return true;
     },
-  }));
+  });
+  app.use('*', async (c, next) => {
+    if (c.req.path === '/participant' || PUBLIC_ASSETS.has(c.req.path) || c.req.path === '/api/participant' || c.req.path.startsWith('/api/participant/')) return next();
+    // A participant credential never falls through to interviewer authentication,
+    // even when the browser also has a cached interviewer login.
+    if (/^Bearer(?:\s|$)/i.test(c.req.header('Authorization') ?? '')) return c.json({ error: 'Access denied.' }, 403);
+    return interviewerAuth(c, next);
+  });
   app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Sheet exceeds 1 MB.' }, 413) }));
   app.use('/api/*', async (c, next) => {
     if (!['GET', 'HEAD'].includes(c.req.method)) {
@@ -65,6 +98,62 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
       if (c.req.header('Content-Type')?.split(';')[0] !== 'application/json') return c.json({ error: 'JSON required.' }, 415);
     }
     await next();
+  });
+  const linkedSheet = (authorization?: string) => {
+    const credential = /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1];
+    if (!credential) return null;
+    return db.query(`SELECT sheets.* FROM sheets JOIN participant_links ON participant_links.sheetId = sheets.id
+      WHERE credentialHash = ? AND expiresAt > ?`).get(hashCredential(credential), Date.now()) as any;
+  };
+  app.get('/api/participant', (c) => {
+    const sheet = linkedSheet(c.req.header('Authorization'));
+    return sheet ? c.json(participantView(sheet)) : c.json({ error: 'Link unavailable.' }, 404);
+  });
+  app.put('/api/participant', async (c) => {
+    const authorization = c.req.header('Authorization');
+    if (!linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
+    const body = await c.req.json().catch(() => null);
+    if (!body || Object.keys(body).some((key) => !['fields', 'revision'].includes(key)) || !validRevision(body.revision)
+      || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields)
+      || Object.entries(body.fields).some(([key, value]) => !PARTICIPANT_FIELDS.has(key) || typeof value !== 'string')) {
+      return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
+    }
+    const result = db.transaction(() => {
+      // Recheck after reading the body and under the same lock as the write.
+      const stored = linkedSheet(authorization);
+      if (!stored) return { status: 404 as const, error: 'Link unavailable.' };
+      if (stored.revision !== body.revision) return { status: 409 as const, error: 'Newer answers are stored. Keep your draft, then reload and merge your answers.' };
+      const fields = { ...JSON.parse(stored.fields), ...body.fields };
+      const saved = db.query('UPDATE sheets SET fields = ?, updatedAt = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING *')
+        .get(JSON.stringify(fields), Date.now(), stored.id, body.revision);
+      return { sheet: participantView(saved) };
+    }).immediate();
+    return result.sheet ? c.json(result.sheet) : c.json({ error: result.error }, result.status!);
+  });
+  app.all('/api/participant/*', (c) => c.json({ error: 'Link unavailable.' }, 404));
+  app.all('/api/participant', (c) => c.json({ error: 'Link unavailable.' }, 404));
+
+  app.post('/api/sheets/:id/access', (c) => {
+    const result = db.transaction(() => {
+      const sheet = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), c.get('owner'));
+      if (!sheet) return null;
+      const credential = randomBytes(32).toString('hex');
+      const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      db.query(`INSERT INTO participant_links (sheetId, credentialHash, expiresAt) VALUES (?, ?, ?)
+        ON CONFLICT(sheetId) DO UPDATE SET credentialHash = excluded.credentialHash, expiresAt = excluded.expiresAt`)
+        .run(c.req.param('id'), hashCredential(credential), expiresAt);
+      return { credential, expiresAt };
+    }).immediate();
+    return result ? c.json(result, 201) : c.json({ error: 'Sheet unavailable.' }, 404);
+  });
+  app.delete('/api/sheets/:id/access', (c) => {
+    const result = db.transaction(() => {
+      const sheet = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), c.get('owner'));
+      if (!sheet) return false;
+      db.query('DELETE FROM participant_links WHERE sheetId = ?').run(c.req.param('id'));
+      return true;
+    }).immediate();
+    return result ? c.body(null, 204) : c.json({ error: 'Sheet unavailable.' }, 404);
   });
   app.get('/api/sheets', (c) => c.json(db.query('SELECT * FROM sheets WHERE owner = ?').all(c.get('owner')).map(decode)));
   app.get('/api/sheets/:id', (c) => {
@@ -104,7 +193,11 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     const body = await c.req.json().catch(() => null);
     if (!validRevision(body?.revision)) return c.json({ error: 'Revision required.' }, 400);
     const owner = c.get('owner');
-    const result = db.query('DELETE FROM sheets WHERE id = ? AND owner = ? AND revision = ? RETURNING id').get(c.req.param('id'), owner, body.revision);
+    const result = db.transaction(() => {
+      const deleted = db.query('DELETE FROM sheets WHERE id = ? AND owner = ? AND revision = ? RETURNING id').get(c.req.param('id'), owner, body.revision);
+      if (deleted) db.query('DELETE FROM participant_links WHERE sheetId = ?').run(c.req.param('id'));
+      return deleted;
+    }).immediate();
     if (result) return c.body(null, 204);
     const exists = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), owner);
     return c.json({ error: exists ? 'Sheet changed; reload before deleting.' : 'Sheet unavailable.' }, exists ? 409 : 404);
@@ -113,11 +206,12 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
   app.get('*', async (c) => {
     const file = PUBLIC_FILES.get(c.req.path);
     if (!file) return c.notFound();
-    return new Response(Bun.file(resolve(root, file)));
+    const asset = Bun.file(resolve(root, file));
+    return new Response(asset, { headers: { 'Content-Type': asset.type } });
   });
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();
-    console.error('Storage request failed:', error.name);
+    console.error('Storage request failed.');
     return c.json({ error: 'Storage unavailable. Keep your draft and retry.' }, 503);
   });
   return { app, db };

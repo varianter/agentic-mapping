@@ -1,17 +1,17 @@
 # Storage and access decision
 
-Design and implementation, 2026-11-04. Human review requested actual persistent storage in this PR. The app now uses the existing Bun/Hono runtime with file-backed SQLite, named interviewer accounts and owner-scoped API queries. Workers/D1 remains an alternative if the owner chooses managed hosting. Participant access remains disabled pending visibility and link-policy decisions.
+Design and implementation, 2026-11-04. Human review requested actual persistent storage in this PR. The app now uses the existing Bun/Hono runtime with file-backed SQLite, named interviewer accounts and owner-scoped API queries. Workers/D1 remains an alternative if the owner chooses managed hosting. Participant completion links now follow the approved defaults documented in [the implementation map](participant-access.md).
 
 ## Implemented behavior
 
 - [`server.ts`](../server.ts) configures [`server/app.ts`](../server/app.ts): durable SQLite, Argon2id-backed [HTTP Basic authentication](https://hono.dev/docs/middleware/builtin/basic-auth), owner-scoped queries, revision checks and an explicit public-file allowlist. Set a production `DATABASE_PATH` on durable storage and `APP_ORIGIN` behind HTTPS; see [setup and operations](../README.md).
 - [`client/db.js`](../client/db.js) uses the same-origin API. [`client/app.js`](../client/app.js) serializes saves, preserves newer edits during requests, reports failures and conflicts, warns on unsaved navigation and offers retry, draft download and explicit reload. Unknown IDs never fall back to another interview. Lists contain only the authenticated owner's sheets.
-- [`index.html`](../index.html) retains the complete interviewer form. A configured username establishes ownership; the editable interviewer field does not. There is no participant UI or API. Authentication is challenged by the browser before loading the app; closing the browser session clears its cached Basic credentials.
+- [`index.html`](../index.html) retains the complete interviewer form. A configured username establishes ownership; the editable interviewer field does not. Interviewer authentication is challenged by the browser before loading the app; closing the browser session clears its cached Basic credentials. `/participant` has a separate entrypoint and scoped bearer API, without interviewer authentication or list loading.
 - [`legacy.html`](../legacy.html) and [`client/legacy.js`](../client/legacy.js) export existing IndexedDB notes only on request, without removing originals. JSON import explicitly uploads to the authenticated account, preserves IDs/timestamps and rejects collisions; identical retries do not duplicate notes. No automatic upload occurs.
 - [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) now publishes only the old-origin exporter. The full app requires Bun hosting; Pages cannot run its API. IndexedDB follows the [same-origin policy](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API), so each old browser/device must export before migrating origins.
 - [`scripts/backup.ts`](../scripts/backup.ts) creates consistent online snapshots; scheduling, encrypted off-host copies and restore operations belong to the host operator. [`tests/storage.test.ts`](../tests/storage.test.ts) verifies reopen, restore, ownership, conflicting revisions, imports and public-file rejection; browser checks cover the user flows.
 
-The remaining sections distinguish the implemented interviewer baseline from the future participant design and production operational responsibilities. No external host or credentials are provisioned by this change.
+The remaining sections distinguish the implemented interviewer baseline from the participant contract and production operational responsibilities. No external host or credentials are provisioned by this change.
 
 ## Hosting comparison
 
@@ -37,30 +37,30 @@ Planning workload: 20 interviews/day, 600 debounced saves/interview, fewer than 
 
 Free quota exhaustion is a save failure, not a reason to claim success locally. Benchmark the authenticated save path against CPU limits, enable usage alerts and revisit the budget before rollout. A free tier does not remove the need for an operational owner.
 
-## Access model and future participant contract
+## Access model and participant contract
 
-Interviewer ownership is implemented now; participant operations below describe the disabled follow-up design. Default to one authenticated interviewer owner per sheet, with no sharing between interviewers. Derive `ownerId` from a verified identity/session, never from the form's editable `interviewer` field or a client-supplied owner ID. Each list, read, update, delete, export and link-management query must enforce ownership. Parameterize SQL and validate fields and request sizes server-side.
+Interviewer ownership and participant operations below are implemented. Default to one authenticated interviewer owner per sheet, with no sharing between interviewers. Derive `ownerId` from a verified identity/session, never from the form's editable `interviewer` field or a client-supplied owner ID. Each list, read, update, delete, export and link-management query must enforce ownership. Parameterize SQL and validate fields and request sizes server-side.
 
-Participant access is a separate, narrow API. A server-generated, high-entropy bearer token grants access to exactly one sheet and explicit read/write field allowlists; store only its hash, sheet binding, expiry and revocation state. Check them on every read and write, including requests from previously opened tabs. Reject extra/private fields rather than silently accepting them. Until the owner chooses the allowlists, participant access stays disabled.
+Participant access is a separate, narrow API. A server-generated, high-entropy bearer token grants access to exactly one sheet and explicit read/write field allowlists; store only its hash, sheet binding, expiry and revocation state. Check them on every read and write, including requests from previously opened tabs. Reject extra/private fields rather than silently accepting them. The approved allowlist is all 27 grid fields plus `good`, `surprised`, `missing`, `advice`; links expire after seven days and only the sheet owner can issue, replace or revoke them.
 
 | Operation | Anonymous visitor (no valid link) | Authenticated interviewer | Valid participant-link holder |
 | --- | --- | --- | --- |
-| Load app shell / guide | Require interviewer sign-in (legacy Pages exporter is public). | Allow. | Disabled; separate participant shell planned. |
+| Load app shell / guide | Participant shell/assets are public without data; interviewer shell/guide require sign-in. | Allow. | Separate participant entrypoint; no interviewer list or controls. |
 | Create / import sheet | Deny, require sign-in. | Allow; server assigns authenticated owner. | Deny. |
 | List sheets | Deny. | Only owned sheets and their summaries. | Deny; no sidebar data or other-sheet counts. |
 | Read / print / export sheet | Deny. | Allow owned sheet only. | Only linked sheet's approved visible fields; print/export must use the same projection. |
 | Update sheet | Deny. | Allow owned sheet with matching revision. | Only linked sheet's approved editable fields with matching revision. |
 | Delete / change ownership | Deny. | Allow delete of owned sheet; ownership transfer disabled pending policy. | Deny. |
-| Issue / revoke / rotate participant link | Deny. | Disabled; future permission on owned sheets only. | Deny; cannot extend expiry or issue another link. |
+| Issue / revoke / rotate participant link | Deny. | Allow on owned sheets only. | Deny; cannot extend expiry or issue another link. |
 | Read database, backups or deployment credentials | Deny. | Deny through the app, even for own sheets. | Deny. |
 
 ### Rejection and exposure scenarios
 
 - A visitor guesses a sheet UUID: require interviewer authentication or a valid participant capability; do not return notes, names or summaries. An authenticated non-owner gets the same `404` as a nonexistent sheet, including for update/delete/export/link routes.
 - A participant changes the sheet ID in a request: resolve the sheet from the token binding; reject mismatched IDs with a generic `404`. Never fall back to another interview, even if it is accessible to the current interviewer.
-- A missing, malformed, expired, revoked or rotated token gets a generic unavailable-link response, no interview fields and no fallback. Rate-limit invalid attempts. A revoked open tab cannot read or save again; clear displayed data on rejection, though already copied notes cannot be recalled.
-- A valid link is forwarded or leaked: anyone holding it has the same access until expiry/revocation. Link-only access cannot prove the interviewee's identity. Require explicit owner acceptance; otherwise plan participant authentication before slice 3.
-- Keep raw tokens out of query strings, server logs, analytics, error reports and persistent browser storage. Proposed handoff: token in the URL fragment, exchange over HTTPS for a short-lived HttpOnly, Secure, SameSite session scoped to participant routes, then remove the fragment with history replacement. Still check the backing link's status on every request; an exchanged session must not bypass revocation. Use `Referrer-Policy: no-referrer` and no third-party scripts on the participant page.
+- A missing, malformed, expired, revoked or rotated token gets a generic unavailable-link response, no interview fields and no fallback. Rate-limit invalid attempts. A revoked open tab cannot read or save again; hide the form on rejection and allow an unsaved draft download, though already copied notes cannot be recalled.
+- A valid link is forwarded or leaked: anyone holding it has the same access until expiry/revocation. Link-only access cannot prove the interviewee's identity. Link-only possession was accepted in issue #6; participant sign-in is out of scope.
+- Keep raw tokens out of query strings, server logs, analytics, error reports and persistent browser storage. The approved handoff keeps the token in the delivery fragment for page reloads and authenticates API requests with an Authorization header, without cookies or browser storage. Check the backing link on every read/save; see the README for browser history/clipboard handling. Use `Referrer-Policy: no-referrer` and no third-party scripts on the participant page.
 - Hide create/list/delete controls in participant mode, but enforce every permission on the server. Use CSRF protection and Origin checks for cookie-authenticated mutations; CORS and hidden buttons are not authorization. Return interview responses with `Cache-Control: no-store`; do not share-cache them or log request bodies.
 - Requests for `.sqlite`, `-wal`, `-shm`, SQL exports, `.env` or repository configuration must return no files. Package only public assets, keep Bun database/backups outside that directory, and keep D1 access in Worker bindings. Deployment/identity secrets belong in host secret storage, never browser modules or `_site`. If credentials leak, rotate them and invalidate affected sessions/links; removing a public file alone is insufficient.
 
@@ -99,12 +99,12 @@ Participant access is a separate, narrow API. A server-generated, high-entropy b
 | --- | --- | --- |
 | 1: comparison and design (complete) | `docs/storage-decision.md`, `README.md`: hosting comparison, access contract and migration design. | Review official sources and remaining owner decisions. |
 | 2: persistent storage + interviewer ownership (implemented) | `server.ts`, `server/app.ts`, `client/db.js`, `client/app.js`, `client/legacy.js`, `legacy.html`, `index.html`, `styles.css`, `scripts/backup.ts`, tests, package scripts and CI. SQLite/Basic-auth baseline, legacy migration, save/conflict recovery and exact public-file allowlist; Pages retains the exporter. | Automated API and browser checks plus committed [browser evidence](evidence/persistent-storage.png). A named host, TLS, accounts and scheduled off-host backups are still required for deployment. |
-| 3: participant completion links | Selected backend entrypoint/auth/storage modules and new link migration; `client/app.js` and `index.html` gain a restricted participant view; `client/db.js` gains the scoped API; deployment headers and `README.md` document expiry, rotation, revocation and handoff. | Participant sees/edits only approved fields on the linked sheet; no list or cross-sheet access. Invalid/revoked/expired links and guessed IDs reveal no interviews. Test revocation after session exchange, open-tab writes, overlap conflicts and restricted PDF output. |
+| 3: participant completion links (implemented) | `server/app.ts` link table and scoped API; `client/boot.js`, `client/participant.js`, `client/form.js`, `index.html` and owner controls; security headers and README deployment instructions. See [implementation and evidence](participant-access.md). | Participant sees/edits only approved fields on the linked sheet; no list or cross-sheet access. Invalid/revoked/expired links and guessed IDs reveal no interviews. Automated checks cover open-tab reads/writes after invalidation, overlap conflicts and restricted print output. |
 
 ### Remaining deployment and participant decisions
 
 - **Hosting and operations:** confirm that setup/maintenance outweigh large-scale needs; name a Bun host/operator for this implementation (or plan a later Cloudflare migration), account/billing owner, data-location requirements, budget, retention and recovery targets.
 - **Interviewer identity and ownership:** provision named interviewer accounts for the implemented Basic-auth baseline; choose an identity provider if SSO is required, and define any later team access, transfer and departing-interviewer rules. An editable interviewer name cannot establish ownership.
-- **Visible/editable fields:** approve explicit participant read and write allowlists across identity, client context, reflections and all grids; decide whether private interviewer notes need separate fields. Default participant access to disabled until agreed.
-- **Link-only access:** explicitly accept that any holder can use a link, or require participant login; choose expiry, issuer/revoker rights and local-draft policy for shared devices. Review this before planning slice 3.
+- **Visible/editable fields (decided):** the 27 grid fields and four approved reflections are participant-readable/editable; identity, context, discipline, contacts and all other fields remain private.
+- **Link-only access (decided):** possession grants access for seven days; the owner can replace/revoke access. Drafts remain in memory with explicit download. Validate the completion window in a real handoff trial.
 - **Existing notes:** approve uploading local interview data, the old-origin export window and how long local exports and backups may retain it. Existing browser notes remain untouched until explicitly imported; the app has no browser-only save fallback.

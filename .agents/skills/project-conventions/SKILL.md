@@ -23,7 +23,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 
 - Language and runtime: Bun/TypeScript on the server; plain HTML, CSS and vanilla JavaScript ES modules in the browser. No framework, no bundler, no TypeScript in the browser.
 - Main parts:
-  - `index.html` + `client/app.js`: capture sheet app (tabs, sidebar list, autosave, delete, PDF via print).
+  - `index.html` + `client/boot.js`: entrypoint selects interviewer `client/app.js` or isolated `client/participant.js` at `/participant`; `client/form.js` shares grids/tabs/plain-text form values.
   - `client/db.js`: same-origin authenticated storage API adapter; IndexedDB is read only by the explicit legacy exporter.
   - `guide.html`: static interviewer guide.
   - `styles.css`: Variant tokens, layout and `@media print` styles for both pages.
@@ -50,7 +50,10 @@ Run the API suite, syntax checks and browser checks before finishing. `.github/w
 
 ```
 index.html        capture sheet page (markup + <template id="matrix-template">)
-client/app.js     browser UI logic for index.html
+client/boot.js    selects interviewer/participant entrypoint by path
+client/app.js     interviewer UI logic for index.html
+client/participant.js isolated bearer access, explicit saves and draft recovery
+client/form.js    shared dimensions, tabs and form values
 client/db.js      authenticated API adapter: allSheets, getSheet, createSheet, putSheet, deleteSheet
 client/legacy.js  explicit old IndexedDB export and JSON download
 legacy.html       old-origin migration/export page
@@ -72,6 +75,7 @@ tests/            Bun API tests and Playwright browser checks
 - State in CSS: use data attributes and ARIA (`data-variant`, `data-state`, `data-sidebar`, `aria-selected`) rather than toggling classes.
 - Styling: use the `:root` tokens in `styles.css` (`--yellow`, `--ink`, `--paper`, `--danger`…). Britti Sans comes from the Varde CDN. Keep the print layout working (A4 landscape).
 - Data: SQLite sheets are `{ id, fields, createdAt, updatedAt, revision }` plus server-only owner. Preserve grid field names (`team_why_next`, etc.). Updates/deletes must enforce owner and revision atomically; never upsert deleted sheets. Old IndexedDB `agentic-mapping`/`sheets` is preserved for export/import only.
+- Participant access: `/api/participant` accepts a bearer header and returns only approved string fields plus revision. The link table stores hashes and seven-day expiry; issue/revoke are owner-only. Keep participant code independent of interviewer storage; no automatic participant saves/retries or persistent browser credentials.
 - Error handling: catch storage failures and show them in the toolbar status via `setStatus(message, 'error')`. Wrap `localStorage` access in `try/catch`.
 - Accessibility: keep roles, `aria-*` attributes, keyboard support on tabs and visible labels (`.visually-hidden` text) intact.
 - Tests: use Bun tests for API/persistence and Playwright for browser saves/recovery; keep fixtures synthetic and use temporary databases.
@@ -80,7 +84,8 @@ tests/            Bun API tests and Playwright browser checks
 
 ## Decisions
 
-- 2026-11-04: PR #10 human review requested implementation beyond the documentation spike. Use the existing Bun/Hono runtime with SQLite and named interviewer accounts; retain Pages as an old-origin exporter. Participant links remain disabled pending access decisions.
+- 2026-11-04: PR #10 human review requested implementation beyond the documentation spike. Use the existing Bun/Hono runtime with SQLite and named interviewer accounts; retain Pages as an old-origin exporter.
+- 2026-11-04: Issue #6 accepted link-only possession and the default 27 grid fields plus `good`, `surprised`, `missing`, `advice`; owners issue/replace/revoke seven-day links. `tests/participant.test.ts` and `tests/participant-browser.mjs` cover the restricted API and fresh-browser handoff; the existing check/browser commands include the new modules and checks.
 
 ## Gotchas
 
@@ -88,5 +93,7 @@ tests/            Bun API tests and Playwright browser checks
 - Old IndexedDB data is per origin and needs explicit export on the old browser/address. Server data follows `DATABASE_PATH`, so preserve that file/volume across deployments.
 - Bun expands dollar signs in `.env`, including password hashes. Put account hashes in a private JSON file referenced by `INTERVIEWER_USERS_FILE`. Never put that file in the public allowlist.
 - Set `APP_ORIGIN` to the public HTTPS origin behind a reverse proxy; write requests require a matching Origin and JSON. Basic authentication must use HTTPS remotely.
+- The entrypoint binds to `127.0.0.1` by default (`BIND_ADDRESS` overrides it); keep the backend private behind the HTTPS proxy. Set security headers after downstream responses, and give Bun file responses an explicit MIME type before Hono wraps them.
+- The participant fragment stays in the address bar for reloads, never HTTP URLs or browser storage; do not capture it in screenshots/logs/analytics. Pages copies only the legacy exporter module and stylesheet. Before restoring a database, invalidate restored participant links to avoid resurrecting revoked access.
 - The legacy Pages exporter lives under `/agentic-mapping/`, so use relative URLs (`styles.css`, `img/…`), never root-absolute ones.
 - `.claude/agents/`, `.claude/settings.json` and `.codex/agents/` are generated by `kanbot sync`; edit `.kanbot/agents/` instead.

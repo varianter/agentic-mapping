@@ -19,9 +19,13 @@ function openDb() {
       const request = indexedDB.open(DB_NAME, 1);
       let failed = false;
       request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'id' });
-      request.onerror = request.onblocked = () => {
+      request.onerror = () => {
         failed = true;
-        reject(request.error ?? new Error('Browser storage is blocked. Close other app tabs and retry.'));
+        reject(request.error);
+      };
+      request.onblocked = () => {
+        failed = true;
+        reject(new Error('Browser storage is blocked. Close other app tabs and retry.'));
       };
       request.onsuccess = () => {
         const db = request.result;
@@ -65,9 +69,11 @@ export async function createSheet(sheet) {
   const saved = structuredClone({ id: sheet.id, fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 });
   return run('readwrite', (store, done, abort) => {
     store.get(saved.id).onsuccess = (event) => {
-      if (event.target.result) return abort(failure('Model ID already exists; nothing was overwritten.', 409));
-      store.add(saved);
-      done(saved);
+      try {
+        if (event.target.result) return abort(failure('Model ID already exists; nothing was overwritten.', 409));
+        store.add(saved);
+        done(saved);
+      } catch (error) { abort(error); }
     };
   });
 }
@@ -76,15 +82,17 @@ function change(sheet, remove) {
   return run('readwrite', (store, done, abort) => {
     // Read and compare inside the write transaction so competing tabs serialize.
     store.get(sheet.id).onsuccess = (event) => {
-      const stored = event.target.result;
-      if (!stored) return abort(failure('Model unavailable. It may have been deleted in another tab.', 404));
-      if (stored.revision !== sheet.revision) return abort(failure('Another tab changed this model. Download your draft, then reload before saving or deleting.', 409));
-      if (remove) store.delete(sheet.id);
-      else {
-        const saved = { ...stored, fields: sheet.fields, updatedAt: Date.now(), revision: stored.revision + 1 };
-        store.put(saved);
-        done(saved);
-      }
+      try {
+        const stored = event.target.result;
+        if (!stored) return abort(failure('Model unavailable. It may have been deleted in another tab.', 404));
+        if (stored.revision !== sheet.revision) return abort(failure('Another tab changed this model. Download your draft, then reload before saving or deleting.', 409));
+        if (remove) store.delete(sheet.id);
+        else {
+          const saved = { ...stored, fields: sheet.fields, updatedAt: Date.now(), revision: stored.revision + 1 };
+          store.put(saved);
+          done(saved);
+        }
+      } catch (error) { abort(error); }
     };
   });
 }

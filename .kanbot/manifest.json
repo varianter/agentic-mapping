@@ -1,10 +1,10 @@
 {
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"files": {
 		".agents/skills/approach-designer/SKILL.md": "d932ed30a58cb32dd91ec03ddd2b1c6c59f77714",
 		".agents/skills/issue-splitting/SKILL.md": "8d8651621721c530522d83edb9530b622df275df",
 		".agents/skills/kanbot-admin/SKILL.md": "47b16ee8a6c6847450589bbb954d5a08c154f52a",
-		".agents/skills/kanbot-guide/SKILL.md": "7fa56c70c75a2f4120b6d0de0eb6dba728e121ab",
+		".agents/skills/kanbot-guide/SKILL.md": "f11cb3e64e8da4ff22e84f5b7429911527a79b72",
 		".agents/skills/kanbot-idea/SKILL.md": "9d47113a299a75514a00993060bf6afebb049c6c",
 		".agents/skills/plan-template/SKILL.md": "841446c304ffe9783c79f293e050a28ceb540b3d",
 		".agents/skills/pr-description/SKILL.md": "830c94888620de0a5bb7030672c017c5fafa63e5",

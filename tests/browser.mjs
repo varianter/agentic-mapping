@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import { checkParticipantFlow } from './participant-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
 const users = { alice: Bun.password.hashSync('browser-password') };
@@ -173,6 +174,7 @@ try {
   await page.locator('#confirm-delete [value="delete"]').click();
   await page.waitForFunction((id) => !document.querySelector(`#sheet-list a[data-id="${id}"]`), id);
   assert.deepEqual(errors, []);
+  await checkParticipantFlow({ browser, context, baseURL, directory, db });
   console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, legacy export/import, missing hashes, PDF layout, mobile width, delete; no page errors.');
 } catch (error) {
   console.log('Browser failure status:', await status.textContent(), errors);

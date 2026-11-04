@@ -20,3 +20,5 @@ export const getSheet = (id) => request(`/${encodeURIComponent(id)}`);
 export const createSheet = (sheet) => request('', 'POST', sheet);
 export const putSheet = (sheet) => request(`/${encodeURIComponent(sheet.id)}`, 'PUT', sheet);
 export const deleteSheet = (sheet) => request(`/${encodeURIComponent(sheet.id)}`, 'DELETE', { revision: sheet.revision });
+export const issueAccess = (id) => request(`/${encodeURIComponent(id)}/access`, 'POST', {});
+export const revokeAccess = (id) => request(`/${encodeURIComponent(id)}/access`, 'DELETE', {});

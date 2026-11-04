@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
 <title>Capture sheets · Agentic mapping</title>
 <link rel="stylesheet" href="styles.css">
-<script type="module" src="client/app.js"></script>
+<script type="module" src="client/boot.js"></script>
 </head>
 <body>
 <div class="app" id="app" data-sidebar="open">
 
-  <aside class="sidebar" id="sidebar" aria-label="Capture sheets">
+  <aside class="sidebar" id="sidebar" aria-label="Capture sheets" data-interviewer>
     <div class="sidebar-inner">
       <div class="sidebar-head">
         <img class="sidebar-logo" src="img/variant-logo-light.svg" alt="Variant" width="101" height="24">
@@ -23,6 +24,8 @@
       <p class="sheet-list-empty" id="sheet-list-empty" hidden>No sheets yet.</p>
       <ul class="sheet-list" id="sheet-list"></ul>
       <div class="sidebar-foot">
+        <button type="button" class="btn" data-action="issue-access" data-needs-sheet>Create / replace private link</button>
+        <button type="button" class="btn" data-action="revoke-access" data-needs-sheet>Revoke private link</button>
         <a href="guide.html">Interviewer guide</a>
         <a href="legacy.html">Export old browser sheets</a>
         <button type="button" class="btn" data-action="retry" data-needs-sheet>Retry save</button>
@@ -35,25 +38,35 @@
 
   <div class="main">
     <div class="toolbar">
-      <button type="button" class="btn" data-variant="icon" id="toggle-sidebar" aria-controls="sidebar" aria-expanded="true" aria-label="Hide sheet list">
+      <button type="button" class="btn" data-variant="icon" id="toggle-sidebar" aria-controls="sidebar" aria-expanded="true" aria-label="Hide sheet list" data-interviewer>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
       </button>
       <span class="save-status" id="save-status" role="status" aria-live="polite"></span>
       <span class="spacer"></span>
-      <button type="button" class="btn" data-variant="danger" data-action="delete" data-needs-sheet>
+      <div class="participant-actions" data-participant-only>
+        <button type="button" class="btn" id="participant-reload" disabled>Reload saved</button>
+        <button type="button" class="btn" id="participant-export" disabled>Download draft</button>
+        <button type="button" class="btn" data-variant="primary" id="participant-save" disabled>Save answers</button>
+      </div>
+      <button type="button" class="btn" data-variant="danger" data-action="delete" data-needs-sheet data-interviewer>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
         <span class="btn-text">Delete</span>
       </button>
-      <button type="button" class="btn" data-variant="primary" data-action="pdf" data-needs-sheet>
+      <button type="button" class="btn" data-variant="primary" data-action="pdf" data-needs-sheet data-interviewer>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
         <span class="btn-text">Download PDF</span>
       </button>
     </div>
 
-    <div class="empty" id="empty" hidden>
+    <div class="empty" id="empty" hidden data-interviewer>
       <h2>No capture sheets yet</h2>
       <p>Make one for each conversation. Everything you type is saved to your interviewer account on the server as you go.</p>
       <button type="button" class="btn" data-variant="primary" data-action="new">New sheet</button>
+    </div>
+
+    <div class="empty" id="participant-unavailable" hidden data-participant-only>
+      <h2>Link unavailable</h2>
+      <p>Ask your interviewer for a new private link. No other interview has been opened.</p>
     </div>
 
     <form class="sheet" id="sheet" autocomplete="off" hidden>
@@ -66,7 +79,7 @@
       </header>
 
       <section class="who" aria-label="About the conversation">
-        <div class="field">
+        <div class="field" data-interviewer>
           <label class="lbl" for="f-name">Name</label>
           <input type="text" id="f-name" name="name">
           <label class="lbl" for="f-date">Date</label>
@@ -74,7 +87,7 @@
           <label class="lbl" for="f-interviewer">Interviewer</label>
           <input type="text" id="f-interviewer" name="interviewer">
         </div>
-        <fieldset class="field" style="margin: 0; min-width: 0">
+        <fieldset class="field" style="margin: 0; min-width: 0" data-interviewer>
           <legend class="visually-hidden">Discipline</legend>
           <span class="lbl" aria-hidden="true">Discipline</span>
           <div class="chips">
@@ -87,7 +100,7 @@
             <label class="chip-other">Other: <input type="text" name="discipline_other" aria-label="Other discipline"></label>
           </div>
         </fieldset>
-        <div class="field">
+        <div class="field" data-interviewer>
           <label class="lbl" for="f-context">Client, domain, team</label>
           <textarea id="f-context" name="context"></textarea>
         </div>
@@ -116,7 +129,7 @@
           <label class="lbl" for="f-advice">Day one advice: first, and what can wait</label>
           <div class="field"><textarea id="f-advice" name="advice"></textarea></div>
         </div>
-        <div>
+        <div data-interviewer>
           <label class="lbl" for="f-talk">Talk to next</label>
           <div class="field"><textarea id="f-talk" name="talk_to"></textarea></div>
         </div>
@@ -125,7 +138,22 @@
   </div>
 </div>
 
-<dialog id="confirm-delete">
+<dialog id="private-link" data-interviewer>
+  <form method="dialog">
+    <h2>Private interview link</h2>
+    <p>Anyone with this link can edit the approved answers, without signing in. Share it privately.</p>
+    <p id="private-link-expiry"></p>
+    <label class="lbl" for="private-link-value">Copy this link before closing</label>
+    <input type="text" id="private-link-value" readonly autocomplete="off" spellcheck="false">
+    <p id="private-link-copy-status" role="status"></p>
+    <div class="actions">
+      <button type="button" class="btn" id="copy-private-link">Copy private link</button>
+      <button class="btn" value="close">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-delete" data-interviewer>
   <form method="dialog">
     <h2>Delete this sheet?</h2>
     <p id="confirm-delete-text">It will be removed from the server for all your devices. This can’t be undone.</p>

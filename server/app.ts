@@ -86,7 +86,7 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     if (c.req.path === '/participant' || PUBLIC_ASSETS.has(c.req.path) || c.req.path === '/api/participant' || c.req.path.startsWith('/api/participant/')) return next();
     // A participant credential never falls through to interviewer authentication,
     // even when the browser also has a cached interviewer login.
-    if (c.req.header('Authorization')?.startsWith('Bearer ')) return c.json({ error: 'Access denied.' }, 403);
+    if (/^Bearer(?:\s|$)/i.test(c.req.header('Authorization') ?? '')) return c.json({ error: 'Access denied.' }, 403);
     return interviewerAuth(c, next);
   });
   app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Sheet exceeds 1 MB.' }, 413) }));
@@ -100,7 +100,7 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     await next();
   });
   const linkedSheet = (authorization?: string) => {
-    const credential = /^Bearer ([a-f0-9]{64})$/.exec(authorization ?? '')?.[1];
+    const credential = /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1];
     if (!credential) return null;
     return db.query(`SELECT sheets.* FROM sheets JOIN participant_links ON participant_links.sheetId = sheets.id
       WHERE credentialHash = ? AND expiresAt > ?`).get(hashCredential(credential), Date.now()) as any;
@@ -206,7 +206,8 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
   app.get('*', async (c) => {
     const file = PUBLIC_FILES.get(c.req.path);
     if (!file) return c.notFound();
-    return new Response(Bun.file(resolve(root, file)));
+    const asset = Bun.file(resolve(root, file));
+    return new Response(asset, { headers: { 'Content-Type': asset.type } });
   });
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();

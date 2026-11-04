@@ -14,20 +14,20 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 
 ## Product
 
-- What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. Interviewers fill in a 3×3 grid per dimension (Individual, Team, Organization), sheets autosave locally and can be downloaded as PDF.
+- What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. Interviewers fill in a 3×3 grid per dimension (Individual, Team, Organization), sheets autosave to server SQLite and can be downloaded as PDF or JSON.
 - Primary users: Variant interviewers running mapping sessions.
 - Language of what users see: English.
-- Live at https://varianter.github.io/agentic-mapping/ (GitHub Pages, from `main`).
+- The old GitHub Pages origin hosts only the IndexedDB exporter. The app requires a Bun host, named interviewer accounts and a durable SQLite path (see README).
 
 ## Stack
 
-- Language and runtime: plain HTML, CSS and vanilla JavaScript ES modules in the browser. No framework, no bundler, no TypeScript in the app.
+- Language and runtime: Bun/TypeScript on the server; plain HTML, CSS and vanilla JavaScript ES modules in the browser. No framework, no bundler, no TypeScript in the browser.
 - Main parts:
   - `index.html` + `client/app.js`: capture sheet app (tabs, sidebar list, autosave, delete, PDF via print).
-  - `client/db.js`: small promise wrapper around IndexedDB (one `sheets` store).
+  - `client/db.js`: same-origin authenticated storage API adapter; IndexedDB is read only by the explicit legacy exporter.
   - `guide.html`: static interviewer guide.
   - `styles.css`: Variant tokens, layout and `@media print` styles for both pages.
-  - `server.ts`: Hono static file server on Bun, local use only.
+  - `server.ts` + `server/app.ts`: Hono API on Bun, file-backed SQLite, HTTP Basic auth and an exact public-file allowlist. `scripts/backup.ts` creates online snapshots.
 - Package manager or build tool: Bun (`bun.lock`). Do not use npm, yarn or pnpm.
 
 ## Commands
@@ -35,27 +35,33 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 | Task         | Command                                                              |
 | ------------ | -------------------------------------------------------------------- |
 | Install      | `bun install`                                                        |
-| Run locally  | `bun start` (or `bun dev` to restart on `server.ts` changes), open http://localhost:4321. `PORT` overrides the port. |
-| Syntax check | `node --check client/app.js && node --check client/db.js`              |
-| Test         | None yet. There is no test runner or test files.                     |
+| Run locally  | Follow README to create a private account JSON file and set `INTERVIEWER_USERS_FILE`, then `bun start` (or `bun dev`); open http://localhost:4321. `PORT` overrides the port. |
+| Syntax check | `bun run check` (checks all browser modules). |
+| Test         | `bun test` (API/storage); `bun run test:browser` (Playwright). Install Chromium once with `bunx playwright install chromium`; set `CHROMIUM_PATH` to use a system Chromium. CI also installs Linux dependencies. |
+| Backup       | `DATABASE_PATH=/absolute/source.sqlite bun run backup /private/new-snapshot.sqlite` (destination must not exist). |
 | Lint         | None configured.                                                    |
 | Format       | None configured. Match surrounding style by hand.                    |
 | Typecheck    | None.                                                                |
 | Build        | None. Files are served as-is.                                        |
 
-Verify changes by running the syntax check and exercising the change in a browser via `bun start`: create a sheet, type, reload (autosave), switch tabs, delete, and check print preview when touching layout. No test or lint CI workflow is configured. If you add a `test` or `lint` script to `package.json`, record it here and configure CI to run it.
+Run the API suite, syntax checks and browser checks before finishing. `.github/workflows/checks.yml` runs all three. Browser checks use synthetic notes and a temporary database and can refresh the committed screenshot with `UPDATE_EVIDENCE=1 bun run test:browser`. No lint or typecheck is configured.
 
 ## Layout
 
 ```
 index.html        capture sheet page (markup + <template id="matrix-template">)
 client/app.js     browser UI logic for index.html
-client/db.js      browser IndexedDB wrapper: allSheets, getSheet, putSheet, deleteSheet
+client/db.js      authenticated API adapter: allSheets, getSheet, createSheet, putSheet, deleteSheet
+client/legacy.js  explicit old IndexedDB export and JSON download
+legacy.html       old-origin migration/export page
 guide.html        interviewer guide (static, no JS)
 styles.css        shared styles, tokens, print layout
 img/              Variant logos (SVG)
-server.ts         local Hono static server (not deployed)
-.github/workflows pages.yml (deploy), kanbot-merged.yml
+server.ts         configured Bun entrypoint
+server/app.ts     owner-scoped SQLite API, auth and public-file allowlist
+scripts/backup.ts online snapshot command
+tests/            Bun API tests and Playwright browser checks
+.github/workflows checks.yml (tests), pages.yml (legacy exporter), kanbot-merged.yml
 ```
 
 ## Code conventions
@@ -65,21 +71,22 @@ server.ts         local Hono static server (not deployed)
 - DOM: build UI with `document.createElement` and `<template>` clones, not `innerHTML` with user data. Delegated clicks use `data-action="…"`.
 - State in CSS: use data attributes and ARIA (`data-variant`, `data-state`, `data-sidebar`, `aria-selected`) rather than toggling classes.
 - Styling: use the `:root` tokens in `styles.css` (`--yellow`, `--ink`, `--paper`, `--danger`…). Britti Sans comes from the Varde CDN. Keep the print layout working (A4 landscape).
-- Data: sheets are `{ id, fields, createdAt, updatedAt }` in IndexedDB database `agentic-mapping`, store `sheets`. Grid field names are `<dim>_<question>_<level>`, e.g. `team_why_next`. Changing these orphans existing users' data; bump the DB version and migrate if a schema change is needed.
+- Data: SQLite sheets are `{ id, fields, createdAt, updatedAt, revision }` plus server-only owner. Preserve grid field names (`team_why_next`, etc.). Updates/deletes must enforce owner and revision atomically; never upsert deleted sheets. Old IndexedDB `agentic-mapping`/`sheets` is preserved for export/import only.
 - Error handling: catch storage failures and show them in the toolbar status via `setStatus(message, 'error')`. Wrap `localStorage` access in `try/catch`.
 - Accessibility: keep roles, `aria-*` attributes, keyboard support on tabs and visible labels (`.visually-hidden` text) intact.
-- Tests: none yet (see Commands).
+- Tests: use Bun tests for API/persistence and Playwright for browser saves/recovery; keep fixtures synthetic and use temporary databases.
 - Commits: Conventional Commits (`feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`) with a scope.
-- Do not: add a framework, bundler or build step; add runtime npm dependencies to the browser code; make `server.ts` required for the app to work (production is static Pages).
+- Do not: add a framework, frontend bundler/build step or browser runtime npm dependencies; serve arbitrary repository files or credentials; fall back silently to browser-only saves.
 
 ## Decisions
 
-- 2026-11-04: Static site on GitHub Pages with no build step, because the tool must stay trivial to host and change.
-- 2026-11-04: Sheets are stored only in the browser (IndexedDB), no backend, because interview notes should stay on the interviewer's machine.
+- 2026-11-04: PR #10 human review requested implementation beyond the documentation spike. Use the existing Bun/Hono runtime with SQLite and named interviewer accounts; retain Pages as an old-origin exporter. Participant links remain disabled pending access decisions.
 
 ## Gotchas
 
-- New top-level files the site needs must be added to the `cp` line in `.github/workflows/pages.yml`, or they 404 in production.
-- IndexedDB is per origin: changing the local port or host shows an empty sheet list.
-- The deployed site lives under `/agentic-mapping/`, so use relative URLs (`styles.css`, `img/…`), never root-absolute ones.
+- New app assets must be added to the exact allowlist in `server/app.ts`. Pages publishes only the exporter; it cannot run the storage API.
+- Old IndexedDB data is per origin and needs explicit export on the old browser/address. Server data follows `DATABASE_PATH`, so preserve that file/volume across deployments.
+- Bun expands dollar signs in `.env`, including password hashes. Put account hashes in a private JSON file referenced by `INTERVIEWER_USERS_FILE`. Never put that file in the public allowlist.
+- Set `APP_ORIGIN` to the public HTTPS origin behind a reverse proxy; write requests require a matching Origin and JSON. Basic authentication must use HTTPS remotely.
+- The legacy Pages exporter lives under `/agentic-mapping/`, so use relative URLs (`styles.css`, `img/…`), never root-absolute ones.
 - `.claude/agents/`, `.claude/settings.json` and `.codex/agents/` are generated by `kanbot sync`; edit `.kanbot/agents/` instead.

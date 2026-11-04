@@ -37,3 +37,5 @@ A fact the code now contradicts is **stale**. If you edit files, fix or delete i
 ## Index
 
 <!-- One line per fact, newest last. -->
+
+- [storage-needs-implementation](facts/storage-needs-implementation.md): Storage implementation requires working, verified persistence.

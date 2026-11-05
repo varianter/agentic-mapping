@@ -5,7 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
@@ -33,14 +33,12 @@ function validSheet(sheet: any) {
 }
 function decode(row: any) {
   if (!row) return null;
-  const { owner, ...sheet } = row;
-  return { ...sheet, fields: JSON.parse(sheet.fields) };
+  return { ...row, fields: JSON.parse(row.fields) };
 }
 
-export function createApp({ databasePath, users, publicOrigin }: { databasePath: string; users: Record<string, string>; publicOrigin?: string }) {
-  if (!users || !Object.keys(users).length || Object.entries(users).some(([name, hash]) => !name || typeof hash !== 'string' || !hash.startsWith('$argon2id$'))) {
-    throw new Error('Configure INTERVIEWER_USERS_FILE with a JSON object of named users and Argon2id password hashes.');
-  }
+export function createApp({ databasePath, adminKey, publicOrigin }: { databasePath: string; adminKey?: string; publicOrigin?: string }) {
+  if (typeof adminKey !== 'string' || adminKey.length < 32) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters.');
+  const adminDigest = hashCredential(adminKey);
   if (publicOrigin && new URL(publicOrigin).origin !== publicOrigin) throw new Error('APP_ORIGIN must be an origin without a trailing slash.');
   if (publicOrigin && new URL(publicOrigin).protocol !== 'https:' && !(new URL(publicOrigin).protocol === 'http:' && localHost(new URL(publicOrigin).hostname))) {
     throw new Error('APP_ORIGIN must use HTTPS outside localhost.');
@@ -50,14 +48,13 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
   db.exec(`PRAGMA journal_mode = WAL;
     PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS sheets (
-      id TEXT PRIMARY KEY, owner TEXT NOT NULL, fields TEXT NOT NULL,
+      id TEXT PRIMARY KEY, fields TEXT NOT NULL,
       createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1
     );
-    CREATE INDEX IF NOT EXISTS sheets_owner ON sheets(owner);
     CREATE TABLE IF NOT EXISTS participant_links (
       sheetId TEXT PRIMARY KEY, credentialHash TEXT NOT NULL UNIQUE, expiresAt INTEGER NOT NULL
     );`);
-  const app = new Hono<{ Variables: { owner: string } }>();
+  const app = new Hono();
   app.use('*', async (c, next) => {
     const url = new URL(c.req.url);
     if (url.protocol !== 'https:' && !localHost(url.hostname) && !publicOrigin?.startsWith('https:')) {
@@ -72,15 +69,10 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     c.header('X-Frame-Options', 'DENY');
     if (publicOrigin?.startsWith('https:')) c.header('Strict-Transport-Security', 'max-age=31536000');
   });
+  // The Basic password is the admin key; the username is ignored.
   const interviewerAuth = basicAuth({
     realm: 'Agentic mapping',
-    verifyUser: async (username, password, c) => {
-      const hash = Object.hasOwn(users, username) ? users[username] : users[Object.keys(users)[0]];
-      const matches = await Bun.password.verify(password, hash);
-      if (!matches || !Object.hasOwn(users, username)) return false;
-      c.set('owner', username);
-      return true;
-    },
+    verifyUser: (_username, password) => timingSafeEqual(Buffer.from(hashCredential(password), 'hex'), Buffer.from(adminDigest, 'hex')),
   });
   app.use('*', async (c, next) => {
     if (c.req.path === '/participant' || PUBLIC_ASSETS.has(c.req.path) || c.req.path === '/api/participant' || c.req.path.startsWith('/api/participant/')) return next();
@@ -135,7 +127,7 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
 
   app.post('/api/sheets/:id/access', (c) => {
     const result = db.transaction(() => {
-      const sheet = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), c.get('owner'));
+      const sheet = db.query('SELECT id FROM sheets WHERE id = ?').get(c.req.param('id'));
       if (!sheet) return null;
       const credential = randomBytes(32).toString('hex');
       const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -148,22 +140,21 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
   });
   app.delete('/api/sheets/:id/access', (c) => {
     const result = db.transaction(() => {
-      const sheet = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), c.get('owner'));
+      const sheet = db.query('SELECT id FROM sheets WHERE id = ?').get(c.req.param('id'));
       if (!sheet) return false;
       db.query('DELETE FROM participant_links WHERE sheetId = ?').run(c.req.param('id'));
       return true;
     }).immediate();
     return result ? c.body(null, 204) : c.json({ error: 'Sheet unavailable.' }, 404);
   });
-  app.get('/api/sheets', (c) => c.json(db.query('SELECT * FROM sheets WHERE owner = ?').all(c.get('owner')).map(decode)));
+  app.get('/api/sheets', (c) => c.json(db.query('SELECT * FROM sheets').all().map(decode)));
   app.get('/api/sheets/:id', (c) => {
-    const sheet = decode(db.query('SELECT * FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), c.get('owner')));
+    const sheet = decode(db.query('SELECT * FROM sheets WHERE id = ?').get(c.req.param('id')));
     return sheet ? c.json(sheet) : c.json({ error: 'Sheet unavailable.' }, 404);
   });
   app.post('/api/sheets', async (c) => {
     const sheet = await c.req.json().catch(() => null);
     if (!validSheet(sheet)) return c.json({ error: 'Invalid sheet.' }, 400);
-    const owner = c.get('owner');
     // Identical create/import retries are safe; an ID collision never overwrites data.
     const result = db.transaction(() => {
       const existing = db.query('SELECT * FROM sheets WHERE id = ?').get(sheet.id) as any;
@@ -171,9 +162,9 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
         const saved = decode(existing);
         const sameFields = Object.keys(saved.fields).length === Object.keys(sheet.fields).length
           && Object.entries(sheet.fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(saved.fields[key]));
-        return existing.owner === owner && sameFields && saved.createdAt === sheet.createdAt && saved.updatedAt === sheet.updatedAt ? { sheet: saved, created: false } : null;
+        return sameFields && saved.createdAt === sheet.createdAt && saved.updatedAt === sheet.updatedAt ? { sheet: saved, created: false } : null;
       }
-      db.query('INSERT INTO sheets (id, owner, fields, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)').run(sheet.id, owner, JSON.stringify(sheet.fields), sheet.createdAt, sheet.updatedAt);
+      db.query('INSERT INTO sheets (id, fields, createdAt, updatedAt) VALUES (?, ?, ?, ?)').run(sheet.id, JSON.stringify(sheet.fields), sheet.createdAt, sheet.updatedAt);
       return { sheet: { id: sheet.id, fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 }, created: true };
     }).immediate();
     if (!result) return c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
@@ -182,24 +173,22 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
   app.put('/api/sheets/:id', async (c) => {
     const sheet = await c.req.json().catch(() => null);
     if (!validSheet(sheet) || sheet.id !== c.req.param('id') || !validRevision(sheet.revision)) return c.json({ error: 'Invalid sheet or revision.' }, 400);
-    const owner = c.get('owner');
-    const result = db.query('UPDATE sheets SET fields = ?, updatedAt = ?, revision = revision + 1 WHERE id = ? AND owner = ? AND revision = ? RETURNING *')
-      .get(JSON.stringify(sheet.fields), Date.now(), sheet.id, owner, sheet.revision);
+    const result = db.query('UPDATE sheets SET fields = ?, updatedAt = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING *')
+      .get(JSON.stringify(sheet.fields), Date.now(), sheet.id, sheet.revision);
     if (result) return c.json(decode(result));
-    const exists = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(sheet.id, owner);
+    const exists = db.query('SELECT id FROM sheets WHERE id = ?').get(sheet.id);
     return c.json({ error: exists ? 'Another device changed this sheet. Download your draft, then reload and merge your notes.' : 'Sheet unavailable.' }, exists ? 409 : 404);
   });
   app.delete('/api/sheets/:id', async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!validRevision(body?.revision)) return c.json({ error: 'Revision required.' }, 400);
-    const owner = c.get('owner');
     const result = db.transaction(() => {
-      const deleted = db.query('DELETE FROM sheets WHERE id = ? AND owner = ? AND revision = ? RETURNING id').get(c.req.param('id'), owner, body.revision);
+      const deleted = db.query('DELETE FROM sheets WHERE id = ? AND revision = ? RETURNING id').get(c.req.param('id'), body.revision);
       if (deleted) db.query('DELETE FROM participant_links WHERE sheetId = ?').run(c.req.param('id'));
       return deleted;
     }).immediate();
     if (result) return c.body(null, 204);
-    const exists = db.query('SELECT id FROM sheets WHERE id = ? AND owner = ?').get(c.req.param('id'), owner);
+    const exists = db.query('SELECT id FROM sheets WHERE id = ?').get(c.req.param('id'));
     return c.json({ error: exists ? 'Sheet changed; reload before deleting.' : 'Sheet unavailable.' }, exists ? 409 : 404);
   });
   app.all('/api/*', (c) => c.json({ error: 'Endpoint unavailable.' }, 404));

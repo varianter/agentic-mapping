@@ -6,20 +6,20 @@ import { createApp } from '../server/app';
 
 const directories: string[] = [];
 const databases: { close: () => void }[] = [];
-const users = { alice: Bun.password.hashSync('alice-password'), bob: Bun.password.hashSync('bob-password') };
+const adminKey = 'test-admin-key-0123456789-abcdefghij';
 const origin = 'https://mapping.example';
 const sheet = () => ({ id: crypto.randomUUID(), fields: { name: 'Interview', ind_why_next: 'Notes' }, createdAt: 1, updatedAt: 2 });
 function setup() {
   const directory = mkdtempSync(join(tmpdir(), 'mapping-'));
   directories.push(directory);
   const databasePath = join(directory, 'notes.sqlite');
-  const instance = createApp({ databasePath, users });
+  const instance = createApp({ databasePath, adminKey });
   databases.push(instance.db);
   return { ...instance, databasePath };
 }
-function request(app: ReturnType<typeof createApp>['app'], path: string, method = 'GET', body?: unknown, user: string | null = 'alice', requestOrigin = origin) {
+function request(app: ReturnType<typeof createApp>['app'], path: string, method = 'GET', body?: unknown, key: string | null = adminKey, requestOrigin = origin) {
   const headers: Record<string, string> = {};
-  if (user) headers.Authorization = `Basic ${btoa(`${user}:${user}-password`)}`;
+  if (key) headers.Authorization = `Basic ${btoa(`admin:${key}`)}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET') headers.Origin = requestOrigin;
   return app.request(`${origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -38,7 +38,7 @@ test('sheets survive database close and reopen, including edits and deletion', a
   expect((await request(app, `/api/sheets/${original.id}`, 'PUT', edited)).status).toBe(200);
   db.close();
   databases.pop();
-  const reopened = createApp({ databasePath, users });
+  const reopened = createApp({ databasePath, adminKey });
   databases.push(reopened.db);
   const saved = await (await request(reopened.app, `/api/sheets/${original.id}`)).json();
   expect(saved.fields).toEqual(edited.fields);
@@ -48,17 +48,23 @@ test('sheets survive database close and reopen, including edits and deletion', a
   expect(await (await request(reopened.app, '/api/sheets')).json()).toEqual([]);
 });
 
-test('anonymous users and other interviewers cannot access sheets or forge ownership', async () => {
+test('missing or wrong admin keys cannot access or change sheets', async () => {
   const { app } = setup();
   const original = sheet();
-  const created = await (await request(app, '/api/sheets', 'POST', { ...original, owner: 'bob' })).json();
+  const created = await (await request(app, '/api/sheets', 'POST', original)).json();
   expect((await request(app, '/api/sheets', 'GET', undefined, null)).status).toBe(401);
   expect((await request(app, '/', 'GET', undefined, null)).status).toBe(401);
-  expect(await (await request(app, '/api/sheets', 'GET', undefined, 'bob')).json()).toEqual([]);
-  for (const method of ['GET', 'PUT', 'DELETE']) {
-    expect((await request(app, `/api/sheets/${original.id}`, method, method === 'GET' ? undefined : created, 'bob')).status).toBe(404);
+  const wrong = 'wrong-admin-key-0123456789-abcdefghij';
+  for (const key of [null, wrong]) {
+    expect((await request(app, '/api/sheets', 'GET', undefined, key)).status).toBe(401);
+    expect((await request(app, '/api/sheets', 'POST', sheet(), key)).status).toBe(401);
+    for (const method of ['GET', 'PUT', 'DELETE']) {
+      expect((await request(app, `/api/sheets/${original.id}`, method, method === 'GET' ? undefined : { ...created, revision: 1 }, key)).status).toBe(401);
+    }
+    for (const method of ['POST', 'DELETE']) expect((await request(app, `/api/sheets/${original.id}/access`, method, {}, key)).status).toBe(401);
   }
-  expect((await request(app, '/api/sheets', 'POST', original, 'bob')).status).toBe(409);
+  expect(await (await request(app, `/api/sheets/${original.id}`)).json()).toEqual(created);
+  expect((await request(app, '/api/sheets', 'POST', original, adminKey)).status).toBe(200);
 });
 
 test('stale writes/deletes conflict and delayed saves cannot recreate deleted sheets', async () => {
@@ -84,11 +90,11 @@ test('legacy import retries do not duplicate or overwrite notes', async () => {
 
 test('rejects cross-site writes, malformed payloads and unknown API paths', async () => {
   const { app } = setup();
-  expect((await request(app, '/api/sheets', 'POST', sheet(), 'alice', 'https://evil.example')).status).toBe(403);
+  expect((await request(app, '/api/sheets', 'POST', sheet(), adminKey, 'https://evil.example')).status).toBe(403);
   for (const invalid of [{ ...sheet(), id: '../secret' }, { ...sheet(), fields: [] }, { ...sheet(), fields: { name: {} } }, { ...sheet(), createdAt: 'yesterday' }]) {
     expect((await request(app, '/api/sheets', 'POST', invalid)).status).toBe(400);
   }
-  const malformed = await app.request(`${origin}/api/sheets`, { method: 'POST', headers: { Authorization: `Basic ${btoa('alice:alice-password')}`, Origin: origin, 'Content-Type': 'application/json' }, body: '{' });
+  const malformed = await app.request(`${origin}/api/sheets`, { method: 'POST', headers: { Authorization: `Basic ${btoa(`admin:${adminKey}`)}`, Origin: origin, 'Content-Type': 'application/json' }, body: '{' });
   expect(malformed.status).toBe(400);
   expect((await request(app, '/api/unknown')).status).toBe(404);
 });
@@ -101,20 +107,20 @@ test('serves only public assets, never source, credentials or databases', async 
   for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/sheets.sqlite', '/bun.lock', '/.git/config', '/docs/storage-decision.md']) {
     expect((await request(app, path)).status).toBe(404);
   }
-  expect(() => createApp({ databasePath: ':memory:', users: {} })).toThrow();
+  expect(() => createApp({ databasePath: ':memory:' })).toThrow('ADMIN_KEY');
+  expect(() => createApp({ databasePath: ':memory:', adminKey: 'short' })).toThrow('ADMIN_KEY');
 });
 
-test('an online backup restores notes and ownership into an isolated database', async () => {
+test('an online backup restores notes into an isolated database', async () => {
   const { backupDatabase } = await import('../scripts/backup');
   const { app, databasePath } = setup();
   const original = sheet();
   await request(app, '/api/sheets', 'POST', original);
   const destination = join(databasePath, '..', 'backup.sqlite');
   backupDatabase(databasePath, destination);
-  const restored = createApp({ databasePath: destination, users });
+  const restored = createApp({ databasePath: destination, adminKey });
   databases.push(restored.db);
   expect((await (await request(restored.app, `/api/sheets/${original.id}`)).json()).fields).toEqual(original.fields);
-  expect((await request(restored.app, `/api/sheets/${original.id}`, 'GET', undefined, 'bob')).status).toBe(404);
 });
 
 test('failed commits return an error and leave stored notes unchanged', async () => {
@@ -131,7 +137,7 @@ test('failed commits return an error and leave stored notes unchanged', async ()
 test('requires valid credentials, origin, JSON and a bounded request body', async () => {
   const { app } = setup();
   expect((await request(app, '/api/sheets', 'GET', undefined, 'mallory')).status).toBe(401);
-  const headers = { Authorization: `Basic ${btoa('alice:alice-password')}` };
+  const headers = { Authorization: `Basic ${btoa(`admin:${adminKey}`)}` };
   expect((await app.request(`${origin}/api/sheets`, { method: 'POST', headers })).status).toBe(403);
   expect((await app.request(`${origin}/api/sheets`, { method: 'POST', headers: { ...headers, Origin: origin, 'Content-Type': 'text/plain' }, body: '{}' })).status).toBe(415);
   expect((await request(app, '/api/sheets', 'POST', { ...sheet(), fields: { name: 'x'.repeat(1024 * 1024) } })).status).toBe(413);

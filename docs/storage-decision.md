@@ -1,6 +1,6 @@
 # Storage and access decision
 
-Design and implementation, 2026-11-04. Human review requested actual persistent storage in this PR. The app now uses the existing Bun/Hono runtime with file-backed SQLite, named interviewer accounts and owner-scoped API queries. Workers/D1 remains an alternative if the owner chooses managed hosting. Participant completion links now follow the approved defaults documented in [the implementation map](participant-access.md).
+Design and implementation, 2026-11-04. Human review requested actual persistent storage in this PR. The app now uses the existing Bun/Hono runtime with file-backed SQLite, a single admin key (`ADMIN_KEY`) and owner-scoped API queries. Workers/D1 remains an alternative if the owner chooses managed hosting. Participant completion links now follow the approved defaults documented in [the implementation map](participant-access.md).
 
 ## Implemented behavior
 
@@ -104,7 +104,7 @@ Participant access is a separate, narrow API. A server-generated, high-entropy b
 ### Remaining deployment and participant decisions
 
 - **Hosting and operations:** confirm that setup/maintenance outweigh large-scale needs; name a Bun host/operator for this implementation (or plan a later Cloudflare migration), account/billing owner, data-location requirements, budget, retention and recovery targets.
-- **Interviewer identity and ownership:** provision named interviewer accounts for the implemented Basic-auth baseline; choose an identity provider if SSO is required, and define any later team access, transfer and departing-interviewer rules. An editable interviewer name cannot establish ownership.
+- **Interviewer identity (decided, #15):** one secret `ADMIN_KEY` (at least 32 characters) sent as the Basic password gates all interview management; there are no named accounts or per-sheet owners. Old local SQLite data is not migrated; delete it. Key rotation and multiple admins are out of scope.
 - **Visible/editable fields (decided):** the 27 grid fields and four approved reflections are participant-readable/editable; identity, context, discipline, contacts and all other fields remain private.
 - **Link-only access (decided):** possession grants access for seven days; the owner can replace/revoke access. Drafts remain in memory with explicit download. Validate the completion window in a real handoff trial.
 - **Existing notes:** approve uploading local interview data, the old-origin export window and how long local exports and backups may retain it. Existing browser notes remain untouched until explicitly imported; the app has no browser-only save fallback.

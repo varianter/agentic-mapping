@@ -7,13 +7,13 @@ import assert from 'node:assert/strict';
 import { checkParticipantFlow } from './participant-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
-const users = { alice: Bun.password.hashSync('browser-password') };
-const { app, db } = createApp({ databasePath: join(directory, 'sheets.sqlite'), users });
+const adminKey = 'browser-admin-key-0123456789-abcdefgh';
+const { app, db } = createApp({ databasePath: join(directory, 'sheets.sqlite'), adminKey });
 const server = Bun.serve({ port: 0, fetch: app.fetch });
 const baseURL = `http://localhost:${server.port}`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true });
 const errors = [];
-const context = await browser.newContext({ httpCredentials: { username: 'alice', password: 'browser-password' }, viewport: { width: 1440, height: 1000 } });
+const context = await browser.newContext({ httpCredentials: { username: 'admin', password: adminKey }, viewport: { width: 1440, height: 1000 } });
 context.setDefaultTimeout(12000);
 const page = await context.newPage();
 page.on('pageerror', (error) => errors.push(error.message));
@@ -39,7 +39,7 @@ try {
 
   console.log('Basic create/reload/dimensions passed');
   // A separate browser context sees persisted notes with the same interviewer identity.
-  const secondContext = await browser.newContext({ httpCredentials: { username: 'alice', password: 'browser-password' } });
+  const secondContext = await browser.newContext({ httpCredentials: { username: 'admin', password: adminKey } });
   secondContext.setDefaultTimeout(12000);
   const second = await secondContext.newPage();
   await second.goto(`${baseURL}/#${id}`);

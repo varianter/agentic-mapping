@@ -1,4 +1,4 @@
-// Server-backed storage. Ownership comes from the authenticated interviewer.
+// Server-backed storage. Access is gated by the admin key, sent as the Basic password.
 async function request(path = '', method = 'GET', body) {
   const response = await fetch(`api/sheets${path}`, {
     method,

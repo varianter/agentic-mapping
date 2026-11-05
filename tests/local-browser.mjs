@@ -344,9 +344,20 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     await page.locator('#save-local [value="later"]').click();
     await page.reload();
     await page.locator('#sheet-list').waitFor({ state: 'attached' });
+    // Let the async IndexedDB read and offer decision settle before asserting absence.
+    await page.evaluate(async () => {
+      await (await import('/client/local-db.js')).allSheets();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    });
     assert.equal(await page.locator('#save-local').isVisible(), false);
     assert.equal(db.query('SELECT COUNT(*) AS count FROM sheets WHERE id IN (?, ?, ?)').get(ids[0], ids[1], ids[2]).count, 0);
     assert.deepEqual(await localIds(page), [...ids].sort());
+    await context.close();
+    // New session (fresh sessionStorage) with the same models: the offer returns.
+    ({ context, page, errors } = await session(seeded));
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#save-local-title').textContent(), 'Save 3 browser models to your account?');
     await context.close();
 
     // Partial failure (offline for the 2nd), retry, and 409 with different content.
@@ -389,6 +400,11 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     ({ context, page, errors } = await session([seeded[3]]));
     await page.reload();
     await page.locator('#sheet-list').waitFor({ state: 'attached' });
+    // Let the async IndexedDB read and offer decision settle before asserting absence.
+    await page.evaluate(async () => {
+      await (await import('/client/local-db.js')).allSheets();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    });
     assert.equal(await page.locator('#save-local').isVisible(), false);
     assert.deepEqual(errors, []);
     await context.close();

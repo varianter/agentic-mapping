@@ -1,6 +1,6 @@
 # Agentic mapping: capture sheets
 
-Capture sheets and an interviewer guide for 15-minute interviews about what people had to learn to work with agents. Plain HTML, CSS and browser JavaScript served by Bun/Hono. No build step.
+Capture sheets and an interviewer guide for 15-minute interviews about what people had to learn to work with agents. Server-rendered HTML (Hono + `hono/jsx` on Bun), one stylesheet and a few custom elements that enhance plain forms. No build step.
 
 Three modes, one name each:
 
@@ -43,33 +43,33 @@ Never commit secrets or copy production KV variables into a local `.env`.
 ## Develop
 
 ```bash
-bun test                              # API and storage tests
-bun run check                         # syntax-check client modules
+bun test                              # server tests (form posts through app.request)
+bun run check                         # syntax-check browser scripts
 bunx playwright install chromium      # once
 bun run test:browser                  # Playwright browser checks
 ```
 
 Tests use in-memory stores and never contact Upstash. No lint, typecheck or formatter is configured.
 
-New public files must be added to the allowlist in `server/app.ts`.
+Files in `public/` are served at content-hashed `/assets/…` URLs; nothing else in the repository is served.
 
 ```
-server.ts          Bun entrypoint
-server/app.ts      Hono API, cookie sign-in, public-file allowlist
-server/config.ts   Env config checks
-server/store.ts    Upstash and memory/JSON-file stores
-api/index.ts       Vercel entry
-client/boot.js     Starts the legacy participant connect page
-server/me/         My map at / (server-rendered form; autosave via public/elements)
-public/            styles.css, img/, elements/*.js custom elements, served with hashed URLs
-server/interviews/ Interview list, editor, new, upload, connect URL
+server.ts           Bun entrypoint
+api/index.ts        Vercel entry
+server/app.tsx      Middleware order and route mounts
+server/config.ts    Env config checks
+server/store.ts     Upstash and memory/JSON-file stores
+server/me/          My map at / (form; autosave via public/elements)
+server/interviews/  Interview list, editor, new, upload, connect URL
 server/submissions/ Self-submitted maps
-server/shell/      Layout, Sheet form, Sidebar, Toolbar, the shared sheet editor routes
-server/domain/     Fields, sheets, respondents, links, import, zod schemas
-server/framework/  Assets manifest, auth, formAction, cookies
-server/connect/    /connect page, private link → browser cookie, merge choice
-index.html, styles.css
-tests/             Bun and Playwright tests
+server/connect/     /connect: private link → browser cookie, merge choice
+server/signIn/      /sign-in, /sign-out
+server/guide/       /guide
+server/shell/       Layout, Sheet form, Sidebar, Toolbar, shared sheet editor routes
+server/domain/      Fields, sheets, respondents, links, import, zod schemas
+server/framework/   formAction, hashed assets, auth, cookies
+public/             styles.css, img/, connect.js, elements/*.js
+tests/              Bun and Playwright tests
 ```
 
 ## Deploy (Vercel)
@@ -77,11 +77,11 @@ tests/             Bun and Playwright tests
 1. Import the repo with no build command and no output directory (`vercel.json` sets `"framework": null`).
 2. Add **Upstash for Redis** from Storage → Marketplace. Apply `KV_REST_API_URL` and `KV_REST_API_TOKEN` to Production and Preview.
 3. Set `ADMIN_KEY` (Production and Preview) and `APP_ORIGIN` (production HTTPS origin). Leave `ADMIN_KEY` unset for a self-only deploy.
-4. After deploy, check that `/server/app.ts` and `/package.json` return 404.
+4. After deploy, check that `/server/app.tsx` and `/package.json` return 404.
 
 **Preview deployments share production data.** Only share preview URLs and the admin key with people allowed to see production.
 
-Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /` and participant requests. Anyone can create a self-submitted map, so rate limiting matters.
+Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /` and `POST /connect`. Anyone can create a self-submitted map, so rate limiting matters.
 
 ## Docs
 

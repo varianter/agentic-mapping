@@ -24,7 +24,8 @@ test('pages send a strict CSP, same-origin referrers and no caching; 404s render
   expect(response.headers.get('Content-Type')).toContain('text/html');
   expect(await response.text()).toContain('Page not found');
   const csp = response.headers.get('Content-Security-Policy') ?? '';
-  for (const directive of ["script-src 'self'", "form-action 'self'", "frame-ancestors 'none'", "object-src 'none'"]) expect(csp).toContain(directive);
+  for (const directive of ["script-src 'self'", "style-src 'self'", "form-action 'self'", "frame-ancestors 'none'", "object-src 'none'"]) expect(csp).toContain(directive);
+  expect(csp).not.toContain('unsafe-inline');
   expect(response.headers.get('Referrer-Policy')).toBe('same-origin');
   expect(response.headers.get('Cache-Control')).toBe('no-store');
   expect(response.headers.get('X-Frame-Options')).toBe('DENY');

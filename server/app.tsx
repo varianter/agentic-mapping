@@ -10,7 +10,6 @@ import { assets } from './framework/assets';
 import { isAdmin, sessionToken } from './framework/auth';
 import { wantsJson } from './framework/respond';
 import { ErrorPage } from './shell/ErrorPage';
-import { createLegacyApp } from './legacy';
 import { guideRoutes } from './guide/guide.routes';
 import { meRoutes } from './me/me.routes';
 import { connectRoutes } from './connect/connect.routes';
@@ -56,8 +55,7 @@ export function createApp(config: AppConfig) {
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      // Inline styles stay allowed until the legacy page is gone.
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'"],
       fontSrc: ['https://varde.variant.dev'],
       imgSrc: ["'self'", 'data:'],
       connectSrc: ["'self'"],
@@ -94,7 +92,6 @@ export function createApp(config: AppConfig) {
   app.route('/', connectRoutes);
   app.route('/interviews', interviewRoutes);
   app.route('/submissions', submissionRoutes);
-  app.route('/', createLegacyApp(config).app);
 
   app.notFound((c) => {
     if (wantsJson(c)) return c.json({ error: 'Not found.' }, 404);

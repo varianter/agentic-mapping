@@ -1,5 +1,7 @@
 # Participant completion links
 
+> Superseded on 2026-11-05 by the server-rendered rework: `server/app.ts`, `client/*`, `index.html` and the JSON API (`/api/sheets`, `/api/me`, `/api/participant*`) are gone. See `.agents/skills/project-conventions/SKILL.md` for the current routes; references below are historical.
+
 ## Implementation map
 
 The storage prerequisite is present in this checkout: `server/app.ts` owns authentication, SQLite, revisions and the public-file allowlist; `server.ts` configures the host. No replacement storage or identity system is needed.

@@ -29,8 +29,9 @@ async function signIn(page) {
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 context.setDefaultTimeout(12000);
 const page = await context.newPage();
-// Until the legacy participant page opts in too, leaving a view-transition page for it aborts the transition.
-page.on('pageerror', (error) => { if (!error.message.includes('ViewTransition opt-in disabled')) errors.push(error.message); });
+page.on('pageerror', (error) => errors.push(error.message));
+// The strict CSP (no inline scripts or styles) must never block anything the app itself sends.
+context.on('console', (message) => { if (/Content Security Policy/i.test(message.text())) errors.push(message.text()); });
 const status = page.locator('#save-status');
 const waitSaved = (target = page) => target.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved to server');
 const ready = (target = page) => target.locator('autosave-form[data-ready]').waitFor();

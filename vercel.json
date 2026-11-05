@@ -1,10 +1,15 @@
 {
   "framework": null,
   "bunVersion": "1.x",
-  "routes": [{ "src": "/(.*)", "dest": "/api" }],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api"
+    }
+  ],
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{index.html,styles.css,client/{boot,participant}.js,public/**}"
+      "includeFiles": "{server,public}/**"
     }
   }
 }

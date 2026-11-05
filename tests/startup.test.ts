@@ -13,7 +13,7 @@ test('configured Bun process retains notes across a server restart', async () =>
   reservation.stop(true);
   const origin = `http://localhost:${port}`;
   const { sessionToken } = await import('../server/app');
-  const headers = { Cookie: `am_admin=${sessionToken(adminKey)}`, Origin: origin, 'Content-Type': 'application/json' };
+  const headers = { Cookie: `am_admin=${sessionToken(adminKey)}`, Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' };
   const env: Record<string, string | undefined> = { ...process.env, PORT: String(port), APP_ORIGIN: origin, LOCAL_STORE_FILE: join(directory, 'store.json'), ADMIN_KEY: adminKey };
   delete env.KV_REST_API_URL;
   delete env.KV_REST_API_TOKEN;
@@ -23,7 +23,7 @@ test('configured Bun process retains notes across a server restart', async () =>
     for (let attempt = 0; attempt < 100; attempt++) {
       if (child.exitCode !== null) throw new Error('Server exited before accepting requests.');
       try {
-        const response = await fetch(`${origin}/api/sheets`, { headers, signal: AbortSignal.timeout(500) });
+        const response = await fetch(`${origin}/guide`, { signal: AbortSignal.timeout(500) });
         if (response.ok) return;
       } catch {}
       await Bun.sleep(50);
@@ -32,16 +32,17 @@ test('configured Bun process retains notes across a server restart', async () =>
   }
   try {
     await waitReady();
-    const id = crypto.randomUUID();
-    const created = await fetch(`${origin}/api/sheets`, { method: 'POST', headers, body: JSON.stringify({ id, fields: { name: 'Survives process restart' }, createdAt: 1, updatedAt: 2 }) });
-    expect(created.status).toBe(201);
+    const created = await fetch(`${origin}/interviews`, { method: 'POST', headers, redirect: 'manual' });
+    expect(created.status).toBe(303);
+    const path = created.headers.get('Location')!;
+    expect((await fetch(`${origin}${path}`, { method: 'POST', headers, body: 'revision=1&name=Survives+process+restart', redirect: 'manual' })).status).toBe(303);
     child.kill();
     await child.exited;
     child = start();
     await waitReady();
-    const saved = await (await fetch(`${origin}/api/sheets/${id}`, { headers })).json();
+    const [saved] = await (await fetch(`${origin}${path}.json`, { headers })).json();
     expect(saved.fields.name).toBe('Survives process restart');
-    expect(saved.revision).toBe(1);
+    expect(saved.revision).toBe(2);
   } finally {
     child.kill();
     await child.exited;

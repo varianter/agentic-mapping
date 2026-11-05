@@ -98,6 +98,7 @@ try {
   console.log('Overlapping edits passed');
   for (const path of ['/legacy.html', '/client/legacy.js']) assert.equal((await page.request.get(`${baseURL}${path}`)).status(), 404);
   assert.equal(await page.locator('#import-json').count(), 0);
+  assert.equal(await page.locator('a[href="legacy.html"]').count(), 0);
   // Unknown hashes never open an unrelated interview.
   await page.goto(`${baseURL}/#${crypto.randomUUID()}`);
   await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('Sheet unavailable'));

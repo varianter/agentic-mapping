@@ -28,9 +28,7 @@ Keep production account files, passwords, tokens and private keys outside the ch
 
 ## Existing notes and recovery
 
-Export each browser’s existing IndexedDB notes from the **old origin**, then select **Import JSON** on the server. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.
-
-Imports preserve IDs, fields and timestamps and assign ownership to the signed-in interviewer. Identical retries are safe; conflicting IDs stop import without overwriting anything. A partial import reports its count; keep the export, resolve collisions and retry. Verify the imported notes before removing any originals or private JSON files.
+There is no browser-note migration: the earlier IndexedDB storage was never used. Notes live on the server. If a sheet is unavailable, use **Download JSON** to keep your draft and create a new sheet.
 
 **Saved to server** means a committed save. On a network failure, use **Retry save** or **Download JSON** in the sidebar before closing the tab. Unsaved drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
 
@@ -50,13 +48,13 @@ The credential travels in the private link's URL fragment (the part after `#`), 
 
 ## Deploy and back up
 
-### GitHub Pages and the storage host
+### Storage host
 
-The working app moves to the Bun host's HTTPS address; GitHub Pages keeps only the old-browser export page. Pages does not store shared sheets or forward saves to the Bun host. Export existing notes on Pages, then open the Bun app and use **Import JSON** to upload them to your account.
+The app runs on the Bun host's HTTPS address; there is no separate static host.
 
-At the Bun address, the browser sends authenticated `POST` (create/import), `PUT` (autosave) and `DELETE` requests to that same host's `/api/sheets` endpoints. The running Bun process checks ownership and revisions and writes to the SQLite file at `DATABASE_PATH` before acknowledging success. Another device reads those saved sheets from the same API using the same interviewer account; it sees updates when loading or reloading a sheet, without live synchronization.
+At the Bun address, the browser sends authenticated `POST` (create), `PUT` (autosave) and `DELETE` requests to that same host's `/api/sheets` endpoints. The running Bun process checks ownership and revisions and writes to the SQLite file at `DATABASE_PATH` before acknowledging success. Another device reads those saved sheets from the same API using the same interviewer account; it sees updates when loading or reloading a sheet, without live synchronization.
 
-The [Pages workflow](.github/workflows/pages.yml) updates only the static exporter after a push to `main` or a manual workflow run. It does not deploy the Bun app or update its database. The operator must deploy code updates to the Bun host separately and restart the service with the same durable `DATABASE_PATH`; sheet edits reach storage through the API without a commit, workflow run or redeployment. This PR does not provision a host or configure automatic Bun deployments.
+The operator must deploy code updates to the Bun host separately and restart the service with the same durable `DATABASE_PATH`; sheet edits reach storage through the API without a commit, workflow run or redeployment. This PR does not provision a host or configure automatic Bun deployments.
 
 ### Bun deployment and backups
 
@@ -64,11 +62,11 @@ Run one Bun instance behind an HTTPS reverse proxy with process supervision, a d
 
 Set `APP_ORIGIN` to the public **HTTPS** origin; external HTTP configuration is rejected. The Bun listener binds to loopback by default. The proxy must terminate HTTPS and keep the backend inaccessible publicly; do not rely on forwarded headers as proof of TLS. Responses, including errors and app assets, send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`; HTTPS configuration also sends HSTS. Disable caching at the proxy/CDN. Do not log Authorization headers, request/response bodies or full private links, and do not enable analytics, session replay or error capture of page URLs/form values on participant pages. The app logs fixed error messages only. Rate-limit invalid participant credentials at the proxy as well as interviewer sign-in.
 
-No new deployment secret is required for participant links. Keep `INTERVIEWER_USERS_FILE` and `DATABASE_PATH` private and outside the checkout/public artifacts. If deployment automation needs credentials, an authorized operator must enter values directly in GitHub repository/environment **Secrets** (for example names `MAPPING_DEPLOY_KEY` and `MAPPING_INTERVIEWER_USERS_JSON`); documentation and workflow configuration may contain names only. Supply values only to the server runtime/private account file, never Pages, browser assets, committed `.env` files, logs or screenshots. This change does not provision Secrets or add a deployment workflow.
+No new deployment secret is required for participant links. Keep `INTERVIEWER_USERS_FILE` and `DATABASE_PATH` private and outside the checkout/public artifacts. If deployment automation needs credentials, an authorized operator must enter values directly in GitHub repository/environment **Secrets** (for example names `MAPPING_DEPLOY_KEY` and `MAPPING_INTERVIEWER_USERS_JSON`); documentation and workflow configuration may contain names only. Supply values only to the server runtime/private account file, never browser assets, committed `.env` files, logs or screenshots. This change does not provision Secrets or add a deployment workflow.
 
 The additive `participant_links` table is created on startup without changing existing sheets. Take a backup before upgrading. Before restoring any database backup, stop access and invalidate restored participant links (`DELETE FROM participant_links` on the private database) before reopening the host, because a backup can resurrect revoked credentials. Test the HTTPS host with two separate browser profiles and confirm whether seven days is a suitable completion window in a handoff trial.
 
-GitHub Pages cannot run this API and now serves only migration/export. Deploy this checkout on the selected Bun host, run `bun install --frozen-lockfile --production`, configure the environment above and start `bun start`. The server serves only allowlisted public files, never source, credentials, databases or backups. Restart/redeploy with the same `DATABASE_PATH` to retain notes. Do not run independent replicas or place the database on an ephemeral disk.
+Deploy this checkout on the selected Bun host, run `bun install --frozen-lockfile --production`, configure the environment above and start `bun start`. The server serves only allowlisted public files, never source, credentials, databases or backups. Restart/redeploy with the same `DATABASE_PATH` to retain notes. Do not run independent replicas or place the database on an ephemeral disk.
 
 ```bash
 # Take a consistent online snapshot (destination must not already exist).
@@ -86,12 +84,11 @@ bunx playwright install chromium       # once; Linux CI also uses --with-deps
 bun run test:browser
 ```
 
-API tests cover persistence, permissions, conflicts, imports, exposure, participant scope/expiry/revocation/replacement and backup/restore. Browser tests cover autosave, two-device access, private-link handoff, failures, conflicts, migration, deletion and print layout; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
+API tests cover persistence, permissions, conflicts, create retries, exposure, participant scope/expiry/revocation/replacement and backup/restore. Browser tests cover autosave, two-device access, private-link handoff, failures, conflicts, deletion and print layout; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
 
 - `server.ts`, `server/app.ts`: authenticated API, SQLite and public-file allowlist.
 - `client/app.js`, `client/db.js`: UI and server storage adapter.
 - `client/boot.js`, `client/participant.js`, `client/form.js`: isolated participant entrypoint and shared grids/tabs.
-- `client/legacy.js`, `legacy.html`: browser-data export and JSON recovery.
 - `scripts/backup.ts`: consistent SQLite snapshot.
 - `styles.css`, `index.html`, `guide.html`: capture sheets and guide; Britti Sans comes from `varde.variant.dev`.
 

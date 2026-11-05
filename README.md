@@ -60,7 +60,18 @@ The credential travels in the private link's URL fragment (the part after `#`), 
 
 Each sheet is one JSON value at `sheet:<id>`; each private link is `link:<hash>` and expires with the link. Every save overwrites the whole sheet after a revision check. The check is not atomic, so two people saving the same sheet at the same instant could overwrite each other; stale tabs still get a 409. Backups are whatever Upstash provides; download JSON for your own copies.
 
-This slice covers storage only. The Vercel deploy and preview setup is separate.
+### Deploy on Vercel
+
+The app runs as one Vercel Function on the Bun runtime (`api/index.ts`, `vercel.json`) that exports the Hono app. `vercel.json` bundles only the allowlisted public files; every other path returns 404 and everything except participant pages/assets needs the admin key (401 otherwise).
+
+1. Import the GitHub repo in Vercel (no build command, no output directory).
+2. Add Upstash Redis as above and make sure `KV_REST_API_URL` and `KV_REST_API_TOKEN` apply to **both Production and Preview**.
+3. Set `ADMIN_KEY` for Production and Preview (same value). Set `APP_ORIGIN` to the production HTTPS origin.
+4. Startup fails with a `Config error` if `ADMIN_KEY` or, on Vercel, the KV variables are missing.
+
+Each PR gets a preview URL. Previews additionally accept writes from their own `https://$VERCEL_URL` and `https://$VERCEL_BRANCH_URL` origins.
+
+**Warning: previews use production data.** They share production's storage, so saves, deletes and private links made on a preview change real interviews. PR code runs against that data; only share preview URLs and the admin key with people already allowed to see production.
 
 ### Local development
 

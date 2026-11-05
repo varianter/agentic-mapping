@@ -35,17 +35,19 @@ function validSheet(sheet: any) {
     && Object.entries(sheet.fields).every(([key, value]) => key.length <= 100 && (typeof value === 'string' || (Array.isArray(value) && value.every((item) => typeof item === 'string'))))
     && Number.isSafeInteger(sheet.createdAt) && sheet.createdAt >= 0 && Number.isSafeInteger(sheet.updatedAt) && sheet.updatedAt >= 0;
 }
-export function createApp({ store, adminKey, publicOrigin }: { store: Store; adminKey?: string; publicOrigin?: string }) {
+export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }: { store: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] }) {
   if (typeof adminKey !== 'string' || adminKey.length < 32) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters.');
   const adminDigest = hashCredential(adminKey);
   if (publicOrigin && new URL(publicOrigin).origin !== publicOrigin) throw new Error('APP_ORIGIN must be an origin without a trailing slash.');
   if (publicOrigin && new URL(publicOrigin).protocol !== 'https:' && !(new URL(publicOrigin).protocol === 'http:' && localHost(new URL(publicOrigin).hostname))) {
     throw new Error('APP_ORIGIN must use HTTPS outside localhost.');
   }
+  const origins = new Set([...(publicOrigin ? [publicOrigin] : []), ...allowedOrigins]);
+  const httpsOrigins = [...origins].some((origin) => origin.startsWith('https:'));
   const app = new Hono();
   app.use('*', async (c, next) => {
     const url = new URL(c.req.url);
-    if (url.protocol !== 'https:' && !localHost(url.hostname) && !publicOrigin?.startsWith('https:')) {
+    if (url.protocol !== 'https:' && !localHost(url.hostname) && !httpsOrigins) {
       c.res = c.json({ error: 'HTTPS required.' }, 403);
     } else {
       await next();
@@ -55,7 +57,7 @@ export function createApp({ store, adminKey, publicOrigin }: { store: Store; adm
     c.header('Referrer-Policy', 'no-referrer');
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('X-Frame-Options', 'DENY');
-    if (publicOrigin?.startsWith('https:')) c.header('Strict-Transport-Security', 'max-age=31536000');
+    if (httpsOrigins) c.header('Strict-Transport-Security', 'max-age=31536000');
   });
   // The Basic password is the admin key; the username is ignored.
   const interviewerAuth = basicAuth({
@@ -78,7 +80,7 @@ export function createApp({ store, adminKey, publicOrigin }: { store: Store; adm
   app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Sheet exceeds 1 MB.' }, 413) }));
   app.use('/api/*', async (c, next) => {
     if (!['GET', 'HEAD'].includes(c.req.method)) {
-      if (c.req.header('Origin') !== (publicOrigin ?? new URL(c.req.url).origin) || c.req.header('Sec-Fetch-Site') === 'cross-site') {
+      if (!(origins.size ? origins : new Set([new URL(c.req.url).origin])).has(c.req.header('Origin') ?? '') || c.req.header('Sec-Fetch-Site') === 'cross-site') {
         return c.json({ error: 'Cross-site writes are not allowed.' }, 403);
       }
       if (c.req.header('Content-Type')?.split(';')[0] !== 'application/json') return c.json({ error: 'JSON required.' }, 415);

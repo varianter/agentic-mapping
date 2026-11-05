@@ -71,6 +71,8 @@ The app runs as one Vercel Function on the Bun runtime (`api/index.ts`, `vercel.
 
 Each PR gets a preview URL. Previews additionally accept writes from their own `https://$VERCEL_URL` and `https://$VERCEL_BRANCH_URL` origins.
 
+After the first deploy, check that `/server/app.ts` and `/package.json` return 404 on the deployment.
+
 **Warning: previews use production data.** They share production's storage, so saves, deletes and private links made on a preview change real interviews. PR code runs against that data; only share preview URLs and the admin key with people already allowed to see production.
 
 ### Local development

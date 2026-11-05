@@ -1,4 +1,5 @@
 {
+  "framework": "hono",
   "bunVersion": "1.x",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "functions": {

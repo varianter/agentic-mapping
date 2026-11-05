@@ -1,24 +1,24 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { createApp } from '../server/app';
+import { memoryStore } from '../server/store';
 
 const origin = 'https://mapping.example';
 const adminKey = 'test-admin-key-0123456789-abcdefghij';
-const directories: string[] = [];
-const databases: ReturnType<typeof createApp>['db'][] = [];
 const approved = [
   ...['ind', 'team', 'org'].flatMap((dimension) => ['learn', 'why', 'found'].flatMap((question) => ['start', 'good', 'next'].map((level) => `${dimension}_${question}_${level}`))),
   'good', 'surprised', 'missing', 'advice',
 ];
-function setup() {
-  const directory = mkdtempSync(join(tmpdir(), 'participant-test-'));
-  directories.push(directory);
-  const databasePath = join(directory, 'sheets.sqlite');
-  const instance = createApp({ databasePath, adminKey, publicOrigin: origin });
-  databases.push(instance.db);
+const directories: string[] = [];
+afterEach(() => {
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+function setup(file?: string) {
+  const store = memoryStore(file);
+  const instance = { ...createApp({ store, adminKey, publicOrigin: origin }), store };
   const send = (path: string, method = 'GET', body?: unknown, authorization?: string) => instance.app.request(`${origin}${path}`, {
     method,
     headers: { ...(authorization ? { Authorization: authorization } : {}), Origin: origin, 'Content-Type': 'application/json' },
@@ -27,17 +27,12 @@ function setup() {
   const owner = (path: string, method = 'GET', body?: unknown, key = adminKey) => send(path, method, body, `Basic ${btoa(`admin:${key}`)}`);
   const participant = (credential?: string, method = 'GET', body?: unknown, path = '/api/participant') => send(path, method, body, credential ? `Bearer ${credential}` : undefined);
   const issue = async (id: string) => (await owner(`/api/sheets/${id}/access`, 'POST', {})).json();
-  return { ...instance, databasePath, send, owner, participant, issue };
+  return { ...instance, send, owner, participant, issue };
 }
 async function createSheet(instance: ReturnType<typeof setup>) {
   const fields = { ...Object.fromEntries(approved.map((key) => [key, `Synthetic ${key}`])), name: 'Private synthetic name', context: 'Private context', discipline: ['Private discipline'], talk_to: 'Private contacts', interviewer: 'Private interviewer' };
   return (await instance.owner('/api/sheets', 'POST', { id: crypto.randomUUID(), fields, createdAt: 1, updatedAt: 2 })).json();
 }
-afterEach(() => {
-  for (const db of databases.splice(0)) db.close();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
-
 test('only the admin issues, replaces and revokes credentials, storing only a 256-bit credential hash', async () => {
   const instance = setup();
   const sheet = await createSheet(instance);
@@ -45,9 +40,11 @@ test('only the admin issues, replaces and revokes credentials, storing only a 25
   expect(first.credential).toMatch(/^[a-f0-9]{64}$/);
   expect(first.expiresAt - Date.now()).toBeGreaterThan(7 * 24 * 60 * 60 * 1000 - 5000);
   expect(first.expiresAt - Date.now()).toBeLessThanOrEqual(7 * 24 * 60 * 60 * 1000);
-  const stored = instance.db.query('SELECT * FROM participant_links').get() as any;
-  expect(stored.credentialHash).toBe(createHash('sha256').update(first.credential).digest('hex'));
-  expect(JSON.stringify(stored)).not.toContain(first.credential);
+  const linkKeys = () => instance.store.keys('link:');
+  const hash = createHash('sha256').update(first.credential).digest('hex');
+  expect(await linkKeys()).toEqual([`link:${hash}`]);
+  expect(await instance.store.keys('')).not.toContain(`link:${first.credential}`);
+  expect(JSON.stringify(await instance.store.get(`sheet:${sheet.id}`))).not.toContain(first.credential);
   for (const method of ['POST', 'DELETE']) {
     const response = await instance.owner(`/api/sheets/${sheet.id}/access`, method, {}, 'wrong-admin-key-0123456789-abcdefghij');
     expect(response.status).toBe(401);
@@ -60,11 +57,14 @@ test('only the admin issues, replaces and revokes credentials, storing only a 25
   expect((await instance.participant(replacement.credential)).status).toBe(200);
   expect((await instance.owner(`/api/sheets/${sheet.id}/access`, 'DELETE', {})).status).toBe(204);
   expect((await instance.participant(replacement.credential)).status).toBe(404);
-  expect(instance.db.query('SELECT * FROM participant_links').all()).toEqual([]);
+  expect(await linkKeys()).toEqual([]);
 });
 
 test('participant projection and patch preserve private fields and persist for the interviewer after restart', async () => {
-  const instance = setup();
+  const directory = mkdtempSync(join(tmpdir(), 'mapping-'));
+  directories.push(directory);
+  const file = join(directory, 'store.json');
+  const instance = setup(file);
   const sheet = await createSheet(instance);
   const { credential } = await instance.issue(sheet.id);
   const view = await (await instance.participant(credential)).json();
@@ -77,10 +77,7 @@ test('participant projection and patch preserve private fields and persist for t
   expect(saved.fields.good).toBe('<script>synthetic inert answer</script>');
   expect(Object.keys(saved).sort()).toEqual(['fields', 'revision']);
   expect(saved.revision).toBe(2);
-  instance.db.close();
-  databases.pop();
-  const reopened = createApp({ databasePath: instance.databasePath, adminKey, publicOrigin: origin });
-  databases.push(reopened.db);
+  const reopened = setup(file);
   const ownerResponse = await reopened.app.request(`${origin}/api/sheets/${sheet.id}`, { headers: { Authorization: `Basic ${btoa(`admin:${adminKey}`)}` } });
   expect((await ownerResponse.json()).fields).toEqual({ ...sheet.fields, good: saved.fields.good });
   const participantResponse = await reopened.app.request(`${origin}/api/participant`, { headers: { Authorization: `Bearer ${credential}` } });
@@ -156,7 +153,7 @@ test('missing, invalid, expired, revoked and replaced credentials cannot read or
   await unavailable('invalid');
   await unavailable(crypto.getRandomValues(new Uint8Array(32)).toHex());
   const first = await instance.issue(sheet.id);
-  instance.db.query('UPDATE participant_links SET expiresAt = ?').run(Date.now() - 1);
+  await instance.store.set(`link:${(await instance.store.get(`sheet:${sheet.id}`)).linkHash}`, { sheetId: sheet.id }, Date.now() - 1);
   await unavailable(first.credential);
   const second = await instance.issue(sheet.id);
   await instance.owner(`/api/sheets/${sheet.id}/access`, 'DELETE', {});
@@ -178,8 +175,6 @@ test('revision conflicts preserve newer answers in both interviewer and particip
   expect(stale.status).toBe(409);
   expect((await stale.json()).error).toContain('Newer answers');
   expect(await (await instance.owner(`/api/sheets/${sheet.id}`)).json()).toEqual(newer);
-  const writes = await Promise.all(['One', 'Two'].map((good) => instance.participant(credential, 'PUT', { fields: { good }, revision: newer.revision })));
-  expect(writes.map((response) => response.status).sort()).toEqual([200, 409]);
 });
 
 test('revocation during a request body read is checked again before committing', async () => {
@@ -227,7 +222,7 @@ test('private responses suppress caching/referrers; participant shell needs no i
   expect((await instance.send('/participant')).status).toBe(200);
   expect((await instance.send('/participant')).headers.get('Content-Type')).toContain('text/html');
   expect((await instance.send('/participant')).headers.get('WWW-Authenticate')).toBeNull();
-  for (const path of ['/data/sheets.sqlite', '/secrets/accounts.json', '/.env', '/server/app.ts', '/.git/config']) {
+  for (const path of ['/data/store.json', '/secrets/accounts.json', '/.env', '/server/app.ts', '/.git/config']) {
     const response = await instance.participant(credential, 'GET', undefined, path);
     expect(response.status).toBe(403);
     expect(JSON.stringify(await response.json())).not.toContain(credential);
@@ -235,9 +230,8 @@ test('private responses suppress caching/referrers; participant shell needs no i
 });
 
 test('HTTPS is required for remote use and configured external origins', async () => {
-  expect(() => createApp({ databasePath: ':memory:', adminKey, publicOrigin: 'http://mapping.example' })).toThrow('HTTPS');
-  const { app, db } = createApp({ databasePath: ':memory:', adminKey });
-  databases.push(db);
+  expect(() => createApp({ store: memoryStore(), adminKey, publicOrigin: 'http://mapping.example' })).toThrow('HTTPS');
+  const { app } = createApp({ store: memoryStore(), adminKey });
   expect((await app.request('http://mapping.example/participant')).status).toBe(403);
   expect((await app.request('http://localhost/participant')).status).toBe(200);
   expect((await app.request(`${origin}/participant`)).status).toBe(200);
@@ -249,7 +243,7 @@ test('failed commits keep stored answers intact and log no credential, answers o
   const { credential } = await instance.issue(sheet.id);
   const logged = spyOn(console, 'error').mockImplementation(() => {});
   try {
-    instance.db.exec('PRAGMA query_only = ON');
+    instance.store.failWrites = true;
     const response = await instance.participant(credential, 'PUT', { fields: { good: 'Synthetic unsaved draft' }, revision: 1 });
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'Storage unavailable. Keep your draft and retry.' });

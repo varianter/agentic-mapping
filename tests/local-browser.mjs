@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 
-export async function checkLocalFlow({ browser, baseURL, directory, db }) {
+export async function checkLocalFlow({ browser, baseURL, directory, store }) {
   const contexts = [];
   const errors = [];
   const apiRequests = [];
-  const serverCount = db.query('SELECT COUNT(*) AS count FROM sheets').get().count;
+  const serverCount = (await store.keys('sheet:')).length;
   const saved = (page) => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved in this browser');
   const failed = (page, text = 'Couldn’t complete') => page.waitForFunction((text) => {
     const status = document.getElementById('save-status');
@@ -279,7 +279,7 @@ export async function checkLocalFlow({ browser, baseURL, directory, db }) {
     assert.equal(validation.collision, 409);
     assert.deepEqual(validation.writes.toSorted(), [409, 'saved'].toSorted());
     assert.equal(validation.revision, validation.previousRevision + 1);
-    assert.equal(db.query('SELECT COUNT(*) AS count FROM sheets').get().count, serverCount);
+    assert.equal((await store.keys('sheet:')).length, serverCount);
     assert.deepEqual(apiRequests, []);
     assert.deepEqual(errors, []);
     console.log('Local browser passed: full model/PDF, reload/delete, profile isolation, stale tabs, no interview API, retryable opening/create/save/commit failures, draft downloads, validation and atomic revisions.');

@@ -1,6 +1,6 @@
 # Agentic mapping: capture sheets
 
-Capture sheets and an interviewer guide in plain HTML, CSS and browser JavaScript. At `/`, anonymous visitors edit complete models saved in IndexedDB in their browser; the admin edits registered interviews saved to SQLite through Bun/Hono using the admin key. No frontend build step.
+Capture sheets and an interviewer guide in plain HTML, CSS and browser JavaScript. At `/`, anonymous visitors edit complete models saved in IndexedDB in their browser; the admin edits registered interviews saved to Upstash Redis (or a local JSON file in development) through Bun/Hono using the admin key. No frontend build step.
 
 ## Run
 
@@ -11,10 +11,11 @@ openssl rand -hex 32
 bun start
 ```
 
-Open http://localhost:4321 to edit a model without signing in. Choose **Sign in for registered interviews** and enter the admin key as the password (any username); sign-in returns to `/`. There is one admin key and no per-user ownership; no default key is provided, and startup fails if `ADMIN_KEY` is missing or shorter than 32 characters. Old local SQLite files from the named-account version are not migrated; delete them before starting. Browser Basic authentication stays cached until the browser session is closed; use separate profiles on shared devices.
+Open http://localhost:4321 to edit a model without signing in. Choose **Sign in for registered interviews** and enter the admin key as the password (any username); sign-in returns to `/`. There is one admin key and no per-user ownership; no default key is provided, and startup fails if `ADMIN_KEY` is missing or shorter than 32 characters. Data from the earlier SQLite version is not migrated: download old sheets as JSON first and import them. Browser Basic authentication stays cached until the browser session is closed; use separate profiles on shared devices.
 
 - `ADMIN_KEY`: secret of at least 32 characters that gates all interview management. Keep it server-side.
-- `DATABASE_PATH`: SQLite file, defaults to `./data/sheets.sqlite`; production must use an absolute path on a durable disk outside the checkout.
+- `KV_REST_API_URL`, `KV_REST_API_TOKEN`: Upstash Redis REST credentials. When both are set, sheets are stored there. Keep the token secret.
+- `LOCAL_STORE_FILE`: JSON file used when no KV variables are set, defaults to `./data/store.json`. Notes survive restarts; use it for local development only.
 - `PORT`: defaults to `4321`.
 - `BIND_ADDRESS`: defaults to `127.0.0.1`; keep the Bun listener private behind the HTTPS proxy. Use a private interface only when the proxy runs separately.
 - `APP_ORIGIN`: public origin, for example `https://mapping.example.com` (no trailing slash); set it behind a reverse proxy so write requests can be checked against the browser’s Origin header.
@@ -47,36 +48,27 @@ At `/participant`, choose **Save answers** to save, then wait for **Saved to ser
 
 Missing, invalid, expired, revoked or replaced links show **Link unavailable**, with no interview fallback. An already-open tab loses server access on its next read/save; revocation cannot recall answers already seen or copied. Unsaved input can still be downloaded after denial. Participant mode never loads the interviewer list or browser database, even in a signed-in interviewer's browser.
 
-The credential travels in the private link's URL fragment (the part after `#`), which stays in the address bar for reloads. Browser history, bookmarks and clipboard can therefore retain the intentionally delivered link: share it privately and close the tab after use. It is never sent in an HTTP URL, stored in localStorage/IndexedDB, included in draft downloads or written to the database as plaintext. Authentication uses a bearer header; SQLite stores only a SHA-256 hash of a random 256-bit credential. Share only placeholders such as `https://mapping.example.com/participant#<credential>` in documentation or issue comments.
+The credential travels in the private link's URL fragment (the part after `#`), which stays in the address bar for reloads. Browser history, bookmarks and clipboard can therefore retain the intentionally delivered link: share it privately and close the tab after use. It is never sent in an HTTP URL, stored in localStorage/IndexedDB, included in draft downloads or written to storage as plaintext. Authentication uses a bearer header; storage keeps only a SHA-256 hash of a random 256-bit credential. Share only placeholders such as `https://mapping.example.com/participant#<credential>` in documentation or issue comments.
 
-## Deploy and back up
+## Storage and deploy
 
-### Storage host
+### Add Upstash Redis in Vercel
 
-The app runs on the Bun host's HTTPS address; there is no separate static host.
+1. In the Vercel project, open **Storage** → **Marketplace** and add **Upstash for Redis** (the successor to Vercel KV). Connect it to the project.
+2. Vercel sets `KV_REST_API_URL` and `KV_REST_API_TOKEN` for the project. Also set `ADMIN_KEY` and `APP_ORIGIN`.
+3. The token grants full read/write access to every sheet. Keep it in Vercel environment variables only: never commit it, put it in browser code, logs or screenshots, and rotate it in the Upstash console if it leaks.
 
-At the Bun address, the browser sends authenticated `POST` (create), `PUT` (autosave) and `DELETE` requests to that same host's `/api/sheets` endpoints. The running Bun process checks revisions and writes to the SQLite file at `DATABASE_PATH` before acknowledging success. Another device reads those saved sheets from the same API using the same admin key; it sees updates when loading or reloading a sheet, without live synchronization.
+Each sheet is one JSON value at `sheet:<id>`; each private link is `link:<hash>` and expires with the link. Every save overwrites the whole sheet after a revision check. The check is not atomic, so two people saving the same sheet at the same instant could overwrite each other; stale tabs still get a 409. Backups are whatever Upstash provides; download JSON for your own copies.
 
-The operator must deploy code updates to the Bun host separately and restart the service with the same durable `DATABASE_PATH`; sheet edits reach storage through the API without a commit, workflow run or redeployment. This PR does not provision a host or configure automatic Bun deployments.
+This slice covers storage only. The Vercel deploy and preview setup is separate.
 
-### Bun deployment and backups
+### Local development
 
-Run one Bun instance behind an HTTPS reverse proxy with process supervision, a durable SQLite volume, a private environment file and `ADMIN_KEY`. Preserve the public Host header and set `APP_ORIGIN`. Bind/firewall the Bun port so remote access goes through HTTPS; Basic authentication must never cross a public HTTP connection. Rate-limit authentication attempts at the proxy. Back up before upgrades; there is no automatic host provisioning in this repository.
+Without KV variables, `bun start` writes to `LOCAL_STORE_FILE` (default `./data/store.json`, git-ignored) and keeps notes across restarts. Do not copy production KV variables into a local `.env`. Tests and browser checks use in-memory or temporary stores only and never contact Upstash, even when KV variables are set in the shell.
 
-Set `APP_ORIGIN` to the public **HTTPS** origin; external HTTP configuration is rejected. The Bun listener binds to loopback by default. The proxy must terminate HTTPS and keep the backend inaccessible publicly; do not rely on forwarded headers as proof of TLS. Responses, including errors and app assets, send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`; HTTPS configuration also sends HSTS. Disable caching at the proxy/CDN. Do not log Authorization headers, request/response bodies or full private links, and do not enable analytics, session replay or error capture of page URLs/form values on participant pages. The app logs fixed error messages only. Rate-limit invalid participant credentials at the proxy as well as interviewer sign-in.
+### Running elsewhere
 
-No new deployment secret is required for participant links. Keep `ADMIN_KEY` and `DATABASE_PATH` private and outside the checkout/public artifacts. If deployment automation needs credentials, an authorized operator must enter values directly in GitHub repository/environment **Secrets** (for example names `MAPPING_DEPLOY_KEY` and `MAPPING_ADMIN_KEY`); documentation and workflow configuration may contain names only. Supply values only to the server runtime, never browser assets, committed `.env` files, logs or screenshots. This change does not provision Secrets or add a deployment workflow.
-
-The additive `participant_links` table is created on startup without changing existing sheets. Take a backup before upgrading. Before restoring any database backup, stop access and invalidate restored participant links (`DELETE FROM participant_links` on the private database) before reopening the host, because a backup can resurrect revoked credentials. Test the HTTPS host with two separate browser profiles and confirm whether seven days is a suitable completion window in a handoff trial.
-
-Deploy this checkout on the selected Bun host, run `bun install --frozen-lockfile --production`, configure the environment above and start `bun start`. The server serves only allowlisted public files, never source, credentials, databases or backups. Restart/redeploy with the same `DATABASE_PATH` to retain notes. Do not run independent replicas or place the database on an ephemeral disk.
-
-```bash
-# Take a consistent online snapshot (destination must not already exist).
-DATABASE_PATH=/srv/mapping/sheets.sqlite bun run backup /private/backups/mapping-2026-11-04.sqlite
-```
-
-Schedule snapshots, encrypt and copy them off-host, and monitor failures. To restore, stop the service, preserve its database and `-wal`/`-shm` sidecars together, then restore a snapshot to a fresh database path and set `DATABASE_PATH` before restarting. Rehearse against an isolated path before production. The test suite verifies snapshot restore. Host, TLS, backup schedule, retention and recovery targets remain deployment responsibilities.
+Any Bun host works with the KV variables or the JSON file. Set `APP_ORIGIN` to the public **HTTPS** origin (external HTTP is rejected) and keep the Bun listener on loopback behind an HTTPS proxy; do not rely on forwarded headers as proof of TLS. Responses send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`; HTTPS configuration also sends HSTS. Disable caching at the proxy/CDN. Do not log Authorization headers, bodies or full private links, and do not enable analytics, session replay or error capture of page URLs/form values on participant pages. The app logs fixed error messages only. Rate-limit interviewer sign-in and invalid participant credentials at the proxy. Never commit `ADMIN_KEY` or the KV token; supply them only to the server runtime. The server serves only allowlisted public files.
 
 ## Checks and files
 
@@ -87,12 +79,12 @@ bunx playwright install chromium       # once; Linux CI also uses --with-deps
 bun run test:browser
 ```
 
-API tests cover persistence, permissions, conflicts, participant links and backup/restore. Browser tests cover local and server editing, storage failures, conflicts, PDF, private-link handoff; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
+API tests cover persistence, permissions, conflicts, imports and participant links. Browser tests cover local and server editing, storage failures, conflicts, PDF, private-link handoff and migration; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
 
-- `server.ts`, `server/app.ts`: authenticated API, SQLite and public-file allowlist.
+- `server.ts`, `server/app.ts`, `server/store.ts`: authenticated API, key-value store (Upstash or local JSON) and public-file allowlist.
 - `client/app.js`, `client/db.js`, `client/local-db.js`: shared editor and server/browser storage adapters.
 - `client/boot.js`, `client/participant.js`, `client/form.js`: isolated participant entrypoint and shared grids/tabs.
-- `scripts/backup.ts`: consistent SQLite snapshot.
+- `client/legacy.js`, `legacy.html`: browser-data export and JSON recovery.
 - `styles.css`, `index.html`, `guide.html`: capture sheets and guide; Britti Sans comes from `varde.variant.dev`.
 
 The [storage and access decision](docs/storage-decision.md) retains the hosting comparison and access contract. The [participant implementation map](docs/participant-access.md) records the approved defaults and verification evidence.

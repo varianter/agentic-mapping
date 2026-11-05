@@ -13,7 +13,9 @@ test('configured Bun process retains notes across a server restart', async () =>
   reservation.stop(true);
   const origin = `http://localhost:${port}`;
   const headers = { Authorization: `Basic ${btoa(`admin:${adminKey}`)}`, Origin: origin, 'Content-Type': 'application/json' };
-  const env = { ...process.env, PORT: String(port), APP_ORIGIN: origin, DATABASE_PATH: join(directory, 'sheets.sqlite'), ADMIN_KEY: adminKey };
+  const env: Record<string, string | undefined> = { ...process.env, PORT: String(port), APP_ORIGIN: origin, LOCAL_STORE_FILE: join(directory, 'store.json'), ADMIN_KEY: adminKey };
+  delete env.KV_REST_API_URL;
+  delete env.KV_REST_API_TOKEN;
   const start = () => Bun.spawn([process.execPath, 'server.ts'], { cwd: root, env, stdout: 'pipe', stderr: 'pipe' });
   let child = start();
   async function waitReady() {

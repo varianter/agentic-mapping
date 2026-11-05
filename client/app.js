@@ -1,7 +1,8 @@
 import { initForm } from './form.js';
 import { downloadJson } from './legacy.js';
+import { filledLocalModels, saveLocalModels } from './save-local.js';
 
-export function initEditor(storage, { localMode }) {
+export function initEditor(storage, { localMode, localStore }) {
   const { allSheets, getSheet, createSheet, putSheet, deleteSheet, issueAccess, revokeAccess } = storage;
   const savedMessage = localMode ? 'Saved in this browser' : 'Saved to server';
   const savedLocation = localMode ? 'browser' : 'server';
@@ -421,4 +422,38 @@ export function initEditor(storage, { localMode }) {
 
   setSidebar(initialSidebar());
   openFromHash().catch(reportError);
+
+  // ---------- Save browser models to the account ----------
+
+  async function offerLocalModels() {
+    const key = 'save-local-dismissed';
+    try { if (sessionStorage.getItem(key)) return; } catch {}
+    let models;
+    try { models = await filledLocalModels(localStore); } catch { return; }
+    if (!models.length) return;
+    const dialog = document.getElementById('save-local');
+    const note = document.getElementById('save-local-status');
+    const confirm = document.getElementById('save-local-confirm');
+    const title = document.getElementById('save-local-title');
+    const label = () => { title.textContent = `Save ${models.length} browser model${models.length === 1 ? '' : 's'} to your account?`; };
+    label();
+    confirm.onclick = async () => {
+      confirm.disabled = true;
+      const total = models.length;
+      const result = await saveLocalModels(localStore, storage, models);
+      models = models.slice(result.saved);
+      const message = `Saved ${result.saved} of ${total}`;
+      note.textContent = result.error ? `${message}. ${result.error.message ?? 'Upload failed.'} Save again to retry the rest.` : message;
+      setStatus(message, result.error ? 'error' : '');
+      confirm.disabled = false;
+      if (result.saved) renderList().catch(reportError);
+      if (!result.error) dialog.close('saved');
+      else { confirm.textContent = 'Save again'; label(); }
+    };
+    dialog.addEventListener('close', () => {
+      if (dialog.returnValue !== 'saved') { try { sessionStorage.setItem(key, '1'); } catch {} }
+    }, { once: true });
+    dialog.showModal();
+  }
+  if (!localMode && localStore) offerLocalModels();
 }

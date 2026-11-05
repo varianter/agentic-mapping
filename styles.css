@@ -387,6 +387,7 @@ dialog {
 dialog::backdrop { background: rgb(40 40 40 / 0.5); }
 dialog h2 { margin: 0 0 8px; font-size: 24px; }
 dialog p { margin: 0 0 20px; font-size: 16px; }
+#save-local-status:empty { display: none; }
 dialog .actions { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
 
 /* ---------- Narrow screens ---------- */

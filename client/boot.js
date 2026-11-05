@@ -7,5 +7,7 @@ if (participant) {
   if (!localMode && document.body.dataset.storageMode !== 'server') throw new Error('Storage mode unavailable. Reload this page from the app server.');
   const storage = await import(localMode ? './local-db.js' : './db.js');
   const { initEditor } = await import('./app.js');
-  initEditor(storage, { localMode });
+  // Server mode also loads the browser store so anonymous models can be offered to the account.
+  const localStore = localMode ? undefined : await import('./local-db.js').catch(() => undefined);
+  initEditor(storage, { localMode, localStore });
 }

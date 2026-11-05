@@ -249,26 +249,21 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     return c.body(null, 204);
   });
 
+  // Each interview has one stable link, derived from the admin key and its ID, so the interviewer can always show it.
+  // Only its hash is stored; deleting the interview turns it off, and rotating ADMIN_KEY turns off every link.
+  const participantCredential = (id: string) => createHmac('sha256', adminKey).update(`agentic-mapping-participant-v1:${id}`).digest('hex');
   app.post('/api/sheets/:id/access', async (c) => {
     const sheet = await store.get(`sheet:${c.req.param('id')}`);
-    if (!sheet) return c.json({ error: 'Sheet unavailable.' }, 404);
-    const credential = randomBytes(32).toString('hex');
+    if (!sheet || sourceOf(sheet) !== 'interview') return c.json({ error: 'Sheet unavailable.' }, 404);
+    const credential = participantCredential(sheet.id);
     const linkHash = hashCredential(credential);
-    // Links last until the interviewer replaces or revokes them.
-    await store.set(`link:${linkHash}`, { sheetId: sheet.id });
-    await store.set(`sheet:${sheet.id}`, { ...sheet, linkHash });
-    if (sheet.linkHash) await store.del(`link:${sheet.linkHash}`);
-    return c.json({ credential }, 201);
-  });
-  app.delete('/api/sheets/:id/access', async (c) => {
-    const sheet = await store.get(`sheet:${c.req.param('id')}`);
-    if (!sheet) return c.json({ error: 'Sheet unavailable.' }, 404);
-    if (sheet.linkHash) {
-      const { linkHash, ...rest } = sheet;
-      await store.set(`sheet:${sheet.id}`, rest);
-      await store.del(`link:${linkHash}`);
+    // Older random or expiring links are replaced by the stable one the first time it is shown.
+    if (sheet.linkHash !== linkHash || !await store.get(`link:${linkHash}`)) {
+      await store.set(`link:${linkHash}`, { sheetId: sheet.id });
+      if (sheet.linkHash !== linkHash) await store.set(`sheet:${sheet.id}`, { ...sheet, linkHash });
+      if (sheet.linkHash && sheet.linkHash !== linkHash) await store.del(`link:${sheet.linkHash}`);
     }
-    return c.body(null, 204);
+    return c.json({ credential });
   });
   app.get('/api/sheets', async (c) => {
     const source = c.req.query('source');

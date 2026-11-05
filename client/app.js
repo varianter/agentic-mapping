@@ -1,9 +1,9 @@
 import { initForm, downloadJson } from './form.js';
 import { sheetsFromUpload, importableSheet } from './import.js';
 
-// Interviewer editor: server-stored interviews, private links and PDFs.
+// Interviewer editor: server-stored interviews, connect URLs and PDFs.
 export function initEditor(storage) {
-  const { allSheets, getSheet, createSheet, putSheet, deleteSheet, issueAccess, revokeAccess } = storage;
+  const { allSheets, getSheet, createSheet, putSheet, deleteSheet, issueAccess } = storage;
   const savedMessage = 'Saved to server';
 
   const app = document.getElementById('app');
@@ -30,7 +30,7 @@ export function initEditor(storage) {
   const { readForm, fillForm, markFilledDimensions } = initForm(form);
 
   if (submissions) {
-    for (const element of document.querySelectorAll('[data-action="new"], [data-action="issue-access"], [data-action="revoke-access"]')) element.remove();
+    for (const element of document.querySelectorAll('[data-action="new"]')) element.remove();
     document.title = 'Self-submitted maps · Agentic mapping';
     document.getElementById('sidebar').setAttribute('aria-label', 'Self-submitted maps');
     document.getElementById('model-list-label').textContent = 'Self-submitted maps';
@@ -64,6 +64,8 @@ export function initEditor(storage) {
         dirty = false;
         setStatus('Saving…');
         try {
+          // The first connect URL for an interview stores its link on the sheet; let that finish first.
+          await linkPending;
           const saved = await putSheet({ ...sheet, fields });
           sheet.revision = saved.revision;
           sheet.updatedAt = saved.updatedAt;
@@ -175,8 +177,8 @@ export function initEditor(storage) {
   }
 
   function showSheet(sheet) {
-    clearPrivateLink();
     current = sheet;
+    showConnectLink(sheet);
     fillForm(sheet?.fields);
     form.hidden = !sheet;
     empty.hidden = !!sheet;
@@ -187,43 +189,42 @@ export function initEditor(storage) {
     markCurrent();
   }
 
-  // ---------- Private participant links ----------
+  // ---------- Connect URL ----------
 
-  const linkDialog = document.getElementById('private-link');
-  const linkOutput = document.getElementById('private-link-value');
-  function clearPrivateLink() {
-    linkDialog.close();
-    linkOutput.value = '';
+  // Every interview has one stable link. The participant opens it on their own computer to keep filling in their answers.
+  const connectLink = document.getElementById('connect-link');
+  const connectOutput = document.getElementById('connect-link-value');
+  const connectStatus = document.getElementById('connect-link-status');
+  let linkPending = Promise.resolve();
+
+  function showConnectLink(sheet) {
+    connectLink.hidden = true;
+    connectOutput.value = '';
+    connectStatus.textContent = '';
+    // Self-submitted maps have no interview link.
+    if (!sheet || submissions) return;
+    linkPending = issueAccess(sheet.id).then(({ credential }) => {
+      if (current !== sheet) return;
+      const url = new URL('/participant', location.origin);
+      url.hash = credential;
+      connectOutput.value = url.href;
+      connectLink.hidden = false;
+    }, (error) => {
+      if (current === sheet) setStatus(`Couldn’t load the connect URL: ${error.message}`, 'error');
+    });
   }
-  linkDialog.addEventListener('close', () => { linkOutput.value = ''; });
 
-  async function generatePrivateLink() {
-    await save();
-    const { credential } = await issueAccess(current.id);
-    const url = new URL('/participant', location.origin);
-    url.hash = credential;
-    linkOutput.value = url.href;
-    document.getElementById('private-link-copy-status').textContent = '';
-    linkDialog.showModal();
-  }
-
-  document.getElementById('copy-private-link').addEventListener('click', async () => {
-    const feedback = document.getElementById('private-link-copy-status');
+  document.getElementById('copy-connect-link').addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(linkOutput.value);
-      feedback.textContent = 'Private link copied.';
+      await navigator.clipboard.writeText(connectOutput.value);
+      connectStatus.textContent = 'Connect URL copied.';
     } catch {
-      linkOutput.focus();
-      linkOutput.select();
-      feedback.textContent = 'Select and copy the private link above.';
+      connectOutput.focus();
+      connectOutput.select();
+      connectStatus.textContent = 'Select and copy the connect URL above.';
     }
   });
-
-  async function revokePrivateLink() {
-    await revokeAccess(current.id);
-    clearPrivateLink();
-    setStatus('Private link revoked. Open participant forms can no longer read or save.');
-  }
+  connectOutput.addEventListener('focus', () => connectOutput.select());
 
   async function openFromHash() {
     if (navigating) {
@@ -410,7 +411,7 @@ export function initEditor(storage) {
 
   document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]')?.dataset.action;
-    const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: retryStorage, reload: reloadSaved, 'issue-access': generatePrivateLink, 'revoke-access': revokePrivateLink, upload: async () => uploadInput.click(), export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
+    const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: retryStorage, reload: reloadSaved, upload: async () => uploadInput.click(), export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
     if (handlers[action]) runAction(action, handlers[action]);
   });
 

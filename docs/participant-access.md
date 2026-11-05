@@ -13,9 +13,9 @@ This remains one feature: backend authorization, isolated participant UI and sec
 ## Access contract
 
 - Anyone holding the link can edit the 27 dimension/grid fields and `good`, `surprised`, `missing`, `advice`. Identity, context, discipline and follow-up contacts remain private.
-- The owner can issue a replacement or revoke access; replacement invalidates the old credential immediately. Since 2026-11-05 links last until replaced or revoked; links issued earlier keep their seven-day expiry.
+- Since 2026-11-05 each interview has one stable link (connect URL), derived as an HMAC of `ADMIN_KEY` and the interview ID and always shown to the signed-in interviewer. It lasts until the interview is deleted or `ADMIN_KEY` is rotated; there is no separate revoke. Older random links are replaced the first time the interview is opened.
 - Deliver the random credential only in a URL fragment; participant API requests use an Authorization header. Store only its SHA-256 hash in SQLite. Do not persist it in browser storage or send it in HTTP URLs.
-- Since 2026-11-05 opening a link connects the browser: `POST /api/participant/connect` sets an HttpOnly `am_respondent` cookie whose hash is stored at `respondent:<hash>` as `{ sheetId, linkHash }`. The browser then edits the interview as My map at `/` through `/api/me`, with autosave and a matching revision. Replacing or revoking the link disconnects those browsers.
+- Since 2026-11-05 opening a link connects the browser: `POST /api/participant/connect` sets an HttpOnly `am_respondent` cookie whose hash is stored at `respondent:<hash>` as `{ sheetId, linkHash }`. The browser then edits the interview as My map at `/` through `/api/me`, with autosave and a matching revision. Deleting the interview (or replacing an older link) disconnects those browsers.
 - If the browser already has its own map with answers, the respondent chooses: merge (an empty side takes the other; differing answers keep both, the interview's first), keep the interview's answers, or replace them with their own. The own map is then deleted.
 - Saves need a matching revision. Conflicts keep the draft and need a reload.
 - A production operator must provision HTTPS, private account configuration, durable storage and backups. A host deployment and a real-user seven-day completion-window trial remain operational handoff steps.
@@ -24,10 +24,10 @@ This remains one feature: backend authorization, isolated participant UI and sec
 
 | Criterion | Evidence |
 | --- | --- |
-| Owner-only issue, copy, replace and revoke | `tests/participant.test.ts`: owner isolation and hash-only persistence; `tests/participant-browser.mjs`: copy control and clipboard handoff. |
+| Owner-only connect URL and copy | `tests/participant.test.ts`: owner isolation and hash-only persistence; `tests/participant-browser.mjs`: copy control and clipboard handoff. |
 | Fresh-browser edits reach interviewer and survive reload | API restart/persistence test and browser handoff without the admin cookie. |
 | Deny other sheets, lists, creation, deletion and private fields | API operation matrix and unchanged stored-sheet assertions; browser asserts exactly 31 fields and no interviewer imports/storage requests. |
-| Missing/invalid/expired/revoked/replaced credentials fail closed | API read/write checks, including revocation during body reading; browser fresh visits and open-form read/save denial. |
+| Missing/invalid/expired/replaced credentials fail closed | API read/write checks, including deletion during body reading; browser fresh visits and open-form read/save denial. |
 | Failed saves/conflicts retain drafts without overwriting/retry | API disk-error and bidirectional/concurrent revision checks; browser offline recovery, conflict download/reload and typing during an in-flight save. |
 | Transport, headers, projection and secret boundaries | API HTTPS/header/projection/log checks; browser referrer, inert-text and storage checks; local tracked/history scan and synthetic screenshot review. |
 

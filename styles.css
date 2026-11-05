@@ -188,6 +188,11 @@ a:hover { color: var(--link-hover); }
 .sidebar-foot form { display: grid; }
 .sidebar-foot a { color: var(--white); }
 .sidebar-foot a:hover { color: var(--yellow); }
+.connect-link { display: grid; gap: 6px; }
+.connect-link label { font-weight: 600; }
+.connect-link input { width: 100%; min-width: 0; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--white); border-radius: 4px; color: var(--ink); background: var(--white); }
+.connect-link p { margin: 0; }
+.connect-link-hint { color: var(--grey-200); font-size: 13px; }
 
 .main { min-width: 0; display: flex; flex-direction: column; container: main / inline-size; }
 
@@ -219,7 +224,6 @@ body:is([data-self], [data-participant]) .reflect { grid-template-columns: repea
 .self-actions { align-items: center; flex-wrap: wrap; gap: 8px; }
 .self-notice { font-size: 0.85rem; }
 @media print { [data-self-only] { display: none !important; } }
-#private-link-value { width: 100%; min-width: 0; font: inherit; }
 
 @media (max-width: 600px) {
   body:is([data-self], [data-participant]) .reflect { grid-template-columns: minmax(0, 1fr); }

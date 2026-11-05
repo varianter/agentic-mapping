@@ -189,7 +189,7 @@ try {
   await page.waitForURL(`${baseURL}/submissions#${submittedId}`);
   await page.waitForFunction(() => document.querySelector('[name="advice"]').value === 'Synthetic submitted advice');
   assert.equal(await page.locator('#model-list-label').textContent(), 'Self-submitted maps');
-  assert.equal(await page.locator('[data-action="new"], [data-action="issue-access"]').count(), 0);
+  assert.equal(await page.locator('[data-action="new"]').count(), 0);
   assert.equal(await page.locator(`#sheet-list a[data-id="${submittedId}"]`).count(), 1);
   await page.locator('[data-action="delete"]').click();
   await page.locator('#confirm-delete [value="delete"]').click();

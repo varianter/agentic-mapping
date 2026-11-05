@@ -59,7 +59,7 @@ test('missing or wrong admin keys cannot access or change sheets', async () => {
     for (const method of ['GET', 'PUT', 'DELETE']) {
       expect((await request(app, `/api/sheets/${original.id}`, method, method === 'GET' ? undefined : { ...created, revision: 1 }, key)).status).toBe(401);
     }
-    for (const method of ['POST', 'DELETE']) expect((await request(app, `/api/sheets/${original.id}/access`, method, {}, key)).status).toBe(401);
+    expect((await request(app, `/api/sheets/${original.id}/access`, 'POST', {}, key)).status).toBe(401);
   }
   expect(await (await request(app, `/api/sheets/${original.id}`)).json()).toEqual(created);
   expect((await request(app, '/api/sheets', 'POST', original, adminKey)).status).toBe(200);
@@ -150,7 +150,7 @@ test('home serves self mode to visitors and interviewer mode only with the admin
     ['/api/sheets', 'GET'], ['/api/sheets', 'POST', sheet()],
     [`/api/sheets/${original.id}`, 'GET'], [`/api/sheets/${original.id}`, 'PUT', { ...original, revision: 1 }],
     [`/api/sheets/${original.id}`, 'DELETE', { revision: 1 }],
-    [`/api/sheets/${original.id}/access`, 'POST', {}], [`/api/sheets/${original.id}/access`, 'DELETE', {}],
+    [`/api/sheets/${original.id}/access`, 'POST', {}],
   ]) {
     expect((await request(app, path, method, body, null)).status).toBe(401);
   }

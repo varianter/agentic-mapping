@@ -35,15 +35,6 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.equal(await page.locator('#sheet').isHidden(), true);
     assert.equal(await page.locator('#sheet-list').count(), 0);
   };
-  async function issueLink() {
-    await owner.locator('[data-action="issue-access"]').click();
-    await owner.locator('#private-link').waitFor({ state: 'visible' });
-    const link = await owner.locator('#private-link-value').inputValue();
-    credentials.add(new URL(link).hash.slice(1));
-    await owner.locator('#private-link [value="close"]').click();
-    await owner.waitForFunction(() => document.getElementById('private-link-value').value === '');
-    return link;
-  }
   try {
     await owner.goto(baseURL);
     await owner.locator('[data-action="new"]').first().click();
@@ -58,16 +49,16 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     const id = new URL(owner.url()).hash.slice(1);
     const stored = async () => (await store.get(`sheet:${id}`)).fields;
 
-    // Issuance/copy is intentional credential delivery; never print the link.
+    // The open interview always shows its connect URL; copying is intentional credential delivery, so never print it.
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: baseURL });
-    await owner.locator('[data-action="issue-access"]').click();
-    await owner.locator('#private-link').waitFor({ state: 'visible' });
-    const link = await owner.locator('#private-link-value').inputValue();
+    await owner.locator('#connect-link').waitFor({ state: 'visible' });
+    assert.equal(await owner.locator('#connect-link-value').getAttribute('readonly'), '');
+    const link = await owner.locator('#connect-link-value').inputValue();
     credentials.add(new URL(link).hash.slice(1));
-    await owner.locator('#copy-private-link').click();
-    await owner.waitForFunction(() => document.getElementById('private-link-copy-status').textContent === 'Private link copied.');
-    assert.ok(await owner.evaluate(async (expected) => (await navigator.clipboard.readText()) === expected, link), 'Clipboard must contain the issued link');
-    await owner.locator('#private-link [value="close"]').click();
+    await owner.locator('#copy-connect-link').click();
+    await owner.waitForFunction(() => document.getElementById('connect-link-status').textContent === 'Connect URL copied.');
+    assert.ok(await owner.evaluate(async (expected) => (await navigator.clipboard.readText()) === expected, link), 'Clipboard must contain the connect URL');
+    assert.equal(await owner.locator('[data-action="issue-access"], [data-action="revoke-access"]').count(), 0);
 
     // A fresh browser opens the link, gets connected and lands on / without the credential in the address bar.
     const participant = await newBrowser();
@@ -138,23 +129,14 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.equal((await stored()).good, 'Newer interviewer answer\n\nMy own answer');
     assert.deepEqual(await ownIds(), []);
 
-    // Replacing the link disconnects connected browsers and turns off the old link.
-    const replacement = await issueLink();
+    // The same URL shows after a reload, and the browser stays connected.
+    await owner.reload();
+    await loaded(owner);
+    await owner.locator('#connect-link').waitFor({ state: 'visible' });
+    assert.equal(await owner.locator('#connect-link-value').inputValue(), link);
     await participant.reload();
     await loaded(participant);
-    assert.equal(await participant.locator('.pill').textContent(), 'My map');
-    assert.equal(await participant.locator('[name="good"]').inputValue(), '');
-    await participant.goto(link);
-    await unavailable(participant);
-    await participant.goto(replacement);
-    await connected(participant);
-    await owner.locator('[data-action="revoke-access"]').click();
-    await owner.waitForFunction(() => document.getElementById('save-status').textContent.includes('Private link revoked'));
-    await participant.reload();
-    await loaded(participant);
-    assert.equal(await participant.locator('.pill').textContent(), 'My map');
-    await participant.goto(replacement);
-    await unavailable(participant);
+    assert.equal(await participant.locator('.pill').textContent(), 'Your interview');
     await participant.goto(`${baseURL}/participant#invalid`);
     await unavailable(participant);
     await participant.goto(`${baseURL}/participant`);
@@ -175,7 +157,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.equal(await participant.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(violations, []);
     assert.deepEqual(errors, []);
-    console.log('Participant browser passed: private copy/handoff, connect and land on /, approved fields, autosave, stays connected, inert answers, conflicts, merge choice, replacement/revocation, missing/invalid links, referrers and mobile.');
+    console.log('Participant browser passed: private copy/handoff, connect and land on /, approved fields, autosave, stays connected, inert answers, conflicts, merge choice, stable connect URL, missing/invalid links, referrers and mobile.');
   } catch (error) {
     // A failing Playwright action can include its navigation URL in the error.
     let message = error.stack ?? String(error);

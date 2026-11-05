@@ -101,7 +101,7 @@ test('clearing deletes the self map; interview-bound browsers cannot clear', asy
   expect((await me('/api/me', 'DELETE', {})).status).toBe(409);
 });
 
-test('a link connects the browser to its interview until the link is replaced or revoked', async () => {
+test('a link connects the browser to its interview until the interview is deleted', async () => {
   const { browser, owner, interview } = setup();
   const me = browser();
   const { sheet, credential } = await interview({ name: 'Private synthetic name', good: 'Interview answer' });
@@ -113,11 +113,13 @@ test('a link connects the browser to its interview until the link is replaced or
   await me('/api/me', 'PUT', { fields: { advice: 'Added later' }, revision: 1 });
   const stored = await (await owner(`/api/sheets/${sheet.id}`)).json();
   expect(stored.fields).toEqual({ name: 'Private synthetic name', good: 'Interview answer', advice: 'Added later' });
-  // Replacing the link disconnects browsers it connected; they fall back to an empty own map.
+  // Showing the link again keeps the browser connected.
   await owner(`/api/sheets/${sheet.id}/access`, 'POST', {});
+  expect((await (await me('/api/me')).json()).source).toBe('interview');
+  // Deleting the interview disconnects browsers it connected; they fall back to an empty own map.
+  expect((await owner(`/api/sheets/${sheet.id}`, 'DELETE', { revision: 2 })).status).toBe(204);
   expect(await (await me('/api/me')).json()).toEqual({ fields: {}, revision: 0, source: 'self' });
   expect((await me('/api/me', 'PUT', { fields: { good: 'Stale' }, revision: 2 })).status).toBe(409);
-  expect((await (await owner(`/api/sheets/${sheet.id}`)).json()).fields.good).toBe('Interview answer');
 });
 
 for (const [choice, expected] of [

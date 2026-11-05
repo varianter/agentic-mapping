@@ -31,34 +31,39 @@ async function createSheet(instance: ReturnType<typeof setup>) {
   const fields = { ...Object.fromEntries(approved.map((key) => [key, `Synthetic ${key}`])), name: 'Private synthetic name', context: 'Private context', discipline: ['Private discipline'], talk_to: 'Private contacts', interviewer: 'Private interviewer' };
   return (await instance.owner('/api/sheets', 'POST', { id: crypto.randomUUID(), fields, createdAt: 1, updatedAt: 2 })).json();
 }
-test('only the admin issues, replaces and revokes credentials, storing only a 256-bit credential hash', async () => {
+test('only the admin gets an interview\'s stable link, storing only a 256-bit credential hash', async () => {
   const instance = setup();
   const sheet = await createSheet(instance);
   const writes = spyOn(instance.store, 'set');
   const first = await instance.issue(sheet.id);
   expect(first.credential).toMatch(/^[a-f0-9]{64}$/);
-  // Links last until replaced or revoked: no expiry is returned or stored.
+  // Links last until the interview is deleted: no expiry is returned or stored.
   expect(first.expiresAt).toBeUndefined();
   expect(writes.mock.calls.find(([key]) => key.startsWith('link:'))).toHaveLength(2);
+  // Showing the link again returns the same one and writes nothing.
+  writes.mockClear();
+  expect(await instance.issue(sheet.id)).toEqual(first);
+  expect(writes).not.toHaveBeenCalled();
   writes.mockRestore();
   const linkKeys = () => instance.store.keys('link:');
   const hash = createHash('sha256').update(first.credential).digest('hex');
   expect(await linkKeys()).toEqual([`link:${hash}`]);
   expect(await instance.store.keys('')).not.toContain(`link:${first.credential}`);
   expect(JSON.stringify(await instance.store.get(`sheet:${sheet.id}`))).not.toContain(first.credential);
-  for (const method of ['POST', 'DELETE']) {
-    const response = await instance.owner(`/api/sheets/${sheet.id}/access`, method, {}, 'wrong-admin-key-0123456789-abcdefghij');
-    expect(response.status).toBe(401);
-    expect((await instance.participant(first.credential)).status).toBe(200);
-  }
+  expect((await instance.owner(`/api/sheets/${sheet.id}/access`, 'POST', {}, 'wrong-admin-key-0123456789-abcdefghij')).status).toBe(401);
   expect((await instance.send(`/api/sheets/${sheet.id}/access`, 'POST', {})).status).toBe(401);
-  const replacement = await instance.issue(sheet.id);
-  expect(replacement.credential).not.toBe(first.credential);
+  expect((await instance.owner(`/api/sheets/${sheet.id}/access`, 'DELETE', {})).status).toBe(404);
+  expect((await instance.participant(first.credential)).status).toBe(200);
+  // Each interview has its own link; self-submitted maps have none.
+  const other = await createSheet(instance);
+  expect((await instance.issue(other.id)).credential).not.toBe(first.credential);
+  const own = await (await instance.owner('/api/sheets', 'POST', { id: crypto.randomUUID(), source: 'self', fields: {}, createdAt: 1, updatedAt: 2 })).json();
+  expect((await instance.owner(`/api/sheets/${own.id}/access`, 'POST', {})).status).toBe(404);
+  // Another admin key gives other links.
+  const rotated = { ...createApp({ store: instance.store, adminKey: 'rotated-admin-key-0123456789-abcdefgh', publicOrigin: origin }) };
+  const rotatedLink = await (await rotated.app.request(`${origin}/api/sheets/${sheet.id}/access`, { method: 'POST', headers: { Cookie: `am_admin=${sessionToken('rotated-admin-key-0123456789-abcdefgh')}`, Origin: origin, 'Content-Type': 'application/json' }, body: '{}' })).json();
+  expect(rotatedLink.credential).not.toBe(first.credential);
   expect((await instance.participant(first.credential)).status).toBe(404);
-  expect((await instance.participant(replacement.credential)).status).toBe(200);
-  expect((await instance.owner(`/api/sheets/${sheet.id}/access`, 'DELETE', {})).status).toBe(204);
-  expect((await instance.participant(replacement.credential)).status).toBe(404);
-  expect(await linkKeys()).toEqual([]);
 });
 
 test('participant projection and patch preserve private fields and persist for the interviewer after restart', async () => {
@@ -94,8 +99,8 @@ test('participant credentials cannot list, create, delete, manage links or reque
     ['/api/sheets', ['GET', 'POST']],
     [`/api/sheets/${first.id}`, ['GET', 'PUT', 'DELETE']],
     [`/api/sheets/${other.id}`, ['GET', 'PUT', 'DELETE']],
-    [`/api/sheets/${first.id}/access`, ['POST', 'DELETE']],
-    [`/api/sheets/${other.id}/access`, ['POST', 'DELETE']],
+    [`/api/sheets/${first.id}/access`, ['POST']],
+    [`/api/sheets/${other.id}/access`, ['POST']],
     [`/api/participant/${other.id}`, ['GET', 'PUT', 'DELETE']],
     ['/api/participant', ['POST', 'DELETE', 'PATCH']],
   ] as [string, string[]][]) {
@@ -140,7 +145,7 @@ test('forbidden fields, types, metadata and malformed writes change no answers',
   expect(await (await instance.owner(`/api/sheets/${sheet.id}`)).json()).toEqual(sheet);
 });
 
-test('missing, invalid, expired, revoked and replaced credentials cannot read or save from an open form', async () => {
+test('missing, invalid, expired and replaced credentials cannot read or save from an open form', async () => {
   const instance = setup();
   const sheet = await createSheet(instance);
   const unavailable = async (credential?: string) => {
@@ -153,16 +158,21 @@ test('missing, invalid, expired, revoked and replaced credentials cannot read or
   await unavailable();
   await unavailable('invalid');
   await unavailable(crypto.getRandomValues(new Uint8Array(32)).toHex());
-  const first = await instance.issue(sheet.id);
-  // Links issued before links stopped expiring keep their TTL and still fail closed once it passes.
+  // A random link issued before links became stable, with the seven-day TTL older links kept.
+  const legacy = crypto.getRandomValues(new Uint8Array(32)).toHex();
+  const legacyHash = createHash('sha256').update(legacy).digest('hex');
+  await instance.store.set(`link:${legacyHash}`, { sheetId: sheet.id }, Date.now() + 60_000);
+  await instance.store.set(`sheet:${sheet.id}`, { ...await instance.store.get(`sheet:${sheet.id}`), linkHash: legacyHash });
+  expect((await instance.participant(legacy)).status).toBe(200);
+  // Showing the stable link replaces it.
+  const stable = await instance.issue(sheet.id);
+  await unavailable(legacy);
+  expect((await instance.participant(stable.credential)).status).toBe(200);
+  // An expired link key is written again the next time the link is shown.
   await instance.store.set(`link:${(await instance.store.get(`sheet:${sheet.id}`)).linkHash}`, { sheetId: sheet.id }, Date.now() - 1);
-  await unavailable(first.credential);
-  const second = await instance.issue(sheet.id);
-  await instance.owner(`/api/sheets/${sheet.id}/access`, 'DELETE', {});
-  await unavailable(second.credential);
-  const third = await instance.issue(sheet.id);
-  await instance.issue(sheet.id);
-  await unavailable(third.credential);
+  await unavailable(stable.credential);
+  expect(await instance.issue(sheet.id)).toEqual(stable);
+  expect((await instance.participant(stable.credential)).status).toBe(200);
   expect(await (await instance.owner(`/api/sheets/${sheet.id}`)).json()).toEqual(sheet);
 });
 
@@ -179,7 +189,7 @@ test('revision conflicts preserve newer answers in both interviewer and particip
   expect(await (await instance.owner(`/api/sheets/${sheet.id}`)).json()).toEqual(newer);
 });
 
-test('revocation during a request body read is checked again before committing', async () => {
+test('deletion during a request body read is checked again before committing', async () => {
   const instance = setup();
   const sheet = await createSheet(instance);
   const { credential } = await instance.issue(sheet.id);
@@ -190,10 +200,10 @@ test('revocation during a request body read is checked again before committing',
   const body = new ReadableStream({ async pull(controller) { release(); controller.enqueue(await chunk); controller.close(); } });
   const pending = instance.app.request(`${origin}/api/participant`, { method: 'PUT', headers: { Authorization: `Bearer ${credential}`, Origin: origin, 'Content-Type': 'application/json' }, body, duplex: 'half' } as RequestInit);
   await reading;
-  await instance.owner(`/api/sheets/${sheet.id}/access`, 'DELETE', {});
+  await instance.owner(`/api/sheets/${sheet.id}`, 'DELETE', { revision: 1 });
   finish(new TextEncoder().encode(JSON.stringify({ fields: { good: 'Must not commit' }, revision: 1 })));
   expect((await pending).status).toBe(404);
-  expect(await (await instance.owner(`/api/sheets/${sheet.id}`)).json()).toEqual(sheet);
+  expect(await instance.store.get(`sheet:${sheet.id}`)).toBeNull();
 });
 
 test('deletion removes link access, including after recreating the same interview ID', async () => {

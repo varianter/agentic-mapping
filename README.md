@@ -7,8 +7,8 @@ Three modes, one name each:
 | Mode | Route | Who | Storage | Can do |
 | --- | --- | --- | --- | --- |
 | **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie. Without `ADMIN_KEY`: browser IndexedDB, never sent to the server | Fill in your own answers (autosaved), clear, download JSON or PDF |
-| **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; create, replace or revoke private links; read and edit self-submitted maps at `/submissions`; sign out |
-| **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the link is replaced or revoked |
+| **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions`; sign out |
+| **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
 
 `/guide.html` is the static interviewer guide.
 

@@ -25,8 +25,13 @@
       <p class="sheet-list-empty" id="sheet-list-empty" hidden>No interviews yet.</p>
       <ul class="sheet-list" id="sheet-list"></ul>
       <div class="sidebar-foot">
-        <button type="button" class="btn" data-action="issue-access" data-needs-sheet disabled>Create / replace private link</button>
-        <button type="button" class="btn" data-action="revoke-access" data-needs-sheet disabled>Revoke private link</button>
+        <div class="connect-link" id="connect-link" hidden>
+          <label for="connect-link-value">Connect URL</label>
+          <input type="text" id="connect-link-value" readonly autocomplete="off" spellcheck="false">
+          <p class="connect-link-hint">Send privately: the participant can keep filling in their answers on their own computer.</p>
+          <button type="button" class="btn" id="copy-connect-link">Copy connect URL</button>
+          <p id="connect-link-status" role="status"></p>
+        </div>
         <a href="/submissions" id="view-switch">Self-submitted maps</a>
         <a href="guide.html">Interviewer guide</a>
         <button type="button" class="btn" data-action="retry" disabled>Retry storage</button>
@@ -142,21 +147,6 @@
     </form>
   </main>
 </div>
-
-<dialog id="private-link" data-interviewer>
-  <form method="dialog">
-    <h2>Private interview link</h2>
-    <p>Anyone with this link can edit the approved answers, without signing in. Share it privately.</p>
-    <p>It works until you replace or revoke it. Creating a new link turns off the previous one.</p>
-    <label class="lbl" for="private-link-value">Copy this link before closing</label>
-    <input type="text" id="private-link-value" readonly autocomplete="off" spellcheck="false">
-    <p id="private-link-copy-status" role="status"></p>
-    <div class="actions">
-      <button type="button" class="btn" id="copy-private-link">Copy private link</button>
-      <button class="btn" value="close">Done</button>
-    </div>
-  </form>
-</dialog>
 
 <dialog id="connect-choice">
   <form method="dialog">

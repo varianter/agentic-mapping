@@ -1,10 +1,10 @@
 {
   "framework": null,
   "bunVersion": "1.x",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "routes": [{ "src": "/(.*)", "dest": "/api" }],
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{index.html,guide.html,styles.css,client/{boot,form,participant,preview,app,db,local-db}.js,img/variant-logo-{dark,light}.svg}"
+      "includeFiles": "{index.html,guide.html,styles.css,client/{boot,fields,form,self,self-db,participant,app,db}.js,img/variant-logo-{dark,light}.svg}"
     }
   }
 }

@@ -89,3 +89,15 @@ test("preview origins may write; other origins are rejected", async () => {
   expect((await post("https://prod.example")).status).toBe(201);
   expect((await post("https://evil.example")).status).toBe(403);
 });
+
+test("vercel.json sends every request to the function and bundles every client file", async () => {
+  const config = await Bun.file(new URL("../vercel.json", import.meta.url)).json();
+  // `routes` without a filesystem handle runs before static files, so the server injects the mode
+  // and repo files such as server/app.ts are never served as-is.
+  expect(config.rewrites).toBeUndefined();
+  expect(config.routes).toEqual([{ src: "/(.*)", dest: "/api" }]);
+  const include = new Bun.Glob(config.functions["api/index.ts"].includeFiles);
+  for (const file of new Bun.Glob("client/*.js").scanSync(new URL("..", import.meta.url).pathname)) {
+    expect(include.match(file) ? file : `missing ${file}`).toBe(file);
+  }
+});

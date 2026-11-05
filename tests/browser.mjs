@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { resize } from './browser-helpers.mjs';
 import { createApp } from '../server/app.tsx';
 import { memoryStore } from '../server/store.ts';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
@@ -167,7 +168,7 @@ try {
   await page.waitForURL(interviewURL);
   await ready();
   const phoneId = new URL(page.url()).pathname.split('/').pop();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await resize(page, { width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.equal(await page.locator('#sidebar').isVisible(), false);
   await page.locator('.sidebar-toggle').click();
@@ -183,7 +184,7 @@ try {
   await page.locator('#confirm-delete button[type="submit"]').click();
   await page.waitForURL(`${baseURL}/interviews`);
   assert.equal(await store.get(`sheet:${phoneId}`), null);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await resize(page, { width: 1440, height: 1000 });
   assert.deepEqual(errors, []);
   await checkParticipantFlow({ browser, context, baseURL, directory, store });
 

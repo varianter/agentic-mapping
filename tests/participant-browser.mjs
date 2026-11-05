@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { resize } from './browser-helpers.mjs';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -165,7 +166,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.deepEqual(ownerDataRequests, []);
     await signedIn.close();
 
-    await participant.setViewportSize({ width: 390, height: 844 });
+    await resize(participant, { width: 390, height: 844 });
     await participant.goto(baseURL);
     await loaded(participant);
     assert.equal(await participant.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

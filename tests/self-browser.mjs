@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { resize } from './browser-helpers.mjs';
 import { join } from 'node:path';
 import { RESPONDENT_FIELDS } from '../server/domain/fields.ts';
 
@@ -80,7 +81,7 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
     await page.waitForURL(`${baseURL}/`);
     assert.equal(await page.locator('[name="advice"]').inputValue(), '');
 
-    await page.setViewportSize({ width: 390, height: 844 });
+    await resize(page, { width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(interviewerRequests, []);
     // Clearing deletes the server copy too.

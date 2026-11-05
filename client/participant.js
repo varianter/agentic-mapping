@@ -1,5 +1,4 @@
-import { initForm } from './form.js';
-import { downloadJson } from './legacy.js';
+import { initForm, downloadJson } from './form.js';
 
 // This entrypoint never imports interviewer storage or loads a sheet list.
 for (const element of document.querySelectorAll('[data-interviewer]')) element.remove();

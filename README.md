@@ -30,9 +30,7 @@ If storage fails, use **Retry storage**. The draft stays editable, and **Downloa
 
 ## Existing notes and recovery
 
-Export each browser’s existing IndexedDB notes from the **old origin**, then sign in and select **Import JSON** in server mode. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.
-
-Imports preserve IDs, fields and timestamps . Identical retries are safe; conflicting IDs stop import without overwriting anything. A partial import reports its count; keep the export, resolve collisions and retry. Verify the imported notes before removing any originals or private JSON files.
+There is no browser-note migration: the earlier IndexedDB storage was never used. Signed-in notes live on the server; anonymous models stay in this browser's IndexedDB. If a sheet is unavailable, use **Download JSON** to keep your draft and create a new sheet.
 
 **Saved to server** means a committed save. On a network failure, use **Retry storage** or **Download JSON** in the sidebar before closing the tab. Unsaved server drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
 
@@ -60,7 +58,7 @@ The credential travels in the private link's URL fragment (the part after `#`), 
 
 Each sheet is one JSON value at `sheet:<id>`; each private link is `link:<hash>` and expires with the link. Every save overwrites the whole sheet after a revision check. The check is not atomic, so two people saving the same sheet at the same instant could overwrite each other; stale tabs still get a 409. Backups are whatever Upstash provides; download JSON for your own copies.
 
-This slice covers storage only. The Vercel deploy and preview setup is separate. GitHub Pages still publishes only the [legacy exporter](legacy.html); the [Pages workflow](.github/workflows/pages.yml) does not deploy the app or touch the store.
+This slice covers storage only. The Vercel deploy and preview setup is separate.
 
 ### Local development
 

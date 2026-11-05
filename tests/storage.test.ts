@@ -77,7 +77,7 @@ test('stale writes/deletes conflict and delayed saves cannot recreate deleted sh
   expect((await request(app, path, 'PUT', { ...created, revision: 2 })).status).toBe(404);
 });
 
-test('legacy import retries do not duplicate or overwrite notes', async () => {
+test('create retries do not duplicate or overwrite notes', async () => {
   const { app } = setup();
   const original = sheet();
   expect((await request(app, '/api/sheets', 'POST', original)).status).toBe(201);
@@ -99,10 +99,10 @@ test('rejects cross-site writes, malformed payloads and unknown API paths', asyn
 
 test('serves only public assets, never source, credentials or databases', async () => {
   const { app } = setup();
-  for (const path of ['/', '/index.html', '/guide.html', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg', '/legacy.html']) {
+  for (const path of ['/', '/index.html', '/guide.html', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg']) {
     expect((await request(app, path)).status).toBe(200);
   }
-  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/store.json', '/bun.lock', '/.git/config', '/docs/storage-decision.md']) {
+  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/store.json', '/bun.lock', '/.git/config', '/docs/storage-decision.md', '/legacy.html', '/client/legacy.js']) {
     expect((await request(app, path)).status).toBe(404);
   }
   expect(() => createApp({ store: memoryStore() })).toThrow('ADMIN_KEY');

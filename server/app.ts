@@ -9,7 +9,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'legacy.html', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/local-db.js', 'client/legacy.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/local-db.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const PARTICIPANT_FIELDS = new Set([

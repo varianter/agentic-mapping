@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app';
-import { memoryStore, storeFromEnv } from '../server/store';
+import { memoryStore, storeFromEnv, upstashStore } from '../server/store';
 
 const directories: string[] = [];
 const adminKey = 'test-admin-key-0123456789-abcdefghij';
@@ -191,4 +191,46 @@ test('entrypoint store is a local JSON file without KV variables', async () => {
   await store.set('sheet:x', { id: 'x' });
   expect(existsSync(file)).toBe(true);
   expect(await storeFromEnv({ LOCAL_STORE_FILE: file }).get('sheet:x')).toEqual({ id: 'x' });
+});
+
+test('upstashStore saves, lists and reloads sheets through the Upstash REST API (local stub)', async () => {
+  const data = new Map<string, string>();
+  const server = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const run = (command: string[]) => {
+        const [cmd, ...args] = command;
+        const name = String(cmd).toLowerCase();
+        if (name === 'set') {
+          data.set(args[0], args[1]);
+          return 'OK';
+        }
+        if (name === 'get') return data.get(args[0]) ?? null;
+        if (name === 'del') return args.filter((key) => data.delete(key)).length;
+        if (name === 'scan') {
+          const pattern = args[args.findIndex((a) => a.toLowerCase() === 'match') + 1];
+          return ['0', [...data.keys()].filter((key) => key.startsWith(pattern.replace(/\*$/, '')))];
+        }
+        throw new Error(`unexpected command ${name}`);
+      };
+      const body = await req.json();
+      if (new URL(req.url).pathname.includes('pipeline')) return Response.json((body as string[][]).map((command) => ({ result: run(command) })));
+      return Response.json({ result: run(body as string[]) });
+    },
+  });
+  try {
+    const url = `http://localhost:${server.port}`;
+    const first = createApp({ store: upstashStore(url, 'stub-token'), adminKey });
+    const original = sheet();
+    const created = await (await request(first.app, '/api/sheets', 'POST', original)).json();
+    const edited = { ...created, fields: { name: 'Remote notes' } };
+    expect((await request(first.app, `/api/sheets/${original.id}`, 'PUT', edited)).status).toBe(200);
+    const second = createApp({ store: upstashStore(url, 'stub-token'), adminKey });
+    const loaded = await (await request(second.app, `/api/sheets/${original.id}`)).json();
+    expect(loaded.fields).toEqual(edited.fields);
+    expect(loaded.revision).toBe(2);
+    expect((await (await request(second.app, '/api/sheets')).json()).map((s: any) => s.id)).toEqual([original.id]);
+  } finally {
+    server.stop(true);
+  }
 });

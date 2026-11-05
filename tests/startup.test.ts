@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -7,14 +7,13 @@ const root = resolve(import.meta.dir, '..');
 
 test('configured Bun process retains notes across a server restart', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'mapping-process-'));
-  const usersFile = join(directory, 'users.json');
-  writeFileSync(usersFile, JSON.stringify({ interviewer: Bun.password.hashSync('process-test-password') }));
+  const adminKey = 'process-test-admin-key-0123456789-abcd';
   const reservation = Bun.serve({ port: 0, fetch: () => new Response() });
   const port = reservation.port;
   reservation.stop(true);
   const origin = `http://localhost:${port}`;
-  const headers = { Authorization: `Basic ${btoa('interviewer:process-test-password')}`, Origin: origin, 'Content-Type': 'application/json' };
-  const env = { ...process.env, PORT: String(port), APP_ORIGIN: origin, DATABASE_PATH: join(directory, 'sheets.sqlite'), INTERVIEWER_USERS_FILE: usersFile };
+  const headers = { Authorization: `Basic ${btoa(`admin:${adminKey}`)}`, Origin: origin, 'Content-Type': 'application/json' };
+  const env = { ...process.env, PORT: String(port), APP_ORIGIN: origin, DATABASE_PATH: join(directory, 'sheets.sqlite'), ADMIN_KEY: adminKey };
   const start = () => Bun.spawn([process.execPath, 'server.ts'], { cwd: root, env, stdout: 'pipe', stderr: 'pipe' });
   let child = start();
   async function waitReady() {
@@ -47,8 +46,10 @@ test('configured Bun process retains notes across a server restart', async () =>
   }
 }, 20000);
 
-test('Bun entrypoint refuses startup without configured interviewer accounts', () => {
-  const child = Bun.spawnSync([process.execPath, 'server.ts'], { cwd: root, env: { ...process.env, INTERVIEWER_USERS_FILE: '' }, stdout: 'pipe', stderr: 'pipe' });
-  expect(child.exitCode).not.toBe(0);
-  expect(child.stderr.toString()).toContain('Configure INTERVIEWER_USERS_FILE');
+test('Bun entrypoint refuses startup without a long enough ADMIN_KEY', () => {
+  for (const ADMIN_KEY of ['', 'too-short']) {
+    const child = Bun.spawnSync([process.execPath, 'server.ts'], { cwd: root, env: { ...process.env, ADMIN_KEY }, stdout: 'pipe', stderr: 'pipe' });
+    expect(child.exitCode).not.toBe(0);
+    expect(child.stderr.toString()).toContain('ADMIN_KEY');
+  }
 });

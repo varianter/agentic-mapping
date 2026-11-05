@@ -24,23 +24,13 @@
       <p id="model-list-label">Interviews</p>
       <p class="sheet-list-empty" id="sheet-list-empty" hidden>No interviews yet.</p>
       <ul class="sheet-list" id="sheet-list"></ul>
-      <div class="sidebar-foot">
-        <div class="connect-link" id="connect-link" hidden>
-          <label for="connect-link-value">Connect URL</label>
-          <input type="text" id="connect-link-value" readonly autocomplete="off" spellcheck="false">
-          <p class="connect-link-hint">Send privately: the participant can keep filling in their answers on their own computer.</p>
-          <button type="button" class="btn" id="copy-connect-link">Copy connect URL</button>
-          <p id="connect-link-status" role="status"></p>
-        </div>
+      <nav class="sidebar-foot" aria-label="More">
         <a href="/submissions" id="view-switch">Self-submitted maps</a>
         <a href="guide.html">Interviewer guide</a>
-        <button type="button" class="btn" data-action="retry" disabled>Retry storage</button>
-        <button type="button" class="btn" data-action="export" data-needs-sheet disabled>Download JSON</button>
-        <button type="button" class="btn" data-action="upload" disabled>Upload JSON</button>
+        <button type="button" class="link-button" data-action="upload" disabled>Upload JSON</button>
         <input type="file" id="upload-file" accept="application/json,.json" hidden>
-        <button type="button" class="btn" data-action="reload" data-needs-sheet disabled>Reload saved</button>
-        <form method="post" action="/sign-out"><button type="submit" class="btn" id="sign-out">Sign out</button></form>
-      </div>
+        <form method="post" action="/sign-out"><button type="submit" class="link-button" id="sign-out">Sign out</button></form>
+      </nav>
     </div>
   </aside>
 
@@ -50,6 +40,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
       </button>
       <span class="save-status" id="save-status" role="status" aria-live="polite"></span>
+      <div class="recovery" id="recovery" hidden data-interviewer>
+        <button type="button" class="btn" data-variant="small" data-action="retry" disabled>Retry storage</button>
+        <button type="button" class="btn" data-variant="small" data-action="reload" data-needs-sheet disabled>Reload saved</button>
+      </div>
       <span class="spacer"></span>
       <div class="self-actions" data-self-only>
         <span class="self-notice"></span>
@@ -61,6 +55,10 @@
       <button type="button" class="btn" data-variant="danger" data-action="delete" data-needs-sheet data-interviewer disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
         <span class="btn-text">Delete</span>
+      </button>
+      <button type="button" class="btn" data-action="export" data-needs-sheet data-interviewer disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4H7a2 2 0 0 0-2 2v4l-2 2 2 2v4a2 2 0 0 0 2 2h1M16 4h1a2 2 0 0 1 2 2v4l2 2-2 2v4a2 2 0 0 1-2 2h-1"/></svg>
+        <span class="btn-text">Download JSON</span>
       </button>
       <button type="button" class="btn" data-variant="primary" data-action="pdf" data-needs-sheet data-interviewer disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
@@ -143,6 +141,18 @@
           <label class="lbl" for="f-talk">Talk to next</label>
           <div class="field"><textarea id="f-talk" name="talk_to"></textarea></div>
         </div>
+      </section>
+
+      <section class="connect-link" id="connect-link" aria-labelledby="connect-link-label" hidden data-interviewer>
+        <div>
+          <h2 id="connect-link-label"><label for="connect-link-value">Connect URL</label></h2>
+          <p class="hint">Send privately: the participant can keep filling in their answers on their own computer.</p>
+        </div>
+        <div class="connect-link-row">
+          <input type="text" id="connect-link-value" readonly autocomplete="off" spellcheck="false">
+          <button type="button" class="btn" id="copy-connect-link">Copy</button>
+        </div>
+        <p id="connect-link-status" class="hint" role="status"></p>
       </section>
     </form>
   </main>

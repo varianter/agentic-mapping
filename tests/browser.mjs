@@ -162,8 +162,8 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.locator('#toggle-sidebar').click();
-  await page.locator('[data-action="retry"]').waitFor({ state: 'visible' });
-  await page.locator('[data-action="retry"]').press('Escape');
+  await page.locator('[data-action="upload"]').waitFor({ state: 'visible' });
+  await page.locator('[data-action="upload"]').press('Escape');
   await page.locator('[data-action="delete"]').click();
   await page.locator('#confirm-delete [value="delete"]').click();
   await page.waitForFunction((id) => !document.querySelector(`#sheet-list a[data-id="${id}"]`), id);

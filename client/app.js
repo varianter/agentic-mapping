@@ -12,6 +12,7 @@ export function initEditor(storage) {
   const listEmpty = document.getElementById('sheet-list-empty');
   const empty = document.getElementById('empty');
   const status = document.getElementById('save-status');
+  const recovery = document.getElementById('recovery');
   const toggle = document.getElementById('toggle-sidebar');
   const confirmDelete = document.getElementById('confirm-delete');
   const narrow = matchMedia('(max-width: 900px)');
@@ -49,6 +50,8 @@ export function initEditor(storage) {
   function setStatus(text, state = '') {
     status.textContent = text;
     status.dataset.state = state;
+    // Retry and reload are only useful while something is wrong.
+    recovery.hidden = state !== 'error';
   }
 
   async function save() {

@@ -52,6 +52,7 @@ index.html        capture sheet page (markup + <template id="matrix-template">)
 client/boot.js    selects local/server adapter or isolated participant entrypoint
 client/app.js     interviewer UI logic for index.html
 client/participant.js isolated bearer access, explicit saves and draft recovery
+client/preview.js public /preview: browser-only localStorage sheet, no server calls
 client/form.js    shared dimensions, tabs and form values
 client/db.js      authenticated API adapter: allSheets, getSheet, createSheet, putSheet, deleteSheet
 client/local-db.js anonymous IndexedDB adapter with transactional revisions

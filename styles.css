@@ -201,6 +201,15 @@ a:hover { color: var(--link-hover); }
 [data-participant-only] { display: none !important; }
 body[data-participant] [data-participant-only]:not([hidden]) { display: flex !important; }
 body[data-participant] [data-interviewer] { display: none !important; }
+[data-preview-only] { display: none !important; }
+body[data-preview] [data-preview-only] { display: flex !important; }
+body[data-preview] [data-interviewer] { display: none !important; }
+body[data-preview] .app { grid-template-columns: minmax(0, 1fr); }
+body[data-preview] .who { grid-template-columns: minmax(0, 1fr); }
+body[data-preview] .reflect { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.preview-actions { align-items: center; flex-wrap: wrap; gap: 8px; }
+.preview-notice { font-size: 0.85rem; }
+@media print { [data-preview-only] { display: none !important; } }
 body[data-participant] .app { grid-template-columns: minmax(0, 1fr); }
 body[data-participant] .who { grid-template-columns: minmax(0, 1fr); }
 body[data-participant] .reflect { grid-template-columns: repeat(3, minmax(0, 1fr)); }

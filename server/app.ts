@@ -10,7 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/local-db.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const PARTICIPANT_FIELDS = new Set([
@@ -87,8 +87,11 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     // A participant credential never falls through to interviewer authentication,
     // even when the browser also has a cached interviewer login.
     if (/^Bearer(?:\s|$)/i.test(c.req.header('Authorization') ?? '')) return c.json({ error: 'Access denied.' }, 403);
+    if (['/', '/index.html'].includes(c.req.path) && !c.req.header('Authorization')) return next();
     return interviewerAuth(c, next);
   });
+  // An explicit challenge establishes Basic auth for this origin, then returns home.
+  app.get('/sign-in', (c) => c.redirect('/', 303));
   app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Sheet exceeds 1 MB.' }, 413) }));
   app.use('/api/*', async (c, next) => {
     if (!['GET', 'HEAD'].includes(c.req.method)) {
@@ -207,6 +210,10 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     const file = PUBLIC_FILES.get(c.req.path);
     if (!file) return c.notFound();
     const asset = Bun.file(resolve(root, file));
+    if (file === 'index.html') {
+      const mode = c.req.path === '/participant' ? 'participant' : c.get('owner') ? 'server' : 'local';
+      return c.html((await asset.text()).replace('data-storage-mode=""', `data-storage-mode="${mode}"`));
+    }
     return new Response(asset, { headers: { 'Content-Type': asset.type } });
   });
   app.onError((error, c) => {

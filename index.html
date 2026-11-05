@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="styles.css">
 <script type="module" src="client/boot.js"></script>
 </head>
-<body>
+<body data-storage-mode="">
 <div class="app" id="app" data-sidebar="open">
 
   <aside class="sidebar" id="sidebar" aria-label="Capture sheets" data-interviewer>
@@ -16,20 +16,23 @@
       <div class="sidebar-head">
         <img class="sidebar-logo" src="img/variant-logo-light.svg" alt="Variant" width="101" height="24">
         <p class="sidebar-title">Agentic mapping</p>
-        <button type="button" class="btn" data-variant="primary" data-action="new">
+        <button type="button" class="btn" data-variant="primary" data-action="new" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           New sheet
         </button>
       </div>
+      <p id="model-list-label">Your interviews</p>
       <p class="sheet-list-empty" id="sheet-list-empty" hidden>No sheets yet.</p>
       <ul class="sheet-list" id="sheet-list"></ul>
       <div class="sidebar-foot">
-        <button type="button" class="btn" data-action="issue-access" data-needs-sheet>Create / replace private link</button>
-        <button type="button" class="btn" data-action="revoke-access" data-needs-sheet>Revoke private link</button>
+        <a href="/sign-in" id="sign-in">Sign in for registered interviews</a>
+        <p id="local-storage-note" hidden>Models stay in this browser. Clearing browser data removes them. Download a copy to keep a backup.</p>
+        <button type="button" class="btn" data-action="issue-access" data-needs-sheet data-server-only disabled>Create / replace private link</button>
+        <button type="button" class="btn" data-action="revoke-access" data-needs-sheet data-server-only disabled>Revoke private link</button>
         <a href="guide.html">Interviewer guide</a>
-        <button type="button" class="btn" data-action="retry" data-needs-sheet>Retry save</button>
-        <button type="button" class="btn" data-action="export" data-needs-sheet>Download JSON</button>
-        <button type="button" class="btn" data-action="reload" data-needs-sheet>Reload saved</button>
+        <button type="button" class="btn" data-action="retry" disabled>Retry storage</button>
+        <button type="button" class="btn" data-action="export" data-needs-sheet disabled>Download JSON</button>
+        <button type="button" class="btn" data-action="reload" data-needs-sheet disabled>Reload saved</button>
       </div>
     </div>
   </aside>
@@ -46,11 +49,11 @@
         <button type="button" class="btn" id="participant-export" disabled>Download draft</button>
         <button type="button" class="btn" data-variant="primary" id="participant-save" disabled>Save answers</button>
       </div>
-      <button type="button" class="btn" data-variant="danger" data-action="delete" data-needs-sheet data-interviewer>
+      <button type="button" class="btn" data-variant="danger" data-action="delete" data-needs-sheet data-interviewer disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
         <span class="btn-text">Delete</span>
       </button>
-      <button type="button" class="btn" data-variant="primary" data-action="pdf" data-needs-sheet data-interviewer>
+      <button type="button" class="btn" data-variant="primary" data-action="pdf" data-needs-sheet data-interviewer disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
         <span class="btn-text">Download PDF</span>
       </button>
@@ -59,7 +62,7 @@
     <div class="empty" id="empty" hidden data-interviewer>
       <h2>No capture sheets yet</h2>
       <p>Make one for each conversation. Everything you type is saved to your interviewer account on the server as you go.</p>
-      <button type="button" class="btn" data-variant="primary" data-action="new">New sheet</button>
+      <button type="button" class="btn" data-variant="primary" data-action="new" disabled>New sheet</button>
     </div>
 
     <div class="empty" id="participant-unavailable" hidden data-participant-only>

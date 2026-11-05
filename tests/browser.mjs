@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { checkParticipantFlow } from './participant-browser.mjs';
+import { checkLocalFlow } from './local-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
 const users = { alice: Bun.password.hashSync('browser-password') };
@@ -20,7 +21,7 @@ page.on('pageerror', (error) => errors.push(error.message));
 const status = page.locator('#save-status');
 const waitSaved = () => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved to server');
 try {
-  await page.goto(baseURL);
+  await page.goto(`${baseURL}/sign-in`);
   await page.locator('#empty').waitFor({ state: 'visible' });
   await page.locator('[data-action="new"]').first().click();
   await page.waitForFunction(() => !document.getElementById('sheet').inert);
@@ -42,6 +43,7 @@ try {
   const secondContext = await browser.newContext({ httpCredentials: { username: 'alice', password: 'browser-password' } });
   secondContext.setDefaultTimeout(12000);
   const second = await secondContext.newPage();
+  await second.goto(`${baseURL}/sign-in`);
   await second.goto(`${baseURL}/#${id}`);
   await second.waitForFunction(() => document.querySelector('[name="name"]').value === 'Cross-device interview');
   await page.locator('[name="name"]').fill('Newer from first device');
@@ -144,6 +146,7 @@ try {
   await page.waitForFunction((id) => !document.querySelector(`#sheet-list a[data-id="${id}"]`), id);
   assert.deepEqual(errors, []);
   await checkParticipantFlow({ browser, context, baseURL, directory, db });
+  await checkLocalFlow({ browser, baseURL, directory, db });
   console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, missing hashes, PDF layout, mobile width, delete; no page errors.');
 } catch (error) {
   console.log('Browser failure status:', await status.textContent(), errors);

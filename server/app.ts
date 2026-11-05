@@ -10,13 +10,19 @@ import { createHash, randomBytes } from 'node:crypto';
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'legacy.html', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/local-db.js', 'client/legacy.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ['/preview', 'index.html'],
+  ...['index.html', 'guide.html', 'styles.css', 'legacy.html', 'client/boot.js', 'client/form.js', 'client/participant.js', 'client/preview.js', 'client/app.js', 'client/db.js', 'client/local-db.js', 'client/legacy.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const PARTICIPANT_FIELDS = new Set([
   ...['ind', 'team', 'org'].flatMap((dimension) => ['learn', 'why', 'found'].flatMap((question) => ['start', 'good', 'next'].map((level) => `${dimension}_${question}_${level}`))),
   'good', 'surprised', 'missing', 'advice',
 ]);
+const SIGN_IN_PAGE = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · Agentic mapping</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem}a{margin-right:1rem}</style></head>
+<body><h1>Sign in required</h1><p>This page is for interviewers. No account? Fill in a sheet for yourself first.</p>
+<p><a href="/preview">Try a preview</a><a href="/sign-in">Sign in</a></p></body></html>`;
 const hashCredential = (credential: string) => createHash('sha256').update(credential).digest('hex');
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 function participantView(row: any) {
@@ -83,7 +89,7 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     },
   });
   app.use('*', async (c, next) => {
-    if (c.req.path === '/participant' || PUBLIC_ASSETS.has(c.req.path) || c.req.path === '/api/participant' || c.req.path.startsWith('/api/participant/')) return next();
+    if (c.req.path === '/participant' || c.req.path === '/preview' || PUBLIC_ASSETS.has(c.req.path) || c.req.path === '/api/participant' || c.req.path.startsWith('/api/participant/')) return next();
     // A participant credential never falls through to interviewer authentication,
     // even when the browser also has a cached interviewer login.
     if (/^Bearer(?:\s|$)/i.test(c.req.header('Authorization') ?? '')) return c.json({ error: 'Access denied.' }, 403);
@@ -211,13 +217,18 @@ export function createApp({ databasePath, users, publicOrigin }: { databasePath:
     if (!file) return c.notFound();
     const asset = Bun.file(resolve(root, file));
     if (file === 'index.html') {
-      const mode = c.req.path === '/participant' ? 'participant' : c.get('owner') ? 'server' : 'local';
+      const mode = c.req.path === '/participant' ? 'participant' : c.req.path === '/preview' ? 'preview' : c.get('owner') ? 'server' : 'local';
       return c.html((await asset.text()).replace('data-storage-mode=""', `data-storage-mode="${mode}"`));
     }
     return new Response(asset, { headers: { 'Content-Type': asset.type } });
   });
   app.onError((error, c) => {
-    if (error instanceof HTTPException) return error.getResponse();
+    if (error instanceof HTTPException) {
+      const response = error.getResponse();
+      if (error.status !== 401 || c.req.path.startsWith('/api/')) return response;
+      // Page requests get a way forward after the browser sign-in prompt is cancelled.
+      return new Response(SIGN_IN_PAGE, { status: 401, headers: { 'WWW-Authenticate': response.headers.get('WWW-Authenticate') ?? '', 'Content-Type': 'text/html; charset=UTF-8' } });
+    }
     console.error('Storage request failed.');
     return c.json({ error: 'Storage unavailable. Keep your draft and retry.' }, 503);
   });

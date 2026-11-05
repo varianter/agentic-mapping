@@ -158,6 +158,13 @@ test('home selects verified storage modes and sign-in explicitly challenges then
   expect(signedIn.headers.get('Location')).toBe('/');
   expect((await request(app, '/client/local-db.js', 'GET', undefined, null)).status).toBe(200);
   expect(await (await request(app, '/participant', 'GET', undefined, null)).text()).toContain('data-storage-mode="participant"');
+  const preview = await request(app, '/preview', 'GET', undefined, null);
+  expect(preview.status).toBe(200);
+  expect(await preview.text()).toContain('data-storage-mode="preview"');
+  expect((await request(app, '/client/preview.js', 'GET', undefined, null)).status).toBe(200);
+  expect((await request(app, '/api/sheets', 'GET', undefined, null)).status).toBe(401);
+  expect(await (await request(app, '/api/sheets', 'GET', undefined, null)).text()).not.toContain('Try a preview');
+  expect(await challenge.text()).toContain('href="/preview">Try a preview');
   const original = sheet();
   await request(app, '/api/sheets', 'POST', original);
   for (const [path, method, body] of [

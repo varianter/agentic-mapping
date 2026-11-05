@@ -67,7 +67,7 @@ export async function checkLocalFlow({ browser, baseURL, directory, db }) {
     assert.equal(await page.locator('#model-list-label').textContent(), 'This browser’s models');
     assert.equal(await page.locator('[data-action="issue-access"]').isHidden(), true);
     assert.equal(await page.locator('[data-action="revoke-access"]').isHidden(), true);
-    assert.equal(await page.locator('#import-json').isDisabled(), true);
+    assert.equal(await page.locator('#import-json').count(), 0);
     assert.equal(await page.locator('#sign-in').isVisible(), true);
     assert.match(await page.locator('#local-storage-note').textContent(), /Clearing browser data removes them/);
     // The entire interviewer model, including all dimensions and private fields, is editable locally.

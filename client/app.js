@@ -1,5 +1,4 @@
-import { initForm } from './form.js';
-import { downloadJson } from './legacy.js';
+import { initForm, downloadJson } from './form.js';
 
 export function initEditor(storage, { localMode }) {
   const { allSheets, getSheet, createSheet, putSheet, deleteSheet, issueAccess, revokeAccess } = storage;
@@ -163,7 +162,6 @@ export function initEditor(storage, { localMode }) {
     for (const button of document.querySelectorAll('[data-action]')) {
       button.disabled = busy || (button.hasAttribute('data-needs-sheet') && !current);
     }
-    document.getElementById('import-json').disabled = busy || localMode;
   }
 
   function showSheet(sheet) {
@@ -300,27 +298,6 @@ export function initEditor(storage, { localMode }) {
     await openFromHash();
   }
 
-  async function importSheets(file) {
-    if (localMode) return;
-    if (!file) return;
-    await save();
-    const sheets = JSON.parse(await file.text());
-    if (!Array.isArray(sheets)) throw new Error('Choose a capture-sheet JSON export.');
-    let imported = 0;
-    try {
-      for (const sheet of sheets) {
-        await createSheet(sheet);
-        imported++;
-      }
-    } catch (error) {
-      throw new Error(`Imported ${imported} of ${sheets.length}. ${error.message} Keep the original export; identical imports can be retried.`);
-    } finally {
-      await renderList();
-    }
-    await openFromHash();
-    setStatus(`Imported ${imported} sheets to server. Original browser data is unchanged.`);
-  }
-
   async function reloadSaved() {
     if (!current) return;
     if ((dirty || saving) && !confirm(`Discard your unsaved draft and reload the ${savedLocation} copy? Download JSON first to keep your notes.`)) return;
@@ -334,7 +311,7 @@ export function initEditor(storage, { localMode }) {
       if (error.status !== 404) throw error;
       showSheet(null);
       history.replaceState(null, '', location.pathname);
-      setStatus('Sheet unavailable. Create a new sheet. Keep your downloaded draft to recover your notes.', 'error');
+      setStatus('Sheet unavailable. Create a new sheet or use your downloaded draft.', 'error');
     }
     await renderList();
   }
@@ -406,11 +383,6 @@ export function initEditor(storage, { localMode }) {
     if (handlers[action]) runAction(action, handlers[action]);
   });
 
-  document.getElementById('import-json').addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    runAction('import', () => importSheets(file));
-    event.target.value = '';
-  });
   addEventListener('hashchange', () => {
     if (actionPending) {
       history.replaceState(null, '', current ? `#${current.id}` : location.pathname);

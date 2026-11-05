@@ -96,46 +96,14 @@ try {
   await page.waitForFunction(() => document.querySelector('[name="name"]').value === 'Latest snapshot');
 
   console.log('Overlapping edits passed');
-  // Old-origin notes can be exported without deletion and imported idempotently.
-  const legacyId = crypto.randomUUID();
-  await page.evaluate(async ({ legacyId }) => {
-    await new Promise((resolve, reject) => {
-      const request = indexedDB.open('agentic-mapping', 1);
-      request.onupgradeneeded = () => request.result.createObjectStore('sheets', { keyPath: 'id' });
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const transaction = db.transaction('sheets', 'readwrite');
-        transaction.objectStore('sheets').put({ id: legacyId, fields: { name: 'Legacy interview', learn_start: 'Preserved legacy grid' }, createdAt: 1, updatedAt: 2 });
-        transaction.oncomplete = () => { db.close(); resolve(); };
-      };
-    });
-  }, { legacyId });
-  await page.goto(`${baseURL}/legacy.html`);
-  const downloading = page.waitForEvent('download');
-  await page.locator('#export-legacy').click();
-  const download = await downloading;
-  const exportPath = join(directory, 'legacy.json');
-  await download.saveAs(exportPath);
-  await page.goto(baseURL);
-  await page.waitForFunction(() => !document.getElementById('import-json').disabled);
-  await page.locator('#import-json').setInputFiles(exportPath);
-  await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('Imported 1 sheets'));
-  await page.waitForFunction(() => !document.getElementById('import-json').disabled);
-  await page.locator('#import-json').setInputFiles(exportPath);
-  await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('Imported 1 sheets'));
-  assert.equal(await page.locator(`#sheet-list a[data-id="${legacyId}"]`).count(), 1);
-  await page.waitForFunction(() => !document.getElementById('import-json').disabled);
-  await page.locator(`#sheet-list a[data-id="${legacyId}"]`).click();
-  await page.waitForFunction(() => document.querySelector('[name="ind_learn_start"]').value === 'Preserved legacy grid');
-
-  await page.waitForFunction(() => !document.getElementById('sheet').inert);
-  console.log('Migration passed');
+  for (const path of ['/legacy.html', '/client/legacy.js']) assert.equal((await page.request.get(`${baseURL}${path}`)).status(), 404);
+  assert.equal(await page.locator('#import-json').count(), 0);
+  assert.equal(await page.locator('a[href="legacy.html"]').count(), 0);
   // Unknown hashes never open an unrelated interview.
   await page.goto(`${baseURL}/#${crypto.randomUUID()}`);
   await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('Sheet unavailable'));
   assert.equal(await page.locator('#sheet').isHidden(), true);
-  await page.waitForFunction(() => !document.getElementById('import-json').disabled);
+  await page.waitForFunction(() => !document.getElementById('sheet').inert);
   await page.locator(`#sheet-list a[data-id="${id}"]`).click();
   await page.waitForFunction(() => document.querySelector('[name="name"]').value === 'Latest snapshot');
   await page.waitForFunction(() => !document.getElementById('sheet').inert);
@@ -164,9 +132,11 @@ try {
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('[data-action="reload"]').click();
   await page.locator('#sheet').waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => !document.getElementById('import-json').disabled);
-  await page.locator('#import-json').setInputFiles(recoveryPath);
-  await page.waitForFunction(() => document.querySelector('[name="name"]').value === 'Draft after remote deletion' && !document.getElementById('sheet').inert);
+  await page.waitForFunction(() => !document.getElementById('sheet').inert);
+  assert.match(await status.textContent(), /Sheet unavailable\. Create a new sheet or use your downloaded draft\.$/);
+  assert.equal(await page.locator('[data-action="export"]').count() > 0, true);
+  await page.locator('[data-action="new"]:visible').first().click();
+  await page.waitForFunction(() => !document.getElementById('sheet').hidden && !document.getElementById('sheet').inert);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.locator('#toggle-sidebar').click();
@@ -178,7 +148,7 @@ try {
   assert.deepEqual(errors, []);
   await checkParticipantFlow({ browser, context, baseURL, directory, db });
   await checkLocalFlow({ browser, baseURL, directory, db });
-  console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, legacy export/import, missing hashes, PDF layout, mobile width, delete; no page errors.');
+  console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, missing hashes, PDF layout, mobile width, delete; no page errors.');
 } catch (error) {
   console.log('Browser failure status:', await status.textContent(), errors);
   throw error;

@@ -2,30 +2,35 @@
 
 Capture sheets and an interviewer guide for 15-minute interviews about what people had to learn to work with agents. Plain HTML, CSS and browser JavaScript served by Bun/Hono. No build step.
 
-| Route | Access | Storage |
-| --- | --- | --- |
-| `/` | Open | Browser IndexedDB |
-| `/` after **Sign in** | Admin key (Basic auth, any username) | Upstash Redis, or local JSON file |
-| `/participant#<credential>` | Private link, expires after 7 days | Server, approved answer fields only |
-| `/preview` | Open | Browser localStorage, never sent to the server |
-| `/guide.html` | Open | Static interviewer guide |
+Three modes, one name each:
+
+| Mode | Route | Who | Storage | Can do |
+| --- | --- | --- | --- | --- |
+| **My map** (`self`) | `/` | Anyone without the admin cookie | One map in browser IndexedDB, never sent to the server | Fill in your own answers, clear, download JSON or PDF |
+| **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; create, replace or revoke private links; sign out |
+| **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Fill in and save their interview, come back later until the link is revoked |
+
+`/guide.html` is the static interviewer guide.
+
+Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/participant` and `/api/*` return 404 and no store is needed.
 
 ## Run
 
 ```bash
 bun install
+bun start        # self-only: My map
 echo "ADMIN_KEY=$(openssl rand -hex 32)" > .env
-bun start        # or: bun dev
+bun start        # or: bun dev; adds interviewer sign-in
 ```
 
-Open http://localhost:4321. Without KV variables, data is written to `./data/store.json`.
+Open http://localhost:4321, and http://localhost:4321/sign-in to sign in with the admin key. Without KV variables, interviews are written to `./data/store.json`.
 
 ## Environment
 
 | Variable | Description |
 | --- | --- |
-| `ADMIN_KEY` | Required, 32+ characters. Gates all interview management. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Upstash Redis. Required on Vercel. |
+| `ADMIN_KEY` | Optional, 32+ characters. Enables interviewer sign-in. The admin cookie holds an HMAC of the key, so rotating it signs everyone out. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Upstash Redis. Required on Vercel when `ADMIN_KEY` is set. |
 | `LOCAL_STORE_FILE` | Used when KV is unset. Default `./data/store.json`. Dev only. |
 | `PORT` | Default `4321`. |
 | `BIND_ADDRESS` | Default `127.0.0.1`. |
@@ -48,17 +53,17 @@ New public files must be added to the allowlist in `server/app.ts`.
 
 ```
 server.ts          Bun entrypoint
-server/app.ts      Hono API, auth, public-file allowlist
+server/app.ts      Hono API, cookie sign-in, public-file allowlist
 server/config.ts   Env config checks
 server/store.ts    Upstash and memory/JSON-file stores
 api/index.ts       Vercel entry
-client/boot.js     Picks browser/server mode or participant page
+client/boot.js     Starts the mode the server marked: self, interviewer or participant
+client/self.js     My map
+client/self-db.js  My map's IndexedDB record
 client/app.js      Interviewer editor
-client/db.js       Server storage adapter
-client/local-db.js Browser IndexedDB adapter
-client/save-local.js  Moves browser models to the server after sign-in
+client/db.js       Interview API adapter
 client/participant.js Participant page
-client/preview.js  Preview page
+client/fields.js   Respondent fields, shared with the server
 client/form.js     Shared grids and tabs
 index.html, guide.html, styles.css
 tests/             Bun and Playwright tests
@@ -68,12 +73,12 @@ tests/             Bun and Playwright tests
 
 1. Import the repo with no build command and no output directory (`vercel.json` sets `"framework": null`).
 2. Add **Upstash for Redis** from Storage → Marketplace. Apply `KV_REST_API_URL` and `KV_REST_API_TOKEN` to Production and Preview.
-3. Set `ADMIN_KEY` (Production and Preview) and `APP_ORIGIN` (production HTTPS origin).
+3. Set `ADMIN_KEY` (Production and Preview) and `APP_ORIGIN` (production HTTPS origin). Leave `ADMIN_KEY` unset for a self-only deploy; then step 2 is optional.
 4. After deploy, check that `/server/app.ts` and `/package.json` return 404.
 
 **Preview deployments share production data.** Only share preview URLs and the admin key with people allowed to see production.
 
-Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit sign-in and participant requests.
+Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in` and participant requests.
 
 ## Docs
 

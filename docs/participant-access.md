@@ -13,7 +13,7 @@ This remains one feature: backend authorization, isolated participant UI and sec
 ## Access contract
 
 - Anyone holding the link can edit the 27 dimension/grid fields and `good`, `surprised`, `missing`, `advice`. Identity, context, discipline and follow-up contacts remain private.
-- The owner can issue a replacement or revoke access; replacement invalidates the old credential immediately. Links expire seven days after issuance.
+- The owner can issue a replacement or revoke access; replacement invalidates the old credential immediately. Since 2026-11-05 links last until replaced or revoked; links issued earlier keep their seven-day expiry.
 - Deliver the random credential only in a URL fragment; participant API requests use an Authorization header. Store only its SHA-256 hash in SQLite. Do not persist it in browser storage or send it in HTTP URLs.
 - Participant saves require an explicit action and a matching revision. Failures retain the draft; conflicts require an explicit reload and manual reconciliation. No automatic retry or merge.
 - A production operator must provision HTTPS, private account configuration, durable storage and backups. A host deployment and a real-user seven-day completion-window trial remain operational handoff steps.
@@ -23,7 +23,7 @@ This remains one feature: backend authorization, isolated participant UI and sec
 | Criterion | Evidence |
 | --- | --- |
 | Owner-only issue, copy, replace and revoke | `tests/participant.test.ts`: owner isolation and hash-only persistence; `tests/participant-browser.mjs`: copy control and clipboard handoff. |
-| Fresh-browser edits reach interviewer and survive reload | API restart/persistence test and browser handoff without HTTP Basic credentials. |
+| Fresh-browser edits reach interviewer and survive reload | API restart/persistence test and browser handoff without the admin cookie. |
 | Deny other sheets, lists, creation, deletion and private fields | API operation matrix and unchanged stored-sheet assertions; browser asserts exactly 31 fields and no interviewer imports/storage requests. |
 | Missing/invalid/expired/revoked/replaced credentials fail closed | API read/write checks, including revocation during body reading; browser fresh visits and open-form read/save denial. |
 | Failed saves/conflicts retain drafts without overwriting/retry | API disk-error and bidirectional/concurrent revision checks; browser offline recovery, conflict download/reload and typing during an in-flight save. |

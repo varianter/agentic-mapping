@@ -228,13 +228,13 @@ test('private responses suppress caching/referrers; participant shell needs no i
     await instance.send('/api/sheets'),
   ]) {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(response.headers.get('Referrer-Policy')).toBe('same-origin');
     expect(response.headers.get('Strict-Transport-Security')).toContain('max-age=');
   }
   expect((await instance.send('/participant')).status).toBe(200);
   expect((await instance.send('/participant')).headers.get('Content-Type')).toContain('text/html');
   expect((await instance.send('/participant')).headers.get('WWW-Authenticate')).toBeNull();
-  for (const path of ['/data/store.json', '/secrets/accounts.json', '/.env', '/server/app.ts', '/.git/config']) {
+  for (const path of ['/data/store.json', '/secrets/accounts.json', '/.env', '/server/app.tsx', '/.git/config']) {
     const response = await instance.participant(credential, 'GET', undefined, path);
     expect(response.status).toBe(404);
     expect(await response.text()).not.toContain(credential);

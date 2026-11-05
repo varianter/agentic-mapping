@@ -1,9 +1,10 @@
+// The pre-rework single-page app and its JSON API, mounted behind app.tsx until each slice replaces it.
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { resolve } from 'node:path';
 import type { Store } from './store';
-import { createHmac } from 'node:crypto';
+import { sessionToken } from './framework/auth';
 import { RESPONDENT_FIELDS as RESPONDENT_FIELD_LIST, isRespondentField, mergeAnswers, storedAnswers } from './domain/fields';
 import { hashCredential, newToken, sameDigest } from './domain/credentials';
 import { createSheet, deleteSheet, getSheet, listSheets, publicSheet, removeSheet, saveFields, sourceOf, validRevision, validSheet } from './domain/sheets';
@@ -14,7 +15,8 @@ const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
   ['/submissions', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', ].map((path) => [`/${path}`, path]),
+  ...['img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, `public/${path}`]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const SESSION_COOKIE = 'am_admin';
@@ -30,14 +32,13 @@ const signInPage = (error = '') => `<!doctype html>
 ${error ? `<p role="alert">${escapeHtml(error)}</p>` : ''}<form method="post" action="/sign-in"><label for="key">Admin key</label><input type="password" id="key" name="key" autocomplete="current-password" required autofocus><button type="submit">Sign in</button></form>
 <a href="/">Fill in your own map instead</a></body></html>`;
 // The admin cookie holds a key-derived token, never the key; rotating ADMIN_KEY signs everyone out.
-export const sessionToken = (adminKey: string) => createHmac('sha256', adminKey).update('agentic-mapping-session-v1').digest('hex');
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 const participantView = (row: any) => ({ fields: storedAnswers(row.fields), revision: row.revision });
 const validAnswers = (body: any) => Boolean(body) && typeof body === 'object' && Object.keys(body).every((key) => ['fields', 'revision'].includes(key))
   && body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)
   && Object.entries(body.fields).every(([key, value]) => isRespondentField(key) && typeof value === 'string');
 const root = resolve(import.meta.dir, '..');
-export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }: { store?: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] }) {
+export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins = [] }: { store?: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] }) {
   if (adminKey !== undefined && (typeof adminKey !== 'string' || adminKey.length < 32)) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters, or leave it unset for self-only mode.');
   if (adminKey !== undefined && !store) throw new Error('Interviewer mode needs a store.');
   const session = adminKey === undefined ? null : sessionToken(adminKey);

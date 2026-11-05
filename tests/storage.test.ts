@@ -102,7 +102,7 @@ test('serves only public assets, never source, credentials or databases', async 
   for (const path of ['/', '/index.html', '/guide.html', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg']) {
     expect((await request(app, path)).status).toBe(200);
   }
-  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/store.json', '/bun.lock', '/.git/config', '/docs/storage-decision.md', '/legacy.html', '/client/legacy.js']) {
+  for (const path of ['/server.ts', '/server/app.tsx', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/store.json', '/bun.lock', '/.git/config', '/docs/storage-decision.md', '/legacy.html', '/client/legacy.js']) {
     expect((await request(app, path)).status).toBe(404);
   }
   expect(() => createApp({ store: memoryStore(), adminKey: 'short' })).toThrow('ADMIN_KEY');
@@ -135,7 +135,7 @@ test('home serves self mode to visitors and interviewer mode only with the admin
     const anonymous = await request(app, path, 'GET', undefined, null);
     expect(anonymous.status).toBe(200);
     expect(anonymous.headers.get('Cache-Control')).toBe('no-store');
-    expect(anonymous.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(anonymous.headers.get('Referrer-Policy')).toBe('same-origin');
     expect(anonymous.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(await anonymous.text()).toContain('data-mode="self" data-admin-enabled');
     expect(await (await request(app, path)).text()).toContain('data-mode="interviewer"');

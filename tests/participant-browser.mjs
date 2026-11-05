@@ -18,7 +18,9 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
       const url = new URL(request.url());
       if (url.pathname.startsWith('/api/sheets') || ['/client/app.js', '/client/db.js'].includes(url.pathname)) violations.push('Interviewer code or data requested');
       if ([...credentials].some((credential) => request.url().includes(credential))) violations.push('Credential in HTTP URL');
-      if (request.headers().referer) violations.push('Referrer sent');
+      // Referrer-Policy: same-origin. Referrers never carry the fragment, and never leave the app's origin.
+      const referer = request.headers().referer;
+      if (referer && ([...credentials].some((credential) => referer.includes(credential)) || new URL(referer).origin !== url.origin)) violations.push('Referrer leaked');
       if (url.pathname !== '/api/participant/connect' && request.headers().authorization) violations.push('Credential sent outside the connect request');
     });
     contexts.push(created);

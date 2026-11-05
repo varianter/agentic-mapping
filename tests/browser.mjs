@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { createApp } from '../server/app.ts';
+import { createApp } from '../server/app.tsx';
 import { memoryStore } from '../server/store.ts';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';

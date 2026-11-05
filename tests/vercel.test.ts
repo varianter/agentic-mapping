@@ -60,7 +60,7 @@ test("Vercel entry serves only allowlisted files and requires credentials", asyn
       ).status,
     ).toBe(401);
     expect(
-      (await app.request("https://x-1.vercel.app/participant")).status,
+      (await app.request("https://x-1.vercel.app/connect")).status,
     ).toBe(200);
   } finally {
     keys.forEach((k, i) =>

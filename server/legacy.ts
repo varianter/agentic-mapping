@@ -99,51 +99,6 @@ export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins 
   // A binding counts only while its sheet exists and, for interviews, the link that connected it is still current.
   const respondentBinding = (c: Context) => findBinding(store, getCookie(c, RESPONDENT_COOKIE));
   const linkedSheet = (authorization?: string) => findLinkedSheet(store, /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1]);
-  app.get('/api/participant', async (c) => {
-    const sheet = await linkedSheet(c.req.header('Authorization'));
-    return sheet ? c.json(participantView(sheet)) : c.json({ error: 'Link unavailable.' }, 404);
-  });
-  app.put('/api/participant', async (c) => {
-    const authorization = c.req.header('Authorization');
-    if (!await linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
-    const body = await c.req.json().catch(() => null);
-    if (!validAnswers(body) || !validRevision(body.revision)) return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
-    // Recheck after reading the body, immediately before the write.
-    const stored = await linkedSheet(authorization);
-    if (!stored) return c.json({ error: 'Link unavailable.' }, 404);
-    if (stored.revision !== body.revision) return c.json({ error: 'Newer answers are stored. Keep your draft, then reload and merge your answers.' }, 409);
-    const saved = { ...stored, fields: { ...stored.fields, ...body.fields }, updatedAt: Date.now(), revision: stored.revision + 1 };
-    await store.set(`sheet:${saved.id}`, saved);
-    return c.json(participantView(saved));
-  });
-  // A link connects this browser to its interview. A browser's own map with answers needs an explicit choice first:
-  // merge both, keep the interview's answers or replace them with the browser's. The own map is then deleted.
-  app.post('/api/participant/connect', async (c) => {
-    const authorization = c.req.header('Authorization');
-    if (!await linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
-    const body = await c.req.json().catch(() => null);
-    if (!body || typeof body !== 'object' || Object.keys(body).some((key) => key !== 'choice')
-      || (body.choice !== undefined && !['merge', 'interview', 'mine'].includes(body.choice))) return c.json({ error: 'Choose merge, interview or mine.' }, 400);
-    // Recheck after reading the body, immediately before any write.
-    const stored = await linkedSheet(authorization);
-    if (!stored) return c.json({ error: 'Link unavailable.' }, 404);
-    const binding = await respondentBinding(c);
-    const own = binding?.sheet && sourceOf(binding.sheet) === 'self' && binding.sheet.id !== stored.id ? binding.sheet : null;
-    const mine: Record<string, string> = own ? participantView(own).fields : {};
-    const hasAnswers = Object.values(mine).some((value) => value.trim());
-    if (hasAnswers && !body.choice) return c.json({ needsChoice: true, mine, interview: participantView(stored).fields });
-    if (hasAnswers && body.choice !== 'interview') {
-      const answers = body.choice === 'merge' ? mergeAnswers(participantView(stored).fields, mine) : Object.fromEntries(RESPONDENT_FIELD_LIST.map((key) => [key, mine[key] ?? '']));
-      await store.set(`sheet:${stored.id}`, { ...stored, fields: { ...stored.fields, ...answers }, updatedAt: Date.now(), revision: stored.revision + 1 });
-    }
-    const token = binding?.token ?? newToken();
-    await store.set(`respondent:${hashCredential(token)}`, { sheetId: stored.id, linkHash: stored.linkHash });
-    if (own) await removeSheet(store, own);
-    setRespondent(c, token);
-    return c.json({ connected: true });
-  });
-  app.all('/api/participant/*', (c) => c.json({ error: 'Link unavailable.' }, 404));
-  app.all('/api/participant', (c) => c.json({ error: 'Link unavailable.' }, 404));
 
   // Each interview has one stable link, derived from the admin key and its ID, so the interviewer can always show it.
   // Only its hash is stored; deleting the interview turns it off, and rotating ADMIN_KEY turns off every link.

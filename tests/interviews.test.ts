@@ -44,7 +44,7 @@ test('a new interview opens with today’s date, the full sheet and its connect 
   expect(form.fields.date).toBe(new Date().toISOString().slice(0, 10));
   for (const name of ['name', 'interviewer', 'context', 'talk_to', 'good', 'org_found_good']) expect(form.names).toContain(name);
   expect(html).toContain('name="discipline"');
-  expect(html).toMatch(/\/participant#[a-f0-9]{64}/);
+  expect(html).toMatch(/\/connect#[a-f0-9]{64}/);
   expect(html).toContain(`href="/interviews/${id}" data-id="${id}" aria-current="page"`);
 });
 

@@ -6,7 +6,7 @@
     "start": "bun server.ts",
     "dev": "bun --watch server.ts",
     "test": "bun test",
-    "check": "for f in client/*.js public/elements/*.js; do node --check \"$f\" || exit 1; done",
+    "check": "for f in client/*.js public/*.js public/elements/*.js; do node --check \"$f\" || exit 1; done",
     "test:browser": "bun tests/browser.mjs"
   },
   "dependencies": {

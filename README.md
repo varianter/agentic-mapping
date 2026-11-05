@@ -8,13 +8,13 @@ Three modes, one name each:
 | --- | --- | --- | --- | --- |
 | **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie | Fill in your own answers (a plain form; autosaved with JS), clear, download JSON (`/me.json`) or PDF |
 | **Interviewer** | `/interviews` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews (`/interviews/:id`); PDF/JSON (`/interviews/:id.json`); upload JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions/:id`; sign out |
-| **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
+| **Participant** | `/connect#<credential>` (old `/participant#…` links redirect) | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
 
 `/guide` is the interviewer guide.
 
-Opening a link in a browser that already has its own map asks whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
+`/connect` is the one page that needs JavaScript: it posts the fragment credential in a form body, so it never travels in a URL. Opening a link in a browser that already has its own map asks (a server-rendered form) whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
 
-Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/participant`, `/submissions` and `/api/*` return 404. My map is still saved in the store (local JSON file, or Upstash).
+Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/connect`, `/interviews` and `/submissions` return 404. My map is still saved in the store (local JSON file, or Upstash).
 
 ## Run
 
@@ -67,7 +67,7 @@ server/submissions/ Self-submitted maps
 server/shell/      Layout, Sheet form, Sidebar, Toolbar, the shared sheet editor routes
 server/domain/     Fields, sheets, respondents, links, import, zod schemas
 server/framework/  Assets manifest, auth, formAction, cookies
-client/participant.js Connects a browser to its interview through a private link
+server/connect/    /connect page, private link → browser cookie, merge choice
 index.html, styles.css
 tests/             Bun and Playwright tests
 ```

@@ -13,6 +13,7 @@ import { ErrorPage } from './shell/ErrorPage';
 import { createLegacyApp } from './legacy';
 import { guideRoutes } from './guide/guide.routes';
 import { meRoutes } from './me/me.routes';
+import { connectRoutes } from './connect/connect.routes';
 import { interviewRoutes } from './interviews/interviews.routes';
 import { submissionRoutes } from './submissions/submissions.routes';
 import { signInRoutes } from './signIn/signIn.routes';
@@ -90,6 +91,7 @@ export function createApp(config: AppConfig) {
   app.route('/', signInRoutes);
   app.route('/', guideRoutes);
   app.route('/', meRoutes);
+  app.route('/', connectRoutes);
   app.route('/interviews', interviewRoutes);
   app.route('/submissions', submissionRoutes);
   app.route('/', createLegacyApp(config).app);

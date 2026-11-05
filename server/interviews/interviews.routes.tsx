@@ -35,5 +35,5 @@ export const interviewRoutes = new Hono<AppEnv>()
     kind: 'interviews',
     source: 'interview',
     // Showing the editor issues the interview's stable link the first time.
-    connectUrl: async (c, sheet) => `${c.get('origin')}/participant#${await issueLink(c.get('store'), c.get('adminKey')!, sheet)}`,
+    connectUrl: async (c, sheet) => `${c.get('origin')}/connect#${await issueLink(c.get('store'), c.get('adminKey')!, sheet)}`,
   }));

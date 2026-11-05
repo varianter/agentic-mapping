@@ -55,3 +55,13 @@ test('Bun entrypoint refuses startup without a long enough ADMIN_KEY', () => {
     expect(child.stderr.toString()).toContain('ADMIN_KEY');
   }
 });
+
+test('loadConfig fails clearly without storage on Vercel and adds preview origins', async () => {
+  const { loadConfig } = await import('../server/config');
+  const base = { ADMIN_KEY: 'x'.repeat(32) };
+  expect(() => loadConfig({ ...base, VERCEL: '1' })).toThrow('Config error: set KV_REST_API_URL');
+  expect(() => loadConfig({})).toThrow('ADMIN_KEY');
+  const preview = loadConfig({ ...base, VERCEL: '1', VERCEL_ENV: 'preview', KV_REST_API_URL: 'https://kv.example', KV_REST_API_TOKEN: 't', APP_ORIGIN: 'https://prod.example', VERCEL_URL: 'a-1.vercel.app', VERCEL_BRANCH_URL: 'a-git-b.vercel.app' });
+  expect(preview.allowedOrigins).toEqual(['https://prod.example', 'https://a-1.vercel.app', 'https://a-git-b.vercel.app']);
+  expect(loadConfig({ ...base, VERCEL_ENV: 'production', VERCEL_URL: 'a-1.vercel.app' }).allowedOrigins).toEqual([]);
+});

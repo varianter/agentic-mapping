@@ -1,0 +1,10 @@
+{
+  "framework": "hono",
+  "bunVersion": "1.x",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "{index.html,guide.html,styles.css,client/{boot,form,participant,preview,app,db,local-db}.js,img/variant-logo-{dark,light}.svg}"
+    }
+  }
+}

@@ -62,7 +62,7 @@ Each sheet is one JSON value at `sheet:<id>`; each private link is `link:<hash>`
 
 ### Deploy on Vercel
 
-The app runs as one Vercel Function on the Bun runtime (`api/index.ts`, `vercel.json`) that exports the Hono app. `vercel.json` bundles only the allowlisted public files; every other path returns 404 and everything except participant pages/assets needs the admin key (401 otherwise).
+The app runs as one Vercel Function on the Bun runtime (`api/index.ts`, `vercel.json`) that exports the Hono app. `vercel.json` bundles only the allowlisted public files; every other path returns 404 and server data and the API need the admin key (401 otherwise). Participant pages/assets, `/` (local-only mode) and `/preview` open without a key; none of them shows server data.
 
 1. Import the GitHub repo in Vercel (no build command, no output directory).
 2. Add Upstash Redis as above and make sure `KV_REST_API_URL` and `KV_REST_API_TOKEN` apply to **both Production and Preview**.

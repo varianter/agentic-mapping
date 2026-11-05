@@ -9,16 +9,14 @@ class AutosaveForm extends HTMLElement {
   #dirty = false;
   #saving = null;
   #conflicted = false;
+  #releasing = false;
 
   connectedCallback() {
     this.#form = this.querySelector('form');
     if (!this.#form) return;
     this.dataset.ready = '';
     this.#form.addEventListener('input', () => this.#changed());
-    this.#form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      this.flush();
-    });
+    this.#form.addEventListener('submit', (event) => this.#submitted(event));
     addEventListener('beforeunload', (event) => {
       if (this.#dirty || this.#saving) event.preventDefault();
     });
@@ -26,6 +24,25 @@ class AutosaveForm extends HTMLElement {
       if (document.visibilityState === 'hidden') this.flush();
     });
     addEventListener('online', () => this.flush());
+  }
+
+  // Save stays on the page. Other submitters (formaction, e.g. Delete) go ahead once pending edits are saved,
+  // so they carry the current revision.
+  async #submitted(event) {
+    const submitter = event.submitter;
+    if (submitter?.hasAttribute('formaction')) {
+      if (this.#releasing) return;
+      event.preventDefault();
+      await this.flush();
+      // A new task: browsers ignore a submit requested while the first submit event is still dispatching.
+      await new Promise((resolve) => setTimeout(resolve));
+      this.#releasing = true;
+      this.#form.requestSubmit(submitter);
+      this.#releasing = false;
+      return;
+    }
+    event.preventDefault();
+    this.flush();
   }
 
   get #status() {

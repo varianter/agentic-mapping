@@ -12,10 +12,8 @@ import { findBinding } from './domain/respondents';
 import { issueLink, linkedSheet as findLinkedSheet } from './domain/links';
 
 const PUBLIC_FILES = new Map([
-  ['/', 'index.html'],
   ['/participant', 'index.html'],
-  ['/submissions', 'index.html'],
-  ...['index.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', ].map((path) => [`/${path}`, path]),
+  ...['styles.css', 'client/boot.js', 'client/participant.js'].map((path) => [`/${path}`, path]),
   ...['img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, `public/${path}`]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
@@ -61,13 +59,10 @@ export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins 
   const serveFiles = () => {
     app.get('*', async (c) => {
       const file = PUBLIC_FILES.get(c.req.path);
-      if (!file || (!session && ['/participant', '/submissions'].includes(c.req.path))) return c.notFound();
-      if (c.req.path === '/submissions' && !c.get('admin')) return c.redirect('/sign-in', 303);
+      if (!file || (!session && c.req.path === '/participant')) return c.notFound();
       const asset = Bun.file(resolve(root, file));
       if (file === 'index.html') {
-        const mode = c.req.path === '/participant' ? 'participant' : c.get('admin') ? 'interviewer' : 'self';
-        const view = c.req.path === '/submissions' ? ' data-view="submissions"' : '';
-        return c.html((await asset.text()).replace('data-mode=""', `data-mode="${mode}"${view}${session ? ' data-admin-enabled' : ''}`));
+        return c.html((await asset.text()).replace('data-mode=""', 'data-mode="participant"'));
       }
       return new Response(asset, { headers: { 'Content-Type': asset.type } });
     });

@@ -36,7 +36,7 @@ const myMap = formAction({
 
 export const meRoutes = new Hono<AppEnv>()
   // Interviewers start from their interview list.
-  .get('/', async (c, next) => (c.get('admin') ? next() : myMap(c)))
+  .get('/', async (c) => (c.get('admin') ? c.redirect('/interviews', 303) : myMap(c)))
   .post('/', myMap)
   .post('/clear', async (c) => {
     const found = await binding(c);

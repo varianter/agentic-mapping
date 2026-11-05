@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, sessionToken } from '../server/app';
-import { RESPONDENT_FIELDS } from '../client/fields.js';
+import { RESPONDENT_FIELDS } from '../server/domain/fields';
 import { memoryStore } from '../server/store';
 
 const origin = 'https://mapping.example';

@@ -14,7 +14,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 
 ## Product
 
-- What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. A 3×3 grid per dimension (Individual, Team, Organization). Three modes: `self` (anonymous, one **My map** at `/` with respondent fields only: a server-rendered form saved on the server and found again through an HttpOnly `am_respondent` browser cookie, also without `ADMIN_KEY`), `interviewer` (admin cookie; interviews autosave to Upstash Redis, or a local JSON file in dev; self-submitted maps at `/submissions`) and `participant` (a private link connects the browser to its interview, then it is edited as My map at `/`). PDF and JSON downloads in self and interviewer modes.
+- What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. A 3×3 grid per dimension (Individual, Team, Organization). Three modes: `self` (anonymous, one **My map** at `/` with respondent fields only: a server-rendered form saved on the server and found again through an HttpOnly `am_respondent` browser cookie, also without `ADMIN_KEY`), `interviewer` (admin cookie; server-rendered interviews at `/interviews/:id` autosave to Upstash Redis, or a local JSON file in dev; self-submitted maps at `/submissions/:id`) and `participant` (a private link connects the browser to its interview, then it is edited as My map at `/`). PDF and JSON downloads in self and interviewer modes.
 - Primary users: Variant interviewers running mapping sessions.
 - Language of what users see: English.
 - The app needs a Bun host. `ADMIN_KEY` is optional: without it the app is self-only and needs no store; with it, it needs Upstash Redis KV variables or a local JSON file (see README). `/` is self mode until sign-in at `/sign-in`.
@@ -23,8 +23,8 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 
 - Language and runtime: Bun/TypeScript on the server; plain HTML, CSS and vanilla JavaScript ES modules in the browser. No framework, no bundler, no TypeScript in the browser.
 - Main parts:
-  - `index.html` + `client/boot.js`: starts the server-marked mode (`data-mode`): `client/self.js`, `client/app.js` (interviewer) or isolated `client/participant.js`; `client/form.js` shares grids/tabs/plain-text form values; `client/fields.js` holds `RESPONDENT_FIELDS`, also imported by the server.
-  - `client/db.js`: same-origin interview API adapter (legacy, until interviews are server-rendered).
+  - `index.html` + `client/boot.js` + `client/participant.js`: the legacy participant connect page at `/participant` (until `/connect` replaces it).
+  - `server/interviews/`, `server/submissions/`: interviewer pages, built on `server/shell/sheetEditor.tsx` (list, editor, `.json` download, delete). Upload is a multipart form to `/interviews/import`.
   - `server/me/`: My map (`GET/POST /`, `POST /clear`, `GET /me.json`). `server/shell/Sheet.tsx` renders the sheet form for respondents or interviewers.
   - `public/elements/*.js`: light-DOM custom elements that enhance server HTML: `autosave-form`, `sheet-tabs`, `print-button`. They never import each other.
   - `server/guide/`: interviewer guide page at `/guide` (server-rendered, no JS). `server/signIn/`: `/sign-in`, `/sign-out`.
@@ -51,13 +51,8 @@ Run the API suite, syntax checks and browser checks before finishing. `.github/w
 
 ```
 index.html        capture sheet page (markup + <template id="matrix-template">)
-client/boot.js    starts the server-marked mode: self, interviewer or participant
-client/app.js     interviewer editor
+client/boot.js    legacy participant connect page entry
 client/participant.js connects the browser to its interview via the link, with the merge choice
-client/fields.js  RESPONDENT_FIELDS, shared with the server
-client/form.js    shared dimensions, tabs and form values
-client/db.js      interview API adapter: allSheets, getSheet, createSheet, putSheet, deleteSheet
-client/import.js  Upload JSON parser: store dumps (`sheet:*` keys), Download JSON arrays or one sheet
 server/<feature>/  one folder per feature: `<feature>.routes.tsx` plus its views and commands
 styles.css        shared styles, tokens, print layout
 img/              Variant logos (SVG)

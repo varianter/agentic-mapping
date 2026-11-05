@@ -38,8 +38,9 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.equal(await page.locator('#sheet-list').count(), 0);
   };
   try {
-    await owner.goto(baseURL);
-    await owner.locator('[data-action="new"]').first().click();
+    await owner.goto(`${baseURL}/interviews`);
+    await owner.locator('#sidebar button[type="submit"]').first().click();
+    await owner.waitForURL(/\/interviews\/[0-9a-f-]{36}$/);
     await loaded(owner);
     await owner.locator('[name="name"]').fill(privateValues[0]);
     await owner.locator('[name="context"]').fill(privateValues[1]);
@@ -48,7 +49,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     const inertAnswer = '<script>window.participantScriptExecuted = true</script>';
     await owner.locator('[name="good"]').fill(inertAnswer);
     await saved(owner);
-    const id = new URL(owner.url()).hash.slice(1);
+    const id = new URL(owner.url()).pathname.split('/').pop();
     const stored = async () => (await store.get(`sheet:${id}`)).fields;
 
     // The open interview always shows its connect URL; copying is intentional credential delivery, so never print it.
@@ -57,8 +58,8 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.equal(await owner.locator('#connect-link-value').getAttribute('readonly'), '');
     const link = await owner.locator('#connect-link-value').inputValue();
     credentials.add(new URL(link).hash.slice(1));
-    await owner.locator('#copy-connect-link').click();
-    await owner.waitForFunction(() => document.getElementById('connect-link-status').textContent === 'Connect URL copied.');
+    await owner.locator('copy-button button').click();
+    await owner.locator('#connect-link [role="status"]', { hasText: 'Connect URL copied.' }).waitFor();
     assert.ok(await owner.evaluate(async (expected) => (await navigator.clipboard.readText()) === expected, link), 'Clipboard must contain the connect URL');
     assert.equal(await owner.locator('[data-action="issue-access"], [data-action="revoke-access"]').count(), 0);
 

@@ -7,7 +7,7 @@ Three modes, one name each:
 | Mode | Route | Who | Storage | Can do |
 | --- | --- | --- | --- | --- |
 | **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie | Fill in your own answers (a plain form; autosaved with JS), clear, download JSON (`/me.json`) or PDF |
-| **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions`; sign out |
+| **Interviewer** | `/interviews` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews (`/interviews/:id`); PDF/JSON (`/interviews/:id.json`); upload JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions/:id`; sign out |
 | **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
 
 `/guide` is the interviewer guide.
@@ -59,14 +59,15 @@ server/app.ts      Hono API, cookie sign-in, public-file allowlist
 server/config.ts   Env config checks
 server/store.ts    Upstash and memory/JSON-file stores
 api/index.ts       Vercel entry
-client/boot.js     Starts the mode the server marked: self, interviewer or participant
+client/boot.js     Starts the legacy participant connect page
 server/me/         My map at / (server-rendered form; autosave via public/elements)
 public/            styles.css, img/, elements/*.js custom elements, served with hashed URLs
-client/app.js      Interviewer editor
-client/db.js       Interview API adapter
+server/interviews/ Interview list, editor, new, upload, connect URL
+server/submissions/ Self-submitted maps
+server/shell/      Layout, Sheet form, Sidebar, Toolbar, the shared sheet editor routes
+server/domain/     Fields, sheets, respondents, links, import, zod schemas
+server/framework/  Assets manifest, auth, formAction, cookies
 client/participant.js Connects a browser to its interview through a private link
-client/fields.js   Respondent fields, shared with the server
-client/form.js     Shared grids and tabs
 index.html, styles.css
 tests/             Bun and Playwright tests
 ```

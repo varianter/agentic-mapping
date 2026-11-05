@@ -186,7 +186,6 @@
     border: 0;
     background: var(--ink);
     color: var(--white);
-    display: flex;
     flex-direction: column;
     gap: 20px;
     & :focus-visible { outline-color: var(--yellow); }
@@ -195,10 +194,13 @@
   }
   /* Wide screens: always in the grid, whatever its popover state. */
   @media (min-width: 901px) {
-    .sidebar[popover] { display: flex; position: sticky; inset: 0 auto auto 0; }
+    .sidebar { display: flex; position: sticky; inset: 0 auto auto 0; }
   }
+  /* Phones: a light-dismiss popover over the sheet. */
   @media (max-width: 900px) {
-    .sidebar[popover]:popover-open {
+    .sidebar:not(:popover-open) { display: none; }
+    .sidebar:popover-open {
+      display: flex;
       position: fixed;
       inset: 0 auto 0 0;
       inline-size: min(var(--sidebar-w), 85vw);

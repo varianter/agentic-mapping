@@ -13,6 +13,8 @@ import { ErrorPage } from './shell/ErrorPage';
 import { createLegacyApp } from './legacy';
 import { guideRoutes } from './guide/guide.routes';
 import { meRoutes } from './me/me.routes';
+import { interviewRoutes } from './interviews/interviews.routes';
+import { submissionRoutes } from './submissions/submissions.routes';
 import { signInRoutes } from './signIn/signIn.routes';
 
 export { sessionToken };
@@ -71,6 +73,7 @@ export function createApp(config: AppConfig) {
   app.use(async (c, next) => {
     c.set('store', store);
     c.set('adminKey', adminKey);
+    c.set('origin', publicOrigin ?? new URL(c.req.url).origin);
     c.set('secure', new URL(c.req.url).protocol === 'https:' || httpsOrigins);
     c.set('admin', isAdmin(c));
     await next();
@@ -87,6 +90,8 @@ export function createApp(config: AppConfig) {
   app.route('/', signInRoutes);
   app.route('/', guideRoutes);
   app.route('/', meRoutes);
+  app.route('/interviews', interviewRoutes);
+  app.route('/submissions', submissionRoutes);
   app.route('/', createLegacyApp(config).app);
 
   app.notFound((c) => {

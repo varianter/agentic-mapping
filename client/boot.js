@@ -1,5 +1,9 @@
 const participant = location.pathname === '/participant';
-if (participant) {
+const preview = location.pathname === '/preview';
+if (preview) {
+  document.body.dataset.preview = '';
+  await import('./preview.js');
+} else if (participant) {
   document.body.dataset.participant = '';
   await import('./participant.js');
 } else {

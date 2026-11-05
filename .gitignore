@@ -26,3 +26,5 @@ data/
 _site/
 test-results/
 playwright-report/
+.vercel
+.env*

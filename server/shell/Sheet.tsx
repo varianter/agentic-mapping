@@ -18,7 +18,7 @@ export function Sheet({ audience, action, revision, fields, pill, form, statusId
   return (
     <autosave-form status={statusId}>
       <form class="sheet" id="sheet" method="post" action={action} autocomplete="off">
-        <input type="hidden" name="revision" value={String(revision)} />
+        <input type="hidden" name="revision" value={typeof form?.values.revision === 'string' ? form.values.revision : String(revision)} />
         <header class="sheet-header">
           <div class="sheet-title">
             <h1>What did you need to learn?</h1>

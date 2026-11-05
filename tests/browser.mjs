@@ -196,6 +196,36 @@ try {
   await page.locator('#empty').waitFor({ state: 'visible' });
   console.log('Submissions page passed');
 
+  // Uploading a store dump adds its interviews and self-submitted maps without overwriting anything.
+  const uploaded = { id: crypto.randomUUID(), fields: { name: 'Uploaded interview', ind_learn_start: 'Synthetic uploaded notes' }, createdAt: 1, updatedAt: 2, revision: 9 };
+  const uploadedSelf = { ...uploaded, id: crypto.randomUUID(), source: 'self', fields: { advice: 'Synthetic uploaded advice' } };
+  const dumpPath = join(directory, 'store.json');
+  await Bun.write(dumpPath, JSON.stringify({
+    [`sheet:${uploaded.id}`]: { value: JSON.stringify(uploaded) },
+    [`sheet:${uploadedSelf.id}`]: { value: JSON.stringify(uploadedSelf) },
+    [`link:${'a'.repeat(64)}`]: { value: JSON.stringify({ sheetId: uploaded.id }) },
+  }));
+  await page.goto(baseURL);
+  await page.waitForFunction(() => !document.querySelector('[data-action="upload"]').disabled);
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('[data-action="upload"]').click();
+  await (await chooser).setFiles(dumpPath);
+  await page.waitForFunction(() => document.getElementById('save-status').textContent.startsWith('Uploaded 2 of 2 sheets.'));
+  assert.match(await status.textContent(), /1 belong in Self-submitted maps\.$/);
+  await page.locator(`#sheet-list a[data-id="${uploaded.id}"]`).click();
+  await page.waitForFunction(() => document.querySelector('[name="ind_learn_start"]').value === 'Synthetic uploaded notes');
+  assert.equal((await store.get(`sheet:${uploadedSelf.id}`)).source, 'self');
+  // A second upload of a changed copy skips it rather than overwriting.
+  await Bun.write(dumpPath, JSON.stringify([{ ...uploaded, fields: { name: 'Changed copy' } }]));
+  await page.locator('#upload-file').setInputFiles(dumpPath);
+  await page.waitForFunction(() => document.getElementById('save-status').dataset.state === 'error');
+  assert.match(await status.textContent(), /Uploaded 0 of 1 sheets\. 1 skipped: a different sheet with that ID exists\./);
+  assert.equal((await store.get(`sheet:${uploaded.id}`)).fields.name, 'Uploaded interview');
+  await Bun.write(dumpPath, 'not json');
+  await page.locator('#upload-file').setInputFiles(dumpPath);
+  await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('isn’t a store or Download JSON file'));
+  console.log('Upload passed');
+
   // Signing out returns to My map; the interview list is gone.
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(baseURL);

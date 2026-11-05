@@ -1,4 +1,5 @@
 import { initForm, downloadJson } from './form.js';
+import { sheetsFromUpload, importableSheet } from './import.js';
 
 // Interviewer editor: server-stored interviews, private links and PDFs.
 export function initEditor(storage) {
@@ -315,6 +316,44 @@ export function initEditor(storage) {
     setStatus(savedMessage);
   }
 
+  // ---------- Upload ----------
+
+  const uploadInput = document.getElementById('upload-file');
+
+  uploadInput.addEventListener('change', () => {
+    const [file] = uploadInput.files;
+    uploadInput.value = '';
+    if (file) runAction('upload', () => uploadSheets(file));
+  });
+
+  // Each sheet goes through the normal create endpoint: identical retries are fine and an existing ID is never overwritten.
+  async function uploadSheets(file) {
+    await save();
+    let sheets;
+    try {
+      sheets = sheetsFromUpload(JSON.parse(await file.text()));
+    } catch {
+      throw new Error(`${file.name} isn’t a store or Download JSON file.`);
+    }
+    if (!sheets.length) throw new Error(`${file.name} holds no sheets.`);
+    const counts = { imported: 0, exists: 0, invalid: 0 };
+    for (const [index, sheet] of sheets.entries()) {
+      setStatus(`Uploading ${index + 1} of ${sheets.length}…`);
+      try {
+        await createSheet(importableSheet(sheet));
+        counts.imported += 1;
+      } catch (error) {
+        if (error.status === 409) counts.exists += 1;
+        else if (error.status === 400) counts.invalid += 1;
+        else throw new Error(`${error.message} ${counts.imported} of ${sheets.length} uploaded before it stopped.`);
+      }
+    }
+    await renderList();
+    const skipped = [counts.exists && `${counts.exists} skipped: a different sheet with that ID exists`, counts.invalid && `${counts.invalid} skipped: invalid`].filter(Boolean);
+    const elsewhere = sheets.filter((sheet) => (sheet?.source === 'self') !== submissions).length;
+    setStatus(`Uploaded ${counts.imported} of ${sheets.length} sheets.${elsewhere ? ` ${elsewhere} belong in ${submissions ? 'Interviews' : 'Self-submitted maps'}.` : ''}${skipped.length ? ` ${skipped.join('; ')}.` : ''}`, skipped.length ? 'error' : '');
+  }
+
   // ---------- PDF ----------
 
   async function downloadPdf() {
@@ -371,7 +410,7 @@ export function initEditor(storage) {
 
   document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]')?.dataset.action;
-    const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: retryStorage, reload: reloadSaved, 'issue-access': generatePrivateLink, 'revoke-access': revokePrivateLink, export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
+    const handlers = { new: newSheet, delete: removeCurrent, pdf: downloadPdf, retry: retryStorage, reload: reloadSaved, 'issue-access': generatePrivateLink, 'revoke-access': revokePrivateLink, upload: async () => uploadInput.click(), export: () => downloadJson(current ? [{ ...current, fields: readForm() }] : []) };
     if (handlers[action]) runAction(action, handlers[action]);
   });
 

@@ -10,7 +10,7 @@ const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
   ['/submissions', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const RESPONDENT_FIELDS = new Set<string>(RESPONDENT_FIELD_LIST);
@@ -51,7 +51,8 @@ const validRevision = (revision: unknown) => Number.isSafeInteger(revision) && N
 function validSheet(sheet: any) {
   return sheet && validId(sheet.id) && sheet.fields && typeof sheet.fields === 'object' && !Array.isArray(sheet.fields)
     && Object.entries(sheet.fields).every(([key, value]) => key.length <= 100 && (typeof value === 'string' || (Array.isArray(value) && value.every((item) => typeof item === 'string'))))
-    && Number.isSafeInteger(sheet.createdAt) && sheet.createdAt >= 0 && Number.isSafeInteger(sheet.updatedAt) && sheet.updatedAt >= 0;
+    && Number.isSafeInteger(sheet.createdAt) && sheet.createdAt >= 0 && Number.isSafeInteger(sheet.updatedAt) && sheet.updatedAt >= 0
+    && [undefined, 'self', 'interview'].includes(sheet.source);
 }
 export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }: { store?: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] }) {
   if (adminKey !== undefined && (typeof adminKey !== 'string' || adminKey.length < 32)) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters, or leave it unset for self-only mode.');
@@ -286,11 +287,12 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     if (existing) {
       const sameFields = Object.keys(existing.fields).length === Object.keys(sheet.fields).length
         && Object.entries(sheet.fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(existing.fields[key]));
-      return sameFields && existing.createdAt === sheet.createdAt && existing.updatedAt === sheet.updatedAt
+      return sameFields && existing.createdAt === sheet.createdAt && existing.updatedAt === sheet.updatedAt && sourceOf(existing) === (sheet.source ?? sourceOf(existing))
         ? c.json(publicSheet(existing), 200)
         : c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
     }
-    const created = { id: sheet.id, source: 'interview', fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 };
+    // Uploads keep a self-submitted map's source; everything else is an interview.
+    const created = { id: sheet.id, source: sheet.source ?? 'interview', fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 };
     await store.set(`sheet:${sheet.id}`, created);
     return c.json(created, 201);
   });

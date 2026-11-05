@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { createApp } from '../server/app.ts';
+import { memoryStore } from '../server/store.ts';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +11,9 @@ import { checkLocalFlow, checkSaveLocalFlow } from './local-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
 const adminKey = 'browser-admin-key-0123456789-abcdefgh';
-const { app, db } = createApp({ databasePath: join(directory, 'sheets.sqlite'), adminKey });
+// Always in-memory: never reads KV variables or contacts Upstash.
+const store = memoryStore();
+const { app } = createApp({ store, adminKey });
 const server = Bun.serve({ port: 0, fetch: app.fetch });
 const baseURL = `http://localhost:${server.port}`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true });
@@ -147,9 +150,9 @@ try {
   await page.locator('#confirm-delete [value="delete"]').click();
   await page.waitForFunction((id) => !document.querySelector(`#sheet-list a[data-id="${id}"]`), id);
   assert.deepEqual(errors, []);
-  await checkParticipantFlow({ browser, context, baseURL, directory, db });
-  await checkLocalFlow({ browser, baseURL, directory, db });
-  await checkSaveLocalFlow({ browser, baseURL, adminKey, db });
+  await checkParticipantFlow({ browser, context, baseURL, directory, store });
+  await checkLocalFlow({ browser, baseURL, directory, store });
+  await checkSaveLocalFlow({ browser, baseURL, adminKey, store });
   await checkPreviewFlow({ browser, baseURL });
   console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, missing hashes, PDF layout, mobile width, delete; no page errors.');
 } catch (error) {
@@ -158,6 +161,5 @@ try {
 } finally {
   await browser.close();
   server.stop(true);
-  db.close();
   rmSync(directory, { recursive: true, force: true });
 }

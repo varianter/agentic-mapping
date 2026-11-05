@@ -2,9 +2,8 @@ import { Hono } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
-import { Database } from 'bun:sqlite';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import type { Store } from './store';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const PUBLIC_FILES = new Map([
@@ -26,8 +25,7 @@ const SIGN_IN_PAGE = `<!doctype html>
 const hashCredential = (credential: string) => createHash('sha256').update(credential).digest('hex');
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 function participantView(row: any) {
-  const fields = JSON.parse(row.fields);
-  return { fields: Object.fromEntries(Object.entries(fields).filter(([key, value]) => PARTICIPANT_FIELDS.has(key) && typeof value === 'string')), revision: row.revision };
+  return { fields: Object.fromEntries(Object.entries(row.fields).filter(([key, value]) => PARTICIPANT_FIELDS.has(key) && typeof value === 'string')), revision: row.revision };
 }
 const root = resolve(import.meta.dir, '..');
 const validId = (id: unknown) => typeof id === 'string' && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id);
@@ -37,29 +35,13 @@ function validSheet(sheet: any) {
     && Object.entries(sheet.fields).every(([key, value]) => key.length <= 100 && (typeof value === 'string' || (Array.isArray(value) && value.every((item) => typeof item === 'string'))))
     && Number.isSafeInteger(sheet.createdAt) && sheet.createdAt >= 0 && Number.isSafeInteger(sheet.updatedAt) && sheet.updatedAt >= 0;
 }
-function decode(row: any) {
-  if (!row) return null;
-  return { ...row, fields: JSON.parse(row.fields) };
-}
-
-export function createApp({ databasePath, adminKey, publicOrigin }: { databasePath: string; adminKey?: string; publicOrigin?: string }) {
+export function createApp({ store, adminKey, publicOrigin }: { store: Store; adminKey?: string; publicOrigin?: string }) {
   if (typeof adminKey !== 'string' || adminKey.length < 32) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters.');
   const adminDigest = hashCredential(adminKey);
   if (publicOrigin && new URL(publicOrigin).origin !== publicOrigin) throw new Error('APP_ORIGIN must be an origin without a trailing slash.');
   if (publicOrigin && new URL(publicOrigin).protocol !== 'https:' && !(new URL(publicOrigin).protocol === 'http:' && localHost(new URL(publicOrigin).hostname))) {
     throw new Error('APP_ORIGIN must use HTTPS outside localhost.');
   }
-  if (databasePath !== ':memory:') mkdirSync(dirname(resolve(databasePath)), { recursive: true, mode: 0o700 });
-  const db = new Database(databasePath, { create: true });
-  db.exec(`PRAGMA journal_mode = WAL;
-    PRAGMA busy_timeout = 5000;
-    CREATE TABLE IF NOT EXISTS sheets (
-      id TEXT PRIMARY KEY, fields TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE IF NOT EXISTS participant_links (
-      sheetId TEXT PRIMARY KEY, credentialHash TEXT NOT NULL UNIQUE, expiresAt INTEGER NOT NULL
-    );`);
   const app = new Hono();
   app.use('*', async (c, next) => {
     const url = new URL(c.req.url);
@@ -103,105 +85,102 @@ export function createApp({ databasePath, adminKey, publicOrigin }: { databasePa
     }
     await next();
   });
-  const linkedSheet = (authorization?: string) => {
+  const publicSheet = ({ linkHash: _linkHash, ...sheet }: any) => sheet;
+  const linkedSheet = async (authorization?: string) => {
     const credential = /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1];
     if (!credential) return null;
-    return db.query(`SELECT sheets.* FROM sheets JOIN participant_links ON participant_links.sheetId = sheets.id
-      WHERE credentialHash = ? AND expiresAt > ?`).get(hashCredential(credential), Date.now()) as any;
+    const hash = hashCredential(credential);
+    const link = await store.get(`link:${hash}`);
+    const sheet = link && await store.get(`sheet:${link.sheetId}`);
+    return sheet?.linkHash === hash ? sheet : null;
   };
-  app.get('/api/participant', (c) => {
-    const sheet = linkedSheet(c.req.header('Authorization'));
+  app.get('/api/participant', async (c) => {
+    const sheet = await linkedSheet(c.req.header('Authorization'));
     return sheet ? c.json(participantView(sheet)) : c.json({ error: 'Link unavailable.' }, 404);
   });
   app.put('/api/participant', async (c) => {
     const authorization = c.req.header('Authorization');
-    if (!linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
+    if (!await linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
     const body = await c.req.json().catch(() => null);
     if (!body || Object.keys(body).some((key) => !['fields', 'revision'].includes(key)) || !validRevision(body.revision)
       || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields)
       || Object.entries(body.fields).some(([key, value]) => !PARTICIPANT_FIELDS.has(key) || typeof value !== 'string')) {
       return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
     }
-    const result = db.transaction(() => {
-      // Recheck after reading the body and under the same lock as the write.
-      const stored = linkedSheet(authorization);
-      if (!stored) return { status: 404 as const, error: 'Link unavailable.' };
-      if (stored.revision !== body.revision) return { status: 409 as const, error: 'Newer answers are stored. Keep your draft, then reload and merge your answers.' };
-      const fields = { ...JSON.parse(stored.fields), ...body.fields };
-      const saved = db.query('UPDATE sheets SET fields = ?, updatedAt = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING *')
-        .get(JSON.stringify(fields), Date.now(), stored.id, body.revision);
-      return { sheet: participantView(saved) };
-    }).immediate();
-    return result.sheet ? c.json(result.sheet) : c.json({ error: result.error }, result.status!);
+    // Recheck after reading the body, immediately before the write.
+    const stored = await linkedSheet(authorization);
+    if (!stored) return c.json({ error: 'Link unavailable.' }, 404);
+    if (stored.revision !== body.revision) return c.json({ error: 'Newer answers are stored. Keep your draft, then reload and merge your answers.' }, 409);
+    const saved = { ...stored, fields: { ...stored.fields, ...body.fields }, updatedAt: Date.now(), revision: stored.revision + 1 };
+    await store.set(`sheet:${saved.id}`, saved);
+    return c.json(participantView(saved));
   });
   app.all('/api/participant/*', (c) => c.json({ error: 'Link unavailable.' }, 404));
   app.all('/api/participant', (c) => c.json({ error: 'Link unavailable.' }, 404));
 
-  app.post('/api/sheets/:id/access', (c) => {
-    const result = db.transaction(() => {
-      const sheet = db.query('SELECT id FROM sheets WHERE id = ?').get(c.req.param('id'));
-      if (!sheet) return null;
-      const credential = randomBytes(32).toString('hex');
-      const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-      db.query(`INSERT INTO participant_links (sheetId, credentialHash, expiresAt) VALUES (?, ?, ?)
-        ON CONFLICT(sheetId) DO UPDATE SET credentialHash = excluded.credentialHash, expiresAt = excluded.expiresAt`)
-        .run(c.req.param('id'), hashCredential(credential), expiresAt);
-      return { credential, expiresAt };
-    }).immediate();
-    return result ? c.json(result, 201) : c.json({ error: 'Sheet unavailable.' }, 404);
+  app.post('/api/sheets/:id/access', async (c) => {
+    const sheet = await store.get(`sheet:${c.req.param('id')}`);
+    if (!sheet) return c.json({ error: 'Sheet unavailable.' }, 404);
+    const credential = randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const linkHash = hashCredential(credential);
+    await store.set(`link:${linkHash}`, { sheetId: sheet.id }, expiresAt);
+    await store.set(`sheet:${sheet.id}`, { ...sheet, linkHash });
+    if (sheet.linkHash) await store.del(`link:${sheet.linkHash}`);
+    return c.json({ credential, expiresAt }, 201);
   });
-  app.delete('/api/sheets/:id/access', (c) => {
-    const result = db.transaction(() => {
-      const sheet = db.query('SELECT id FROM sheets WHERE id = ?').get(c.req.param('id'));
-      if (!sheet) return false;
-      db.query('DELETE FROM participant_links WHERE sheetId = ?').run(c.req.param('id'));
-      return true;
-    }).immediate();
-    return result ? c.body(null, 204) : c.json({ error: 'Sheet unavailable.' }, 404);
+  app.delete('/api/sheets/:id/access', async (c) => {
+    const sheet = await store.get(`sheet:${c.req.param('id')}`);
+    if (!sheet) return c.json({ error: 'Sheet unavailable.' }, 404);
+    if (sheet.linkHash) {
+      const { linkHash, ...rest } = sheet;
+      await store.set(`sheet:${sheet.id}`, rest);
+      await store.del(`link:${linkHash}`);
+    }
+    return c.body(null, 204);
   });
-  app.get('/api/sheets', (c) => c.json(db.query('SELECT * FROM sheets').all().map(decode)));
-  app.get('/api/sheets/:id', (c) => {
-    const sheet = decode(db.query('SELECT * FROM sheets WHERE id = ?').get(c.req.param('id')));
-    return sheet ? c.json(sheet) : c.json({ error: 'Sheet unavailable.' }, 404);
+  app.get('/api/sheets', async (c) => {
+    const sheets = await Promise.all((await store.keys('sheet:')).map((key) => store.get(key)));
+    return c.json(sheets.filter(Boolean).map(publicSheet));
+  });
+  app.get('/api/sheets/:id', async (c) => {
+    const sheet = await store.get(`sheet:${c.req.param('id')}`);
+    return sheet ? c.json(publicSheet(sheet)) : c.json({ error: 'Sheet unavailable.' }, 404);
   });
   app.post('/api/sheets', async (c) => {
     const sheet = await c.req.json().catch(() => null);
     if (!validSheet(sheet)) return c.json({ error: 'Invalid sheet.' }, 400);
     // Identical create/import retries are safe; an ID collision never overwrites data.
-    const result = db.transaction(() => {
-      const existing = db.query('SELECT * FROM sheets WHERE id = ?').get(sheet.id) as any;
-      if (existing) {
-        const saved = decode(existing);
-        const sameFields = Object.keys(saved.fields).length === Object.keys(sheet.fields).length
-          && Object.entries(sheet.fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(saved.fields[key]));
-        return sameFields && saved.createdAt === sheet.createdAt && saved.updatedAt === sheet.updatedAt ? { sheet: saved, created: false } : null;
-      }
-      db.query('INSERT INTO sheets (id, fields, createdAt, updatedAt) VALUES (?, ?, ?, ?)').run(sheet.id, JSON.stringify(sheet.fields), sheet.createdAt, sheet.updatedAt);
-      return { sheet: { id: sheet.id, fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 }, created: true };
-    }).immediate();
-    if (!result) return c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
-    return c.json(result.sheet, result.created ? 201 : 200);
+    const existing = await store.get(`sheet:${sheet.id}`);
+    if (existing) {
+      const sameFields = Object.keys(existing.fields).length === Object.keys(sheet.fields).length
+        && Object.entries(sheet.fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(existing.fields[key]));
+      return sameFields && existing.createdAt === sheet.createdAt && existing.updatedAt === sheet.updatedAt
+        ? c.json(publicSheet(existing), 200)
+        : c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
+    }
+    const created = { id: sheet.id, fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 };
+    await store.set(`sheet:${sheet.id}`, created);
+    return c.json(created, 201);
   });
   app.put('/api/sheets/:id', async (c) => {
     const sheet = await c.req.json().catch(() => null);
     if (!validSheet(sheet) || sheet.id !== c.req.param('id') || !validRevision(sheet.revision)) return c.json({ error: 'Invalid sheet or revision.' }, 400);
-    const result = db.query('UPDATE sheets SET fields = ?, updatedAt = ?, revision = revision + 1 WHERE id = ? AND revision = ? RETURNING *')
-      .get(JSON.stringify(sheet.fields), Date.now(), sheet.id, sheet.revision);
-    if (result) return c.json(decode(result));
-    const exists = db.query('SELECT id FROM sheets WHERE id = ?').get(sheet.id);
-    return c.json({ error: exists ? 'Another device changed this sheet. Download your draft, then reload and merge your notes.' : 'Sheet unavailable.' }, exists ? 409 : 404);
+    const stored = await store.get(`sheet:${sheet.id}`);
+    if (!stored) return c.json({ error: 'Sheet unavailable.' }, 404);
+    if (stored.revision !== sheet.revision) return c.json({ error: 'Another device changed this sheet. Download your draft, then reload and merge your notes.' }, 409);
+    const saved = { ...stored, fields: sheet.fields, updatedAt: Date.now(), revision: stored.revision + 1 };
+    await store.set(`sheet:${sheet.id}`, saved);
+    return c.json(publicSheet(saved));
   });
   app.delete('/api/sheets/:id', async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!validRevision(body?.revision)) return c.json({ error: 'Revision required.' }, 400);
-    const result = db.transaction(() => {
-      const deleted = db.query('DELETE FROM sheets WHERE id = ? AND revision = ? RETURNING id').get(c.req.param('id'), body.revision);
-      if (deleted) db.query('DELETE FROM participant_links WHERE sheetId = ?').run(c.req.param('id'));
-      return deleted;
-    }).immediate();
-    if (result) return c.body(null, 204);
-    const exists = db.query('SELECT id FROM sheets WHERE id = ?').get(c.req.param('id'));
-    return c.json({ error: exists ? 'Sheet changed; reload before deleting.' : 'Sheet unavailable.' }, exists ? 409 : 404);
+    const stored = await store.get(`sheet:${c.req.param('id')}`);
+    if (!stored) return c.json({ error: 'Sheet unavailable.' }, 404);
+    if (stored.revision !== body.revision) return c.json({ error: 'Sheet changed; reload before deleting.' }, 409);
+    await store.del(`sheet:${stored.id}`, ...(stored.linkHash ? [`link:${stored.linkHash}`] : []));
+    return c.body(null, 204);
   });
   app.all('/api/*', (c) => c.json({ error: 'Endpoint unavailable.' }, 404));
   app.get('*', async (c) => {
@@ -224,5 +203,5 @@ export function createApp({ databasePath, adminKey, publicOrigin }: { databasePa
     console.error('Storage request failed.');
     return c.json({ error: 'Storage unavailable. Keep your draft and retry.' }, 503);
   });
-  return { app, db };
+  return { app };
 }

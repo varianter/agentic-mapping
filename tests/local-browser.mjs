@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 
-export async function checkLocalFlow({ browser, baseURL, directory, db }) {
+export async function checkLocalFlow({ browser, baseURL, directory, store }) {
   const contexts = [];
   const errors = [];
   const apiRequests = [];
-  const serverCount = db.query('SELECT COUNT(*) AS count FROM sheets').get().count;
+  const serverCount = (await store.keys('sheet:')).length;
   const saved = (page) => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved in this browser');
   const failed = (page, text = 'Couldn’t complete') => page.waitForFunction((text) => {
     const status = document.getElementById('save-status');
@@ -279,7 +279,7 @@ export async function checkLocalFlow({ browser, baseURL, directory, db }) {
     assert.equal(validation.collision, 409);
     assert.deepEqual(validation.writes.toSorted(), [409, 'saved'].toSorted());
     assert.equal(validation.revision, validation.previousRevision + 1);
-    assert.equal(db.query('SELECT COUNT(*) AS count FROM sheets').get().count, serverCount);
+    assert.equal((await store.keys('sheet:')).length, serverCount);
     assert.deepEqual(apiRequests, []);
     assert.deepEqual(errors, []);
     console.log('Local browser passed: full model/PDF, reload/delete, profile isolation, stale tabs, no interview API, retryable opening/create/save/commit failures, draft downloads, validation and atomic revisions.');
@@ -289,7 +289,7 @@ export async function checkLocalFlow({ browser, baseURL, directory, db }) {
 }
 
 // Signed-in offer to move anonymous browser models into the account.
-export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
+export async function checkSaveLocalFlow({ browser, baseURL, adminKey, store }) {
   const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333', '44444444-4444-4444-8444-444444444444'];
   const model = (id, fields, createdAt) => ({ id, fields, createdAt, updatedAt: createdAt + 5 });
   const seeded = [
@@ -298,7 +298,7 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     model(ids[2], { name: 'Browser three', team_why_next: 'Gamma' }, 3000),
     model(ids[3], { name: '', date: '2026-01-04', discipline: [] }, 4000),
   ];
-  const sql = (id) => db.query('SELECT * FROM sheets WHERE id = ?').get(id);
+  const sql = (id) => store.get(`sheet:${id}`);
   async function session(models) {
     const context = await browser.newContext({ httpCredentials: { username: 'admin', password: adminKey } });
     context.setDefaultTimeout(12000);
@@ -314,8 +314,8 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
   }
   const localIds = (page) => page.evaluate(async () => (await (await import('/client/local-db.js')).allSheets()).map((sheet) => sheet.id).sort());
   const status = (page) => page.locator('#save-status');
-  const cleanup = () => { for (const id of ids) db.query('DELETE FROM sheets WHERE id = ?').run(id); };
-  cleanup();
+  const cleanup = () => store.del(...ids.map((id) => `sheet:${id}`));
+  await cleanup();
   try {
     // Save all: 3 filled, 1 blank.
     let { context, page, errors } = await session(seeded);
@@ -327,15 +327,15 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     await dialog.waitFor({ state: 'hidden' });
     assert.equal(await status(page).textContent(), 'Saved 3 of 3');
     for (const model of seeded.slice(0, 3)) {
-      const row = sql(model.id);
-      assert.deepEqual([JSON.parse(row.fields), row.createdAt, row.updatedAt], [model.fields, model.createdAt, model.updatedAt]);
+      const row = await sql(model.id);
+      assert.deepEqual([row.fields, row.createdAt, row.updatedAt], [model.fields, model.createdAt, model.updatedAt]);
       await page.locator(`#sheet-list a[data-id="${model.id}"]`).waitFor();
     }
-    assert.equal(sql(ids[3]), null);
+    assert.equal(await sql(ids[3]), null);
     assert.deepEqual(await localIds(page), [ids[3]]);
     assert.deepEqual(errors, []);
     await context.close();
-    cleanup();
+    await cleanup();
 
     // Not now: nothing uploaded; stays quiet for the session, returns in a new session.
     ({ context, page, errors } = await session(seeded));
@@ -350,7 +350,7 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
       await new Promise((resolve) => setTimeout(resolve, 600));
     });
     assert.equal(await page.locator('#save-local').isVisible(), false);
-    assert.equal(db.query('SELECT COUNT(*) AS count FROM sheets WHERE id IN (?, ?, ?)').get(ids[0], ids[1], ids[2]).count, 0);
+    assert.equal((await store.keys('sheet:')).filter((key) => ids.some((id) => key === `sheet:${id}`)).length, 0);
     assert.deepEqual(await localIds(page), [...ids].sort());
     await context.close();
     // New session (fresh sessionStorage) with the same models: the offer returns.
@@ -374,32 +374,32 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 1 of 3');
     assert.equal(await page.locator('#save-local').isVisible(), true);
     assert.deepEqual(await localIds(page), [ids[1], ids[2], ids[3]].sort());
-    assert.equal(sql(ids[0]) !== null, true);
+    assert.equal(await sql(ids[0]) !== null, true);
     blocked = false;
     await page.locator('#save-local-confirm').click();
     await page.locator('#save-local').waitFor({ state: 'hidden' });
     assert.equal(await status(page).textContent(), 'Saved 2 of 2');
-    assert.equal(db.query('SELECT COUNT(*) AS count FROM sheets WHERE id IN (?, ?, ?)').get(ids[0], ids[1], ids[2]).count, 3);
+    assert.equal((await store.keys('sheet:')).filter((key) => ids.some((id) => key === `sheet:${id}`)).length, 3);
     assert.deepEqual(await localIds(page), [ids[3]]);
     assert.deepEqual(errors.filter((message) => !/Failed to fetch/.test(message)), []);
     await context.close();
-    cleanup();
+    await cleanup();
 
-    db.query('INSERT INTO sheets (id, fields, createdAt, updatedAt) VALUES (?, ?, ?, ?)').run(ids[1], JSON.stringify({ name: 'Different' }), 1, 1);
+    await store.set(`sheet:${ids[1]}`, { id: ids[1], fields: { name: 'Different' }, createdAt: 1, updatedAt: 1 });
     ({ context, page } = await session(seeded));
     await page.reload();
     await page.locator('#save-local').waitFor({ state: 'visible' });
     await page.locator('#save-local-confirm').click();
     await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 2 of 3');
-    assert.deepEqual(JSON.parse(sql(ids[1]).fields), { name: 'Different' });
-    assert.equal(sql(ids[2]) !== null, true);
+    assert.deepEqual((await sql(ids[1])).fields, { name: 'Different' });
+    assert.equal(await sql(ids[2]) !== null, true);
     assert.match(await page.locator('#save-local-status').textContent(), /Browser two/);
     assert.deepEqual(await localIds(page), [ids[1], ids[3]].sort());
     await page.locator('#save-local-confirm').click();
     await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 0 of 1');
     assert.deepEqual(await localIds(page), [ids[1], ids[3]].sort());
     await context.close();
-    cleanup();
+    await cleanup();
 
     // 401 on the 2nd upload: stops, keeps the rest, no page error.
     ({ context, page, errors } = await session(seeded));
@@ -415,7 +415,7 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     assert.deepEqual(await localIds(page), [ids[1], ids[2], ids[3]].sort());
     assert.deepEqual(errors, []);
     await context.close();
-    cleanup();
+    await cleanup();
 
     // IndexedDB unavailable: no dialog, no error.
     ({ context, page, errors } = await session([]));
@@ -442,6 +442,6 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     await context.close();
     console.log('Save-local passed: save all, Not now, partial failure/retry, 401, 409 skip-and-continue, IndexedDB unavailable, blank-only.');
   } finally {
-    cleanup();
+    await cleanup();
   }
 }

@@ -53,7 +53,7 @@ test('missing or wrong admin keys cannot access or change sheets', async () => {
   const original = sheet();
   const created = await (await request(app, '/api/sheets', 'POST', original)).json();
   expect((await request(app, '/api/sheets', 'GET', undefined, null)).status).toBe(401);
-  expect((await request(app, '/', 'GET', undefined, null)).status).toBe(401);
+  expect((await request(app, '/', 'GET', undefined, null)).status).toBe(200);
   const wrong = 'wrong-admin-key-0123456789-abcdefghij';
   for (const key of [null, wrong]) {
     expect((await request(app, '/api/sheets', 'GET', undefined, key)).status).toBe(401);
@@ -141,4 +141,37 @@ test('requires valid credentials, origin, JSON and a bounded request body', asyn
   expect((await app.request(`${origin}/api/sheets`, { method: 'POST', headers })).status).toBe(403);
   expect((await app.request(`${origin}/api/sheets`, { method: 'POST', headers: { ...headers, Origin: origin, 'Content-Type': 'text/plain' }, body: '{}' })).status).toBe(415);
   expect((await request(app, '/api/sheets', 'POST', { ...sheet(), fields: { name: 'x'.repeat(1024 * 1024) } })).status).toBe(413);
+});
+
+test('home selects verified storage modes and sign-in explicitly challenges then returns home', async () => {
+  const { app } = setup();
+  for (const path of ['/', '/index.html']) {
+    const anonymous = await request(app, path, 'GET', undefined, null);
+    expect(anonymous.status).toBe(200);
+    expect(anonymous.headers.has('WWW-Authenticate')).toBe(false);
+    expect(anonymous.headers.get('Cache-Control')).toBe('no-store');
+    expect(anonymous.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(anonymous.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(await anonymous.text()).toContain('data-storage-mode="local"');
+    expect(await (await request(app, path)).text()).toContain('data-storage-mode="server"');
+    expect((await request(app, path, 'GET', undefined, 'mallory')).status).toBe(401);
+  }
+  const challenge = await request(app, '/sign-in', 'GET', undefined, null);
+  expect(challenge.status).toBe(401);
+  expect(challenge.headers.get('WWW-Authenticate')).toContain('Basic');
+  const signedIn = await request(app, '/sign-in');
+  expect(signedIn.status).toBe(303);
+  expect(signedIn.headers.get('Location')).toBe('/');
+  expect((await request(app, '/client/local-db.js', 'GET', undefined, null)).status).toBe(200);
+  expect(await (await request(app, '/participant', 'GET', undefined, null)).text()).toContain('data-storage-mode="participant"');
+  const original = sheet();
+  await request(app, '/api/sheets', 'POST', original);
+  for (const [path, method, body] of [
+    ['/api/sheets', 'GET'], ['/api/sheets', 'POST', sheet()],
+    [`/api/sheets/${original.id}`, 'GET'], [`/api/sheets/${original.id}`, 'PUT', { ...original, revision: 1 }],
+    [`/api/sheets/${original.id}`, 'DELETE', { revision: 1 }],
+    [`/api/sheets/${original.id}/access`, 'POST', {}], [`/api/sheets/${original.id}/access`, 'DELETE', {}],
+  ]) {
+    expect((await request(app, path, method, body, null)).status).toBe(401);
+  }
 });

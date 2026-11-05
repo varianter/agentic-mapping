@@ -38,13 +38,15 @@ test('preview origins may post; other origins are rejected', async () => {
   expect((await post('https://evil.example')).status).toBe(403);
 });
 
-test('vercel.json sends every request to the function and bundles the server and every public file', async () => {
+test('vercel.json sends every request to the function and bundles tsconfig, the server and every public file', async () => {
   const config = await Bun.file(new URL('../vercel.json', import.meta.url)).json();
   // `routes` without a filesystem handle runs before static files, so repo files are never served as-is.
   expect(config.rewrites).toBeUndefined();
   expect(config.routes).toEqual([{ src: '/(.*)', dest: '/api' }]);
   const include = new Bun.Glob(config.functions['api/index.ts'].includeFiles);
   const root = new URL('..', import.meta.url).pathname;
+  // Bun runs the bundled .tsx source; without tsconfig.json it falls back to React's JSX runtime and every request fails.
+  expect(include.match('tsconfig.json')).toBe(true);
   for (const pattern of ['public/**/*', 'server/**/*']) {
     for (const file of new Bun.Glob(pattern).scanSync(root)) expect(include.match(file) ? file : `missing ${file}`).toBe(file);
   }

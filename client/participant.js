@@ -53,7 +53,7 @@ async function request(method = 'GET', body) {
   });
   if (!response.ok) {
     // Use fixed messages: no server details or credential can enter the UI/logs.
-    const error = new Error(response.status === 409 ? 'Newer answers are stored. Download your draft, then reload saved answers and merge your changes.' : 'Could not save or load answers. Keep your draft and try again explicitly.');
+    const error = new Error(response.status === 409 ? 'Newer answers are stored. Download your draft, then reload saved answers and merge your changes.' : 'Could not save or load answers. Your draft is kept; choose Save answers to try again.');
     error.status = response.status;
     throw error;
   }
@@ -63,7 +63,7 @@ async function request(method = 'GET', body) {
 function reportError(error) {
   if ([401, 403, 404].includes(error.status)) return denyAccess();
   if (error.status === 409) conflicted = true;
-  setStatus(error.status === 409 ? error.message : 'Could not save or load answers. Your input is retained; use Save answers or Reload saved to try again.', 'error');
+  setStatus(error.status === 409 ? error.message : 'Could not save or load answers. Your answers are still in the form; choose Save answers or Reload saved to try again.', 'error');
 }
 
 async function loadAnswers() {

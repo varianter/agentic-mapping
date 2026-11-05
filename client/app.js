@@ -425,8 +425,12 @@ export function initEditor(storage, { localMode, localStore }) {
       if (!failed) dialog.close('saved');
       else { confirm.textContent = 'Save again'; label(); }
     };
+    const dismiss = () => { try { sessionStorage.setItem(key, '1'); } catch {} };
+    // "Not now" submits the form; record it synchronously, since `close` fires a task later
+    // and a reload right after the click would otherwise lose the dismissal.
+    dialog.querySelector('form').addEventListener('submit', dismiss, { once: true });
     dialog.addEventListener('close', () => {
-      if (dialog.returnValue !== 'saved') { try { sessionStorage.setItem(key, '1'); } catch {} }
+      if (dialog.returnValue !== 'saved') dismiss();
     }, { once: true });
     dialog.showModal();
   }

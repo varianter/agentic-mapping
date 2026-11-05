@@ -11,7 +11,7 @@ export type Audience = 'respondent' | 'interviewer';
 export function Sheet({ audience, action, revision, fields, pill, form, statusId = 'save-status', children }: {
   audience: Audience; action: string; revision: number; fields: Fields; pill: string; form?: FormState; statusId?: string; children?: Child;
 }) {
-  const values = form?.formError ? { ...withLegacyGrid(fields), ...form.values } : withLegacyGrid(fields);
+  const values = form?.formError ? { ...withLegacyGrid(fields), discipline: [], ...form.values } : withLegacyGrid(fields);
   const text = (name: string) => (typeof values[name] === 'string' ? values[name] as string : '');
   const list = (name: string) => [values[name] ?? []].flat();
   const interviewer = audience === 'interviewer';

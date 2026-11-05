@@ -99,7 +99,7 @@ test('rejects cross-site writes, malformed payloads and unknown API paths', asyn
 
 test('serves only public assets, never source, credentials or databases', async () => {
   const { app } = setup();
-  for (const path of ['/', '/index.html', '/guide.html', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg']) {
+  for (const path of ['/', '/index.html', '/guide', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg']) {
     expect((await request(app, path)).status).toBe(200);
   }
   for (const path of ['/server.ts', '/server/app.tsx', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/store.json', '/bun.lock', '/.git/config', '/docs/storage-decision.md', '/legacy.html', '/client/legacy.js']) {

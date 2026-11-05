@@ -35,3 +35,12 @@ test('cross-site form posts are refused with a page', async () => {
   expect(response.status).toBe(403);
   expect(response.headers.get('Set-Cookie')).toBeNull();
 });
+
+test('the interviewer guide is a server-rendered page; the old file name redirects', async () => {
+  const guide = await app().request(`${origin}/guide`);
+  expect(guide.status).toBe(200);
+  expect(await guide.text()).toContain('A 15-minute mapping');
+  const old = await app().request(`${origin}/guide.html`);
+  expect(old.status).toBe(301);
+  expect(old.headers.get('Location')).toBe('/guide');
+});

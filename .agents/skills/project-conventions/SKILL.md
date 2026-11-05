@@ -25,7 +25,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 - Main parts:
   - `index.html` + `client/boot.js`: starts the server-marked mode (`data-mode`): `client/self.js`, `client/app.js` (interviewer) or isolated `client/participant.js`; `client/form.js` shares grids/tabs/plain-text form values; `client/fields.js` holds `RESPONDENT_FIELDS`, also imported by the server.
   - `client/db.js`: same-origin interview API adapter; `client/me-db.js`: My map on the server (`/api/me`); `client/self-db.js` stores My map in IndexedDB `agentic-mapping-self` in self-only mode.
-  - `guide.html`: static interviewer guide.
+  - `server/guide/`: interviewer guide page at `/guide` (server-rendered, no JS). `server/signIn/`: `/sign-in`, `/sign-out`.
   - `styles.css`: Variant tokens, layout and `@media print` styles for both pages.
   - `server.ts` + `server/app.ts`: Hono API on Bun, a key-value `Store` (`server/store.ts`: Upstash adapter, Map/JSON-file adapter with `failWrites` for tests), cookie sign-in (`/sign-in` sets HttpOnly `am_admin` = HMAC of `ADMIN_KEY`) and an exact public-file allowlist.
 - Package manager or build tool: Bun (`bun.lock`). Do not use npm, yarn or pnpm.
@@ -59,7 +59,7 @@ client/fields.js  RESPONDENT_FIELDS, shared with the server
 client/form.js    shared dimensions, tabs and form values
 client/db.js      interview API adapter: allSheets, getSheet, createSheet, putSheet, deleteSheet
 client/import.js  Upload JSON parser: store dumps (`sheet:*` keys), Download JSON arrays or one sheet
-guide.html        interviewer guide (static, no JS)
+server/<feature>/  one folder per feature: `<feature>.routes.tsx` plus its views and commands
 styles.css        shared styles, tokens, print layout
 img/              Variant logos (SVG)
 server.ts         configured Bun entrypoint (picks the store from env)

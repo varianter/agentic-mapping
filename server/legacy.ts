@@ -15,22 +15,14 @@ const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
   ['/submissions', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', ].map((path) => [`/${path}`, path]),
+  ...['index.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', ].map((path) => [`/${path}`, path]),
   ...['img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, `public/${path}`]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const SESSION_COOKIE = 'am_admin';
-const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 // A random browser token (only its hash is stored) that finds this browser's own map or connected interview.
 const RESPONDENT_COOKIE = 'am_respondent';
 const RESPONDENT_MAX_AGE = 400 * 24 * 60 * 60;
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
-const signInPage = (error = '') => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Sign in · Agentic mapping</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:15vh auto;padding:0 1rem}label,input,button{display:block;font:inherit}input{width:100%;box-sizing:border-box;margin:.25rem 0 1rem;padding:.5rem}button{padding:.5rem 1rem}[role=alert]{color:#b00020}a{display:inline-block;margin-top:1.5rem}</style></head>
-<body><h1>Interviewer sign-in</h1><p>Sign in with the admin key to create and manage interviews.</p>
-${error ? `<p role="alert">${escapeHtml(error)}</p>` : ''}<form method="post" action="/sign-in"><label for="key">Admin key</label><input type="password" id="key" name="key" autocomplete="current-password" required autofocus><button type="submit">Sign in</button></form>
-<a href="/">Fill in your own map instead</a></body></html>`;
 // The admin cookie holds a key-derived token, never the key; rotating ADMIN_KEY signs everyone out.
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 const participantView = (row: any) => ({ fields: storedAnswers(row.fields), revision: row.revision });
@@ -49,8 +41,6 @@ export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins 
   const origins = new Set([...(publicOrigin ? [publicOrigin] : []), ...allowedOrigins]);
   const httpsOrigins = [...origins].some((origin) => origin.startsWith('https:'));
   const sameOrigin = (c: Context) => (origins.size ? origins : new Set([new URL(c.req.url).origin])).has(c.req.header('Origin') ?? '') && c.req.header('Sec-Fetch-Site') !== 'cross-site';
-  // With Referrer-Policy: no-referrer, browsers send `Origin: null` on form posts; Fetch Metadata still proves same-origin.
-  const sameOriginForm = (c: Context) => sameOrigin(c) || c.req.header('Sec-Fetch-Site') === 'same-origin';
   const app = new Hono<{ Variables: { admin: boolean } }>();
   app.use('*', async (c, next) => {
     const url = new URL(c.req.url);
@@ -100,24 +90,8 @@ export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins 
     await next();
   });
   const secureCookie = (c: Context) => new URL(c.req.url).protocol === 'https:' || httpsOrigins;
-  const setSession = (c: Context, value: string, maxAge: number) => setCookie(c, SESSION_COOKIE, value, {
-    httpOnly: true, sameSite: 'Strict', path: '/', maxAge, secure: secureCookie(c),
-  });
   const setRespondent = (c: Context, token: string) => setCookie(c, RESPONDENT_COOKIE, token, {
     httpOnly: true, sameSite: 'Strict', path: '/', maxAge: RESPONDENT_MAX_AGE, secure: secureCookie(c),
-  });
-  app.get('/sign-in', (c) => (c.get('admin') ? c.redirect('/', 303) : c.html(signInPage())));
-  app.post('/sign-in', async (c) => {
-    if (!sameOriginForm(c)) return c.html(signInPage('Sign in from this site.'), 403);
-    const key = (await c.req.parseBody().catch(() => ({} as Record<string, unknown>))).key;
-    if (typeof key !== 'string' || !sameDigest(key, adminKey)) return c.html(signInPage('That admin key is not right.'), 401);
-    setSession(c, session, SESSION_MAX_AGE);
-    return c.redirect('/', 303);
-  });
-  app.post('/sign-out', (c) => {
-    if (!sameOriginForm(c)) return c.json({ error: 'Cross-site sign-out is not allowed.' }, 403);
-    deleteCookie(c, SESSION_COOKIE, { path: '/', secure: secureCookie(c) });
-    return c.redirect('/', 303);
   });
   app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Sheet exceeds 1 MB.' }, 413) }));
   app.use('/api/*', async (c, next) => {

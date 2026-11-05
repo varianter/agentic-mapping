@@ -10,6 +10,8 @@ import { isAdmin, sessionToken } from './framework/auth';
 import { wantsJson } from './framework/respond';
 import { ErrorPage } from './shell/ErrorPage';
 import { createLegacyApp } from './legacy';
+import { guideRoutes } from './guide/guide.routes';
+import { signInRoutes } from './signIn/signIn.routes';
 
 export { sessionToken };
 
@@ -75,6 +77,8 @@ export function createApp(config: AppConfig) {
   app.use(csrf({ origin: origins.size ? (origin) => origins.has(origin) : undefined }));
 
   app.route('/assets', assets);
+  app.route('/', signInRoutes);
+  app.route('/', guideRoutes);
   app.route('/', createLegacyApp(config).app);
 
   app.notFound((c) => {

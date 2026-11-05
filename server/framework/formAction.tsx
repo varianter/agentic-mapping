@@ -9,7 +9,7 @@ export type FieldErrors = Record<string, string[]>;
 export type FormState = { values: Values; fieldErrors: FieldErrors; formError?: string; saved: boolean };
 export type SubmitResult =
   | { redirect: string; json?: unknown }
-  | { formError?: string; fieldErrors?: FieldErrors; status?: 404 | 409 | 422 };
+  | { formError?: string; fieldErrors?: FieldErrors; status?: 401 | 404 | 409 | 422 };
 
 // Submitted values as typed, for re-rendering; never trusted. Repeated names stay arrays.
 export async function formValues(c: Context): Promise<Values> {

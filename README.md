@@ -10,7 +10,7 @@ Three modes, one name each:
 | **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions`; sign out |
 | **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
 
-`/guide.html` is the static interviewer guide.
+`/guide` is the interviewer guide.
 
 Opening a link in a browser that already has its own map asks whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
 
@@ -68,7 +68,7 @@ client/db.js       Interview API adapter
 client/participant.js Connects a browser to its interview through a private link
 client/fields.js   Respondent fields, shared with the server
 client/form.js     Shared grids and tabs
-index.html, guide.html, styles.css
+index.html, styles.css
 tests/             Bun and Playwright tests
 ```
 

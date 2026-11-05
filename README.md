@@ -1,6 +1,6 @@
 # Agentic mapping: capture sheets
 
-Capture sheets and an interviewer guide in plain HTML, CSS and browser JavaScript. Sheets autosave to SQLite through Bun/Hono and are available on other devices using the same interviewer account. No frontend build step.
+Capture sheets and an interviewer guide in plain HTML, CSS and browser JavaScript. At `/`, anonymous visitors edit complete models saved in IndexedDB in their browser; signed-in interviewers edit private registered interviews saved to SQLite through Bun/Hono. No frontend build step.
 
 ## Run
 
@@ -16,7 +16,7 @@ unset MAPPING_PASSWORD
 bun start
 ```
 
-Open http://localhost:4321 and enter the configured username/password in the browser’s sign-in prompt. Add other usernames/hashes to the JSON object for separate accounts; each can access only their own sheets. Keep usernames stable: they identify sheet owners. No default account is provided; startup fails without valid configuration. Browser Basic authentication stays cached until the browser session is closed; use separate profiles on shared devices.
+Open http://localhost:4321 to edit a model without signing in. Choose **Sign in for registered interviews** and enter the configured username/password; sign-in returns to `/`. Keep usernames stable: they identify sheet owners. No default account is provided; startup fails without valid configuration. Browser Basic authentication stays cached until the browser session is closed; use separate profiles on shared devices.
 
 - `INTERVIEWER_USERS_FILE`: path to a private JSON object of usernames and Argon2id password hashes. Keep it server-side; use a JSON file because Bun expands dollar signs in `.env` values, including password hashes.
 - `DATABASE_PATH`: SQLite file, defaults to `./data/sheets.sqlite`; production must use an absolute path on a durable disk outside the checkout.
@@ -26,15 +26,21 @@ Open http://localhost:4321 and enter the configured username/password in the bro
 
 Keep production account files, passwords, tokens and private keys outside the checkout; never commit them or put them in browser code. Git ignores `.env*`, `data/`, `secrets/`, `interviewers.json` and common key files as a safeguard; arbitrary filenames still require care. Test passwords are synthetic and are never deployment credentials. If a real secret is ever committed, revoke/rotate it immediately; deleting the file does not remove it from Git history.
 
+## Anonymous browser models
+
+Without signing in, models are saved in this browser's IndexedDB (**Saved in this browser**) and no interview API is called. Other profiles, devices and origins cannot see them. Clearing browser data removes them, so download PDF/JSON backups.
+
+If storage fails, use **Retry storage**. The draft stays editable, and **Download PDF** and **Download JSON** still work. A stale tab cannot overwrite newer values or recreate a deleted model.
+
 ## Existing notes and recovery
 
-Export each browser’s existing IndexedDB notes from the **old origin**, then select **Import JSON** on the server. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.
+Export each browser’s existing IndexedDB notes from the **old origin**, then sign in and select **Import JSON** in server mode. The GitHub Pages workflow now publishes only the [legacy exporter](legacy.html); it leaves browser data untouched and never uploads it. The same exporter is available on the server for notes previously saved on that origin. Repeat on each browser/device that holds notes.
 
 Imports preserve IDs, fields and timestamps and assign ownership to the signed-in interviewer. Identical retries are safe; conflicting IDs stop import without overwriting anything. A partial import reports its count; keep the export, resolve collisions and retry. Verify the imported notes before removing any originals or private JSON files.
 
-**Saved to server** means a committed save. On a network failure, use **Retry save** or **Download JSON** in the sidebar before closing the tab. Unsaved drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
+**Saved to server** means a committed save. On a network failure, use **Retry storage** or **Download JSON** in the sidebar before closing the tab. Unsaved server drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
 
-**Download PDF** opens the browser’s A4 landscape print dialog. Choose **Save as PDF**.
+**Download PDF** opens the browser’s A4 landscape print dialog with the current form values. Choose **Save as PDF**.
 
 ## Finish an interview through a private link
 
@@ -86,10 +92,10 @@ bunx playwright install chromium       # once; Linux CI also uses --with-deps
 bun run test:browser
 ```
 
-API tests cover persistence, permissions, conflicts, imports, exposure, participant scope/expiry/revocation/replacement and backup/restore. Browser tests cover autosave, two-device access, private-link handoff, failures, conflicts, migration, deletion and print layout; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
+API tests cover persistence, permissions, conflicts, imports, participant links and backup/restore. Browser tests cover local and server editing, storage failures, conflicts, PDF, private-link handoff and migration; all notes and credentials used in checks are synthetic. No lint or typecheck is configured.
 
 - `server.ts`, `server/app.ts`: authenticated API, SQLite and public-file allowlist.
-- `client/app.js`, `client/db.js`: UI and server storage adapter.
+- `client/app.js`, `client/db.js`, `client/local-db.js`: shared editor and server/browser storage adapters.
 - `client/boot.js`, `client/participant.js`, `client/form.js`: isolated participant entrypoint and shared grids/tabs.
 - `client/legacy.js`, `legacy.html`: browser-data export and JSON recovery.
 - `scripts/backup.ts`: consistent SQLite snapshot.

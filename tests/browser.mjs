@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { checkParticipantFlow } from './participant-browser.mjs';
 import { checkPreviewFlow } from './preview-browser.mjs';
-import { checkLocalFlow } from './local-browser.mjs';
+import { checkLocalFlow, checkSaveLocalFlow } from './local-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
 const adminKey = 'browser-admin-key-0123456789-abcdefgh';
@@ -152,6 +152,7 @@ try {
   assert.deepEqual(errors, []);
   await checkParticipantFlow({ browser, context, baseURL, directory, store });
   await checkLocalFlow({ browser, baseURL, directory, store });
+  await checkSaveLocalFlow({ browser, baseURL, adminKey, store });
   await checkPreviewFlow({ browser, baseURL });
   console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, missing hashes, PDF layout, mobile width, delete; no page errors.');
 } catch (error) {

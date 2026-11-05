@@ -287,3 +287,161 @@ export async function checkLocalFlow({ browser, baseURL, directory, store }) {
     for (const context of contexts) await context.close();
   }
 }
+
+// Signed-in offer to move anonymous browser models into the account.
+export async function checkSaveLocalFlow({ browser, baseURL, adminKey, store }) {
+  const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333', '44444444-4444-4444-8444-444444444444'];
+  const model = (id, fields, createdAt) => ({ id, fields, createdAt, updatedAt: createdAt + 5 });
+  const seeded = [
+    model(ids[0], { name: 'Browser one', date: '2026-01-01', ind_learn_start: 'Alpha' }, 1000),
+    model(ids[1], { name: 'Browser two', date: '2026-01-02', discipline: ['Developer'] }, 2000),
+    model(ids[2], { name: 'Browser three', team_why_next: 'Gamma' }, 3000),
+    model(ids[3], { name: '', date: '2026-01-04', discipline: [] }, 4000),
+  ];
+  const sql = (id) => store.get(`sheet:${id}`);
+  async function session(models) {
+    const context = await browser.newContext({ httpCredentials: { username: 'admin', password: adminKey } });
+    context.setDefaultTimeout(12000);
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(`${baseURL}/sign-in`);
+    await page.evaluate(async (models) => {
+      const local = await import('/client/local-db.js');
+      for (const model of models) await local.createSheet(model);
+    }, models);
+    return { context, page, errors };
+  }
+  const localIds = (page) => page.evaluate(async () => (await (await import('/client/local-db.js')).allSheets()).map((sheet) => sheet.id).sort());
+  const status = (page) => page.locator('#save-status');
+  const cleanup = () => store.del(...ids.map((id) => `sheet:${id}`));
+  await cleanup();
+  try {
+    // Save all: 3 filled, 1 blank.
+    let { context, page, errors } = await session(seeded);
+    await page.reload();
+    const dialog = page.locator('#save-local');
+    await dialog.waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#save-local-title').textContent(), 'Save 3 browser models to your account?');
+    await page.locator('#save-local-confirm').click();
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(await status(page).textContent(), 'Saved 3 of 3');
+    for (const model of seeded.slice(0, 3)) {
+      const row = await sql(model.id);
+      assert.deepEqual([row.fields, row.createdAt, row.updatedAt], [model.fields, model.createdAt, model.updatedAt]);
+      await page.locator(`#sheet-list a[data-id="${model.id}"]`).waitFor();
+    }
+    assert.equal(await sql(ids[3]), null);
+    assert.deepEqual(await localIds(page), [ids[3]]);
+    assert.deepEqual(errors, []);
+    await context.close();
+    await cleanup();
+
+    // Not now: nothing uploaded; stays quiet for the session, returns in a new session.
+    ({ context, page, errors } = await session(seeded));
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    await page.locator('#save-local [value="later"]').click();
+    await page.reload();
+    await page.locator('#sheet-list').waitFor({ state: 'attached' });
+    // Let the async IndexedDB read and offer decision settle before asserting absence.
+    await page.evaluate(async () => {
+      await (await import('/client/local-db.js')).allSheets();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    });
+    assert.equal(await page.locator('#save-local').isVisible(), false);
+    assert.equal((await store.keys('sheet:')).filter((key) => ids.some((id) => key === `sheet:${id}`)).length, 0);
+    assert.deepEqual(await localIds(page), [...ids].sort());
+    await context.close();
+    // New session (fresh sessionStorage) with the same models: the offer returns.
+    ({ context, page, errors } = await session(seeded));
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#save-local-title').textContent(), 'Save 3 browser models to your account?');
+    await context.close();
+
+    // Partial failure (offline for the 2nd), retry, and 409 with different content.
+    ({ context, page, errors } = await session(seeded));
+    let blocked = true;
+    await page.route('**/api/sheets', (route) => {
+      const request = route.request();
+      if (blocked && request.method() === 'POST' && request.postData().includes(ids[1])) return route.abort();
+      return route.continue();
+    });
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    await page.locator('#save-local-confirm').click();
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 1 of 3');
+    assert.equal(await page.locator('#save-local').isVisible(), true);
+    assert.deepEqual(await localIds(page), [ids[1], ids[2], ids[3]].sort());
+    assert.equal(await sql(ids[0]) !== null, true);
+    blocked = false;
+    await page.locator('#save-local-confirm').click();
+    await page.locator('#save-local').waitFor({ state: 'hidden' });
+    assert.equal(await status(page).textContent(), 'Saved 2 of 2');
+    assert.equal((await store.keys('sheet:')).filter((key) => ids.some((id) => key === `sheet:${id}`)).length, 3);
+    assert.deepEqual(await localIds(page), [ids[3]]);
+    assert.deepEqual(errors.filter((message) => !/Failed to fetch/.test(message)), []);
+    await context.close();
+    await cleanup();
+
+    await store.set(`sheet:${ids[1]}`, { id: ids[1], fields: { name: 'Different' }, createdAt: 1, updatedAt: 1 });
+    ({ context, page } = await session(seeded));
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    await page.locator('#save-local-confirm').click();
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 2 of 3');
+    assert.deepEqual((await sql(ids[1])).fields, { name: 'Different' });
+    assert.equal(await sql(ids[2]) !== null, true);
+    assert.match(await page.locator('#save-local-status').textContent(), /Browser two/);
+    assert.deepEqual(await localIds(page), [ids[1], ids[3]].sort());
+    await page.locator('#save-local-confirm').click();
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 0 of 1');
+    assert.deepEqual(await localIds(page), [ids[1], ids[3]].sort());
+    await context.close();
+    await cleanup();
+
+    // 401 on the 2nd upload: stops, keeps the rest, no page error.
+    ({ context, page, errors } = await session(seeded));
+    await page.route('**/api/sheets', (route) => {
+      const request = route.request();
+      if (request.method() === 'POST' && request.postData().includes(ids[1])) return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"Unauthorized"}' });
+      return route.continue();
+    });
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    await page.locator('#save-local-confirm').click();
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 1 of 3');
+    assert.deepEqual(await localIds(page), [ids[1], ids[2], ids[3]].sort());
+    assert.deepEqual(errors, []);
+    await context.close();
+    await cleanup();
+
+    // IndexedDB unavailable: no dialog, no error.
+    ({ context, page, errors } = await session([]));
+    await page.addInitScript(() => { indexedDB.open = () => { throw new DOMException('IndexedDB unavailable', 'SecurityError'); }; });
+    await page.reload();
+    await page.locator('#sheet-list').waitFor({ state: 'attached' });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assert.equal(await page.locator('#save-local').isVisible(), false);
+    assert.notEqual(await status(page).getAttribute('data-state'), 'error');
+    assert.deepEqual(errors, []);
+    await context.close();
+
+    // Only blank models: no dialog.
+    ({ context, page, errors } = await session([seeded[3]]));
+    await page.reload();
+    await page.locator('#sheet-list').waitFor({ state: 'attached' });
+    // Let the async IndexedDB read and offer decision settle before asserting absence.
+    await page.evaluate(async () => {
+      await (await import('/client/local-db.js')).allSheets();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    });
+    assert.equal(await page.locator('#save-local').isVisible(), false);
+    assert.deepEqual(errors, []);
+    await context.close();
+    console.log('Save-local passed: save all, Not now, partial failure/retry, 401, 409 skip-and-continue, IndexedDB unavailable, blank-only.');
+  } finally {
+    await cleanup();
+  }
+}

@@ -6,7 +6,7 @@
     "start": "bun server.ts",
     "dev": "bun --watch server.ts",
     "test": "bun test",
-    "check": "node --check client/app.js && node --check client/db.js && node --check client/local-db.js && node --check client/save-local.js && node --check client/legacy.js && node --check client/boot.js && node --check client/form.js && node --check client/participant.js",
+    "check": "node --check client/app.js && node --check client/db.js && node --check client/local-db.js && node --check client/save-local.js && node --check client/boot.js && node --check client/form.js && node --check client/participant.js",
     "backup": "bun scripts/backup.ts",
     "test:browser": "bun tests/browser.mjs"
   },

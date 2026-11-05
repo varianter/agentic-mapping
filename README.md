@@ -6,7 +6,7 @@ Three modes, one name each:
 
 | Mode | Route | Who | Storage | Can do |
 | --- | --- | --- | --- | --- |
-| **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie. Without `ADMIN_KEY`: browser IndexedDB, never sent to the server | Fill in your own answers (autosaved), clear, download JSON or PDF |
+| **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie | Fill in your own answers (a plain form; autosaved with JS), clear, download JSON (`/me.json`) or PDF |
 | **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions`; sign out |
 | **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
 
@@ -14,7 +14,7 @@ Three modes, one name each:
 
 Opening a link in a browser that already has its own map asks whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
 
-Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/participant`, `/submissions` and `/api/*` return 404 and no store is needed.
+Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/participant`, `/submissions` and `/api/*` return 404. My map is still saved in the store (local JSON file, or Upstash).
 
 ## Run
 
@@ -32,7 +32,7 @@ Open http://localhost:4321, and http://localhost:4321/sign-in to sign in with th
 | Variable | Description |
 | --- | --- |
 | `ADMIN_KEY` | Optional, 32+ characters. Enables interviewer sign-in. The admin cookie holds an HMAC of the key, so rotating it signs everyone out. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Upstash Redis. Required on Vercel when `ADMIN_KEY` is set. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Upstash Redis. Required on Vercel. |
 | `LOCAL_STORE_FILE` | Used when KV is unset. Default `./data/store.json`. Dev only. |
 | `PORT` | Default `4321`. |
 | `BIND_ADDRESS` | Default `127.0.0.1`. |
@@ -60,9 +60,8 @@ server/config.ts   Env config checks
 server/store.ts    Upstash and memory/JSON-file stores
 api/index.ts       Vercel entry
 client/boot.js     Starts the mode the server marked: self, interviewer or participant
-client/self.js     My map
-client/me-db.js    My map on the server (/api/me)
-client/self-db.js  My map's IndexedDB record (self-only)
+server/me/         My map at / (server-rendered form; autosave via public/elements)
+public/            styles.css, img/, elements/*.js custom elements, served with hashed URLs
 client/app.js      Interviewer editor
 client/db.js       Interview API adapter
 client/participant.js Connects a browser to its interview through a private link
@@ -76,12 +75,12 @@ tests/             Bun and Playwright tests
 
 1. Import the repo with no build command and no output directory (`vercel.json` sets `"framework": null`).
 2. Add **Upstash for Redis** from Storage → Marketplace. Apply `KV_REST_API_URL` and `KV_REST_API_TOKEN` to Production and Preview.
-3. Set `ADMIN_KEY` (Production and Preview) and `APP_ORIGIN` (production HTTPS origin). Leave `ADMIN_KEY` unset for a self-only deploy; then step 2 is optional.
+3. Set `ADMIN_KEY` (Production and Preview) and `APP_ORIGIN` (production HTTPS origin). Leave `ADMIN_KEY` unset for a self-only deploy.
 4. After deploy, check that `/server/app.ts` and `/package.json` return 404.
 
 **Preview deployments share production data.** Only share preview URLs and the admin key with people allowed to see production.
 
-Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `/api/me` and participant requests. Anyone can create a self-submitted map, so rate limiting matters.
+Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /` and participant requests. Anyone can create a self-submitted map, so rate limiting matters.
 
 ## Docs
 

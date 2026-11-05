@@ -106,7 +106,7 @@ test('serves only public assets, never source, credentials or databases', async 
     expect((await request(app, path)).status).toBe(404);
   }
   expect(() => createApp({ store: memoryStore(), adminKey: 'short' })).toThrow('ADMIN_KEY');
-  expect(() => createApp({ adminKey })).toThrow('store');
+  expect(() => createApp({ adminKey } as any)).toThrow('store');
 });
 
 test('failed commits return an error and leave stored notes unchanged', async () => {
@@ -129,21 +129,18 @@ test('requires valid credentials, origin, JSON and a bounded request body', asyn
   expect((await request(app, '/api/sheets', 'POST', { ...sheet(), fields: { name: 'x'.repeat(1024 * 1024) } })).status).toBe(413);
 });
 
-test('home serves self mode to visitors and interviewer mode only with the admin cookie', async () => {
+test('home serves My map to visitors and the interviewer editor only with the admin cookie', async () => {
   const { app } = setup();
-  for (const path of ['/', '/index.html']) {
-    const anonymous = await request(app, path, 'GET', undefined, null);
-    expect(anonymous.status).toBe(200);
-    expect(anonymous.headers.get('Cache-Control')).toBe('no-store');
-    expect(anonymous.headers.get('Referrer-Policy')).toBe('same-origin');
-    expect(anonymous.headers.get('X-Content-Type-Options')).toBe('nosniff');
-    expect(await anonymous.text()).toContain('data-mode="self" data-admin-enabled');
-    expect(await (await request(app, path)).text()).toContain('data-mode="interviewer"');
-    expect(await (await request(app, path, 'GET', undefined, 'mallory-0123456789-0123456789-abcdef')).text()).toContain('data-mode="self"');
-  }
+  const anonymous = await request(app, '/', 'GET', undefined, null);
+  expect(anonymous.status).toBe(200);
+  expect(anonymous.headers.get('Cache-Control')).toBe('no-store');
+  expect(anonymous.headers.get('Referrer-Policy')).toBe('same-origin');
+  expect(anonymous.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  expect(await anonymous.text()).toContain('<title>My map');
+  expect(await (await request(app, '/')).text()).toContain('data-mode="interviewer"');
+  expect(await (await request(app, '/', 'GET', undefined, 'mallory-0123456789-0123456789-abcdef')).text()).toContain('<title>My map');
   expect(await (await request(app, '/participant', 'GET', undefined, null)).text()).toContain('data-mode="participant"');
-  for (const path of ['/preview', '/client/preview.js', '/client/local-db.js', '/client/save-local.js']) expect((await request(app, path, 'GET', undefined, null)).status).toBe(404);
-  for (const path of ['/client/self.js', '/client/self-db.js', '/client/fields.js']) expect((await request(app, path, 'GET', undefined, null)).status).toBe(200);
+  for (const path of ['/preview', '/client/preview.js', '/client/local-db.js', '/client/save-local.js', '/client/self.js', '/client/self-db.js']) expect((await request(app, path, 'GET', undefined, null)).status).toBe(404);
   const original = sheet();
   await request(app, '/api/sheets', 'POST', original);
   for (const [path, method, body] of [
@@ -204,19 +201,6 @@ test('sign-out clears the cookie and refuses cross-site requests', async () => {
   expect(response.status).toBe(303);
   expect(response.headers.get('Location')).toBe('/');
   expect(response.headers.get('Set-Cookie')).toMatch(/^am_admin=;.*Max-Age=0/);
-});
-
-test('without an admin key the app is self-only: no sign-in, interviews or private links', async () => {
-  const { app } = createApp({});
-  const home = await app.request(`${origin}/`);
-  expect(home.status).toBe(200);
-  const html = await home.text();
-  expect(html).toContain('data-mode="self"');
-  expect(html).not.toContain('data-admin-enabled');
-  expect((await app.request(`${origin}/client/self.js`)).status).toBe(200);
-  for (const [path, method] of [['/sign-in', 'GET'], ['/sign-in', 'POST'], ['/sign-out', 'POST'], ['/participant', 'GET'], ['/api/sheets', 'GET'], ['/api/sheets', 'POST'], ['/api/participant', 'GET']]) {
-    expect((await app.request(`${origin}${path}`, { method, headers: { Origin: origin } })).status).toBe(404);
-  }
 });
 
 test('parallel apps with separate stores never see each other\'s sheets', async () => {

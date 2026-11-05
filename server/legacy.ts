@@ -15,7 +15,7 @@ const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
   ['/submissions', 'index.html'],
-  ...['index.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', ].map((path) => [`/${path}`, path]),
+  ...['index.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', ].map((path) => [`/${path}`, path]),
   ...['img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, `public/${path}`]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
@@ -57,7 +57,7 @@ export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins 
     if (httpsOrigins) c.header('Strict-Transport-Security', 'max-age=31536000');
   });
   // Respondent routes never use interviewer authentication.
-  const respondentPath = (path: string) => path === '/participant' || path === '/api/me' || path === '/api/participant' || path.startsWith('/api/participant/');
+  const respondentPath = (path: string) => path === '/participant' || path === '/api/participant' || path.startsWith('/api/participant/');
   const serveFiles = () => {
     app.get('*', async (c) => {
       const file = PUBLIC_FILES.get(c.req.path);
@@ -149,48 +149,6 @@ export function createLegacyApp({ store, adminKey, publicOrigin, allowedOrigins 
   });
   app.all('/api/participant/*', (c) => c.json({ error: 'Link unavailable.' }, 404));
   app.all('/api/participant', (c) => c.json({ error: 'Link unavailable.' }, 404));
-
-  // ---------- My map: the browser's own answers, or the interview a link connected it to ----------
-  const meView = (sheet: any) => ({ ...participantView(sheet), source: sourceOf(sheet) });
-  const noMap = { fields: {}, revision: 0, source: 'self' };
-  app.use('/api/me', async (c, next) => {
-    if (c.req.header('Authorization')) return c.json({ error: 'Access denied.' }, 403);
-    await next();
-  });
-  app.get('/api/me', async (c) => {
-    const binding = await respondentBinding(c);
-    return c.json(binding?.sheet ? meView(binding.sheet) : noMap);
-  });
-  app.put('/api/me', async (c) => {
-    const body = await c.req.json().catch(() => null);
-    if (!validAnswers(body) || !(body.revision === 0 || validRevision(body.revision))) return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
-    const binding = await respondentBinding(c);
-    const stored = binding?.sheet;
-    if ((stored?.revision ?? 0) !== body.revision) return c.json({ error: 'Your map changed elsewhere or is no longer available. Download JSON to keep this draft, then reload.' }, 409);
-    if (!stored) {
-      // The first save creates the map and the browser token; empty visits store nothing.
-      const now = Date.now();
-      const created = { id: crypto.randomUUID(), source: 'self', fields: body.fields, createdAt: now, updatedAt: now, revision: 1 };
-      const token = binding?.token ?? newToken();
-      await store.set(`sheet:${created.id}`, created);
-      await store.set(`respondent:${hashCredential(token)}`, { sheetId: created.id });
-      setRespondent(c, token);
-      return c.json(meView(created), 201);
-    }
-    // Only answer fields change; interviewer notes on the same sheet are kept.
-    const saved = { ...stored, fields: { ...stored.fields, ...body.fields }, updatedAt: Date.now(), revision: stored.revision + 1 };
-    await store.set(`sheet:${saved.id}`, saved);
-    setRespondent(c, binding.token);
-    return c.json(meView(saved));
-  });
-  app.delete('/api/me', async (c) => {
-    const binding = await respondentBinding(c);
-    if (binding?.sheet && sourceOf(binding.sheet) !== 'self') return c.json({ error: 'Interview answers can’t be cleared here.' }, 409);
-    if (binding?.sheet) await removeSheet(store, binding.sheet);
-    if (binding) await store.del(binding.key);
-    deleteCookie(c, RESPONDENT_COOKIE, { path: '/', secure: secureCookie(c) });
-    return c.body(null, 204);
-  });
 
   // Each interview has one stable link, derived from the admin key and its ID, so the interviewer can always show it.
   // Only its hash is stored; deleting the interview turns it off, and rotating ADMIN_KEY turns off every link.

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { csrf } from 'hono/csrf';
 import { jsxRenderer } from 'hono/jsx-renderer';
@@ -11,17 +12,18 @@ import { wantsJson } from './framework/respond';
 import { ErrorPage } from './shell/ErrorPage';
 import { createLegacyApp } from './legacy';
 import { guideRoutes } from './guide/guide.routes';
+import { meRoutes } from './me/me.routes';
 import { signInRoutes } from './signIn/signIn.routes';
 
 export { sessionToken };
 
-export type AppConfig = { store?: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] };
+export type AppConfig = { store: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] };
 
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 
 function checkConfig({ store, adminKey, publicOrigin }: AppConfig) {
   if (adminKey !== undefined && (typeof adminKey !== 'string' || adminKey.length < 32)) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters, or leave it unset for self-only mode.');
-  if (adminKey !== undefined && !store) throw new Error('Interviewer mode needs a store.');
+  if (!store) throw new Error('The app needs a store.');
   if (!publicOrigin) return;
   const url = new URL(publicOrigin);
   if (url.origin !== publicOrigin) throw new Error('APP_ORIGIN must be an origin without a trailing slash.');
@@ -67,18 +69,24 @@ export function createApp(config: AppConfig) {
     strictTransportSecurity: httpsOrigins ? 'max-age=31536000' : false,
   }));
   app.use(async (c, next) => {
-    c.set('store', store!);
+    c.set('store', store);
     c.set('adminKey', adminKey);
     c.set('secure', new URL(c.req.url).protocol === 'https:' || httpsOrigins);
     c.set('admin', isAdmin(c));
     await next();
   });
   app.use(jsxRenderer(({ children }) => <>{children}</>));
+  // Uploads may hold every sheet; everything else is one sheet at most.
+  app.use((c, next) => bodyLimit({
+    maxSize: (c.req.path === '/interviews/import' ? 10 : 1) * 1024 * 1024,
+    onError: (c) => (wantsJson(c) ? c.json({ error: 'Too large to save.' }, 413) : c.text('Too large to save.', 413)),
+  })(c, next));
   app.use(csrf({ origin: origins.size ? (origin) => origins.has(origin) : undefined }));
 
   app.route('/assets', assets);
   app.route('/', signInRoutes);
   app.route('/', guideRoutes);
+  app.route('/', meRoutes);
   app.route('/', createLegacyApp(config).app);
 
   app.notFound((c) => {

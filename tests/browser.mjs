@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { checkParticipantFlow } from './participant-browser.mjs';
-import { checkSelfFlow } from './self-browser.mjs';
+import { checkSelfFlow, checkSelfWithoutScripts } from './self-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
 const adminKey = 'browser-admin-key-0123456789-abcdefgh';
@@ -232,16 +232,17 @@ try {
   await page.goto(baseURL);
   await page.locator('#sign-out').click();
   await page.waitForURL(`${baseURL}/`);
-  await page.locator('#self-clear').waitFor({ state: 'visible' });
+  await page.locator('[commandfor="confirm-clear"][command="show-modal"]').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#sidebar').count(), 0);
   assert.equal((await context.cookies()).length, 0);
   assert.equal((await page.request.get(`${baseURL}/api/sheets`)).status(), 401);
 
   await checkSelfFlow({ browser, baseURL, directory, store });
-  const selfOnly = Bun.serve({ port: 0, fetch: createApp({}).app.fetch });
+  const selfOnly = Bun.serve({ port: 0, fetch: createApp({ store: memoryStore() }).app.fetch });
   try {
     const selfOnlyURL = `http://localhost:${selfOnly.port}`;
     await checkSelfFlow({ browser, baseURL: selfOnlyURL, directory, adminEnabled: false });
+    await checkSelfWithoutScripts({ browser, baseURL: selfOnlyURL });
     for (const path of ['/sign-in', '/participant', '/api/sheets']) assert.equal((await fetch(`${selfOnlyURL}${path}`)).status, 404);
   } finally {
     selfOnly.stop(true);

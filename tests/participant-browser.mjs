@@ -67,11 +67,11 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     await participant.goto(link);
     await connected(participant);
     assert.equal(await participant.locator('.pill').textContent(), 'Your interview');
-    assert.match(await participant.locator('.self-notice').textContent(), /Your interviewer can read your answers/);
-    assert.equal(await participant.locator('#self-clear').isVisible(), false);
+    assert.match(await participant.locator('.toolbar-notice').textContent(), /Your interviewer can read your answers/);
+    assert.equal(await participant.locator('#confirm-clear').count(), 0);
     assert.equal(await participant.locator('[name="good"]').inputValue(), inertAnswer);
     assert.equal(await participant.evaluate(() => window.participantScriptExecuted), undefined);
-    assert.equal(await participant.locator('#sheet [name]').count(), 31);
+    assert.equal(await participant.locator('#sheet [name]:not([name="revision"])').count(), 31);
     for (const name of ['name', 'context', 'interviewer', 'discipline', 'talk_to']) assert.equal(await participant.locator(`[name="${name}"]`).count(), 0);
     const [cookie] = (await participant.context().cookies()).filter((item) => item.name === 'am_respondent');
     assert.equal(cookie.httpOnly, true);

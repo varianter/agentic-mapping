@@ -1,9 +1,6 @@
-// The server marks the page with the verified mode: self, interviewer or participant.
+// The server marks the page with the verified mode: interviewer or participant. My map is server-rendered.
 const mode = document.body.dataset.mode;
-if (mode === 'self') {
-  document.body.dataset.self = '';
-  await import('./self.js');
-} else if (mode === 'participant') {
+if (mode === 'participant') {
   document.body.dataset.participant = '';
   await import('./participant.js');
 } else if (mode === 'interviewer') {

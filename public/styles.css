@@ -563,3 +563,8 @@
     .guide-top a { display: none; }
   }
 }
+
+/* Script-only controls stay hidden until their element upgrades. */
+@layer components {
+  print-button:not([data-ready]) { display: none; }
+}

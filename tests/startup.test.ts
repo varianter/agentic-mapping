@@ -60,11 +60,17 @@ test('loadConfig fails clearly without storage on Vercel and adds preview origin
   const base = { ADMIN_KEY: 'x'.repeat(32) };
   expect(() => loadConfig({ ...base, VERCEL: '1' })).toThrow('Config error: set KV_REST_API_URL');
   expect(() => loadConfig({ ADMIN_KEY: 'too-short' })).toThrow('ADMIN_KEY');
-  // Without ADMIN_KEY the app is self-only and needs no storage, even on Vercel.
-  for (const env of [{}, { ADMIN_KEY: '' }, { VERCEL: '1' }]) {
-    const config = loadConfig(env);
-    expect(config.adminKey).toBeUndefined();
-    expect(config.store).toBeUndefined();
+  // Without ADMIN_KEY the app is self-only, but My map still needs storage: KV on Vercel, a local file elsewhere.
+  expect(() => loadConfig({ VERCEL: '1' })).toThrow('Config error: set KV_REST_API_URL');
+  const directory = mkdtempSync(join(tmpdir(), 'mapping-config-'));
+  try {
+    for (const env of [{}, { ADMIN_KEY: '' }]) {
+      const config = loadConfig({ ...env, LOCAL_STORE_FILE: join(directory, 'store.json') });
+      expect(config.adminKey).toBeUndefined();
+      expect(config.store).toBeDefined();
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
   const preview = loadConfig({ ...base, VERCEL: '1', VERCEL_ENV: 'preview', KV_REST_API_URL: 'https://kv.example', KV_REST_API_TOKEN: 't', APP_ORIGIN: 'https://prod.example', VERCEL_URL: 'a-1.vercel.app', VERCEL_BRANCH_URL: 'a-git-b.vercel.app' });
   expect(preview.allowedOrigins).toEqual(['https://prod.example', 'https://a-1.vercel.app', 'https://a-git-b.vercel.app']);

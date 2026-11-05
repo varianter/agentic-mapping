@@ -4,7 +4,7 @@
   "routes": [{ "src": "/(.*)", "dest": "/api" }],
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{index.html,styles.css,client/{boot,fields,form,self,self-db,me-db,participant,app,db,import}.js,public/**}"
+      "includeFiles": "{index.html,styles.css,client/{boot,fields,form,participant,app,db,import}.js,public/**}"
     }
   }
 }

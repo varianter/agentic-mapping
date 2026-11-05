@@ -1,38 +1,62 @@
 import { initForm, downloadJson } from './form.js';
-import { loadMap, saveMap, clearMap } from './self-db.js';
 
-// My map: one browser-only map with the respondent's own answers. Never calls the server.
+// My map: the respondent's own answers. With interviewers enabled it is saved on the server, where they can
+// read it; without them nobody could, so it stays in this browser's IndexedDB.
+const serverSaved = 'adminEnabled' in document.body.dataset;
+const storage = await import(serverSaved ? './me-db.js' : './self-db.js');
 for (const element of document.querySelectorAll('[data-interviewer]')) element.remove();
 document.title = 'My map · Agentic mapping';
 document.getElementById('app').dataset.sidebar = 'closed';
 document.querySelector('.pill').textContent = 'My map';
-document.getElementById('self-sign-in').hidden = !('adminEnabled' in document.body.dataset);
+document.getElementById('self-sign-in').hidden = !serverSaved;
 
 const form = document.getElementById('sheet');
 const status = document.getElementById('save-status');
+const notice = document.querySelector('.self-notice');
+const clearButton = document.getElementById('self-clear');
 const { readForm, fillForm, markFilledDimensions } = initForm(form);
+const savedMessage = serverSaved ? 'Saved to server' : 'Saved in this browser';
 let saveTimer = null;
 let dirty = false;
 let saving = null;
+let conflicted = false;
+// Server only: 0 until the first save creates the map.
+let revision = 0;
 
 function setStatus(message, state = '') {
   status.textContent = message;
   status.dataset.state = state;
 }
 
+function showSource(source) {
+  const interview = source === 'interview';
+  document.querySelector('.pill').textContent = interview ? 'Your interview' : 'My map';
+  notice.textContent = !serverSaved
+    ? 'Saved only in this browser, never sent to the server'
+    : interview
+      ? 'Saved on the server. Your interviewer can read your answers.'
+      : 'Saved on the server, where Variant’s interviewers can read your answers. This browser remembers your map.';
+  // Interview answers belong to the interviewer's sheet; only an own map can be cleared.
+  clearButton.hidden = interview;
+}
+
 async function save() {
   clearTimeout(saveTimer);
   saveTimer = null;
   if (saving) await saving.catch(() => {});
-  if (!dirty) return;
+  if (!dirty || conflicted) return;
   dirty = false;
-  saving = saveMap(readForm());
+  const fields = readForm();
+  saving = serverSaved ? storage.saveMap(fields, revision).then((saved) => { revision = saved.revision; }) : storage.saveMap(fields);
   try {
     await saving;
-    if (!dirty) setStatus('Saved in this browser');
+    if (!dirty) setStatus(savedMessage);
   } catch (error) {
     dirty = true;
-    setStatus(`Could not save in this browser: ${error?.message ?? error} Keep this tab open, or download JSON or PDF.`, 'error');
+    conflicted = error?.status === 409;
+    setStatus(conflicted
+      ? `${error.message}`
+      : `Could not save: ${error?.message ?? error} Keep this tab open and keep typing to retry, or download JSON or PDF.`, 'error');
   } finally {
     saving = null;
   }
@@ -41,8 +65,9 @@ async function save() {
 form.addEventListener('input', () => {
   dirty = true;
   markFilledDimensions();
-  setStatus('Unsaved changes…');
   clearTimeout(saveTimer);
+  if (conflicted) return;
+  setStatus('Unsaved changes…');
   saveTimer = setTimeout(save, 400);
 });
 form.addEventListener('submit', (event) => event.preventDefault());
@@ -55,17 +80,19 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && dirty) save();
 });
 
-document.getElementById('self-clear').addEventListener('click', async () => {
-  if (!confirm('Clear your map from this browser? This can’t be undone.')) return;
+clearButton.addEventListener('click', async () => {
+  if (!confirm(serverSaved ? 'Delete your map from the server? This can’t be undone.' : 'Clear your map from this browser? This can’t be undone.')) return;
   clearTimeout(saveTimer);
   dirty = false;
   if (saving) await saving.catch(() => {});
   try {
-    await clearMap();
+    await storage.clearMap();
   } catch {
-    setStatus('Could not clear browser storage.', 'error');
+    setStatus(serverSaved ? 'Could not delete your map. Try again.' : 'Could not clear browser storage.', 'error');
     return;
   }
+  revision = 0;
+  conflicted = false;
   fillForm({});
   setStatus('Map cleared');
 });
@@ -79,9 +106,23 @@ document.getElementById('self-pdf').addEventListener('click', async () => {
   print();
 });
 
-try {
-  fillForm(await loadMap());
-} catch {
-  setStatus('Browser storage is unavailable. Your answers will not be kept after reload; download JSON or PDF.', 'error');
+showSource('self');
+if (serverSaved) {
+  try {
+    const saved = await storage.loadMap();
+    revision = saved.revision;
+    fillForm(saved.fields);
+    showSource(saved.source);
+    form.hidden = false;
+  } catch {
+    // Without the stored revision, a save could create a second map; keep the form closed.
+    setStatus('Could not load your map. Reload the page to try again.', 'error');
+  }
+} else {
+  try {
+    fillForm(await storage.loadMap());
+  } catch {
+    setStatus('Browser storage is unavailable. Your answers will not be kept after reload; download JSON or PDF.', 'error');
+  }
+  form.hidden = false;
 }
-form.hidden = false;

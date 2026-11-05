@@ -27,6 +27,7 @@
       <div class="sidebar-foot">
         <button type="button" class="btn" data-action="issue-access" data-needs-sheet disabled>Create / replace private link</button>
         <button type="button" class="btn" data-action="revoke-access" data-needs-sheet disabled>Revoke private link</button>
+        <a href="/submissions" id="view-switch">Self-submitted maps</a>
         <a href="guide.html">Interviewer guide</a>
         <button type="button" class="btn" data-action="retry" disabled>Retry storage</button>
         <button type="button" class="btn" data-action="export" data-needs-sheet disabled>Download JSON</button>
@@ -44,16 +45,11 @@
       <span class="save-status" id="save-status" role="status" aria-live="polite"></span>
       <span class="spacer"></span>
       <div class="self-actions" data-self-only>
-        <span class="self-notice">Saved only in this browser, never sent to the server</span>
+        <span class="self-notice"></span>
         <a href="/sign-in" id="self-sign-in" hidden>Interviewer sign-in</a>
         <button type="button" class="btn" id="self-clear">Clear</button>
         <button type="button" class="btn" id="self-export">Download JSON</button>
         <button type="button" class="btn" data-variant="primary" id="self-pdf">Download PDF</button>
-      </div>
-      <div class="participant-actions" data-participant-only>
-        <button type="button" class="btn" id="participant-reload" disabled>Reload saved</button>
-        <button type="button" class="btn" id="participant-export" disabled>Download draft</button>
-        <button type="button" class="btn" data-variant="primary" id="participant-save" disabled>Save answers</button>
       </div>
       <button type="button" class="btn" data-variant="danger" data-action="delete" data-needs-sheet data-interviewer disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
@@ -156,6 +152,19 @@
     <div class="actions">
       <button type="button" class="btn" id="copy-private-link">Copy private link</button>
       <button class="btn" value="close">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="connect-choice">
+  <form method="dialog">
+    <h2>You already have a map in this browser</h2>
+    <p id="connect-choice-text"></p>
+    <p>Merge keeps every answer; where both have one, the interview’s comes first.</p>
+    <div class="actions">
+      <button class="btn" value="interview">Keep interview answers</button>
+      <button class="btn" value="mine">Replace with my answers</button>
+      <button class="btn" data-variant="primary" value="merge" autofocus>Merge both</button>
     </div>
   </form>
 </dialog>

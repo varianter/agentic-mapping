@@ -9,12 +9,16 @@ import { RESPONDENT_FIELDS as RESPONDENT_FIELD_LIST } from '../client/fields.js'
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
   ['/participant', 'index.html'],
-  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
+  ['/submissions', 'index.html'],
+  ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
 const RESPONDENT_FIELDS = new Set<string>(RESPONDENT_FIELD_LIST);
 const SESSION_COOKIE = 'am_admin';
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
+// A random browser token (only its hash is stored) that finds this browser's own map or connected interview.
+const RESPONDENT_COOKIE = 'am_respondent';
+const RESPONDENT_MAX_AGE = 400 * 24 * 60 * 60;
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 const signInPage = (error = '') => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><title>Sign in · Agentic mapping</title>
@@ -29,6 +33,17 @@ const sameDigest = (a: string, b: string) => timingSafeEqual(Buffer.from(hashCre
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
 function participantView(row: any) {
   return { fields: Object.fromEntries(Object.entries(row.fields).filter(([key, value]) => RESPONDENT_FIELDS.has(key) && typeof value === 'string')), revision: row.revision };
+}
+const sourceOf = (sheet: any) => sheet.source ?? 'interview';
+const validAnswers = (body: any) => Boolean(body) && typeof body === 'object' && Object.keys(body).every((key) => ['fields', 'revision'].includes(key))
+  && body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)
+  && Object.entries(body.fields).every(([key, value]) => RESPONDENT_FIELDS.has(key) && typeof value === 'string');
+// Per answer: an empty side takes the other; differing answers keep both, the interview's first.
+function mergeAnswers(interview: Record<string, string>, mine: Record<string, string>) {
+  return Object.fromEntries(RESPONDENT_FIELD_LIST.map((key) => {
+    const [ours, theirs] = [interview[key] ?? '', mine[key] ?? ''];
+    return [key, !theirs.trim() || ours.trim() === theirs.trim() ? ours : !ours.trim() ? theirs : `${ours}\n\n${theirs}`];
+  }));
 }
 const root = resolve(import.meta.dir, '..');
 const validId = (id: unknown) => typeof id === 'string' && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id);
@@ -66,15 +81,18 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     c.header('X-Frame-Options', 'DENY');
     if (httpsOrigins) c.header('Strict-Transport-Security', 'max-age=31536000');
   });
-  const participantPath = (path: string) => path === '/participant' || path === '/api/participant' || path.startsWith('/api/participant/');
+  // Respondent routes never use interviewer authentication.
+  const respondentPath = (path: string) => path === '/participant' || path === '/api/me' || path === '/api/participant' || path.startsWith('/api/participant/');
   const serveFiles = () => {
     app.get('*', async (c) => {
       const file = PUBLIC_FILES.get(c.req.path);
-      if (!file || (!session && c.req.path === '/participant')) return c.notFound();
+      if (!file || (!session && ['/participant', '/submissions'].includes(c.req.path))) return c.notFound();
+      if (c.req.path === '/submissions' && !c.get('admin')) return c.redirect('/sign-in', 303);
       const asset = Bun.file(resolve(root, file));
       if (file === 'index.html') {
         const mode = c.req.path === '/participant' ? 'participant' : c.get('admin') ? 'interviewer' : 'self';
-        return c.html((await asset.text()).replace('data-mode=""', `data-mode="${mode}"${session ? ' data-admin-enabled' : ''}`));
+        const view = c.req.path === '/submissions' ? ' data-view="submissions"' : '';
+        return c.html((await asset.text()).replace('data-mode=""', `data-mode="${mode}"${view}${session ? ' data-admin-enabled' : ''}`));
       }
       return new Response(asset, { headers: { 'Content-Type': asset.type } });
     });
@@ -89,16 +107,19 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
   app.use('*', async (c, next) => {
     const cookie = getCookie(c, SESSION_COOKIE);
     c.set('admin', Boolean(cookie && sameDigest(cookie, session)));
-    if (participantPath(c.req.path) || !c.req.path.startsWith('/api/')) return next();
+    if (respondentPath(c.req.path) || !c.req.path.startsWith('/api/')) return next();
     // A participant credential never falls through to interviewer authentication,
     // even when the browser also has an admin cookie.
     if (/^Bearer(?:\s|$)/i.test(c.req.header('Authorization') ?? '')) return c.json({ error: 'Access denied.' }, 403);
     if (!c.get('admin')) return c.json({ error: 'Sign in as interviewer.' }, 401);
     await next();
   });
+  const secureCookie = (c: Context) => new URL(c.req.url).protocol === 'https:' || httpsOrigins;
   const setSession = (c: Context, value: string, maxAge: number) => setCookie(c, SESSION_COOKIE, value, {
-    httpOnly: true, sameSite: 'Strict', path: '/', maxAge,
-    secure: new URL(c.req.url).protocol === 'https:' || httpsOrigins,
+    httpOnly: true, sameSite: 'Strict', path: '/', maxAge, secure: secureCookie(c),
+  });
+  const setRespondent = (c: Context, token: string) => setCookie(c, RESPONDENT_COOKIE, token, {
+    httpOnly: true, sameSite: 'Strict', path: '/', maxAge: RESPONDENT_MAX_AGE, secure: secureCookie(c),
   });
   app.get('/sign-in', (c) => (c.get('admin') ? c.redirect('/', 303) : c.html(signInPage())));
   app.post('/sign-in', async (c) => {
@@ -110,7 +131,7 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
   });
   app.post('/sign-out', (c) => {
     if (!sameOriginForm(c)) return c.json({ error: 'Cross-site sign-out is not allowed.' }, 403);
-    deleteCookie(c, SESSION_COOKIE, { path: '/', secure: new URL(c.req.url).protocol === 'https:' || httpsOrigins });
+    deleteCookie(c, SESSION_COOKIE, { path: '/', secure: secureCookie(c) });
     return c.redirect('/', 303);
   });
   app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Sheet exceeds 1 MB.' }, 413) }));
@@ -122,6 +143,15 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     await next();
   });
   const publicSheet = ({ linkHash: _linkHash, ...sheet }: any) => sheet;
+  // A binding counts only while its sheet exists and, for interviews, the link that connected it is still current.
+  const respondentBinding = async (c: Context) => {
+    const token = /^[a-f0-9]{64}$/.exec(getCookie(c, RESPONDENT_COOKIE) ?? '')?.[0];
+    if (!token) return null;
+    const key = `respondent:${hashCredential(token)}`;
+    const binding = await store.get(key);
+    const sheet = binding && await store.get(`sheet:${binding.sheetId}`);
+    return { token, key, sheet: sheet && (binding.linkHash === undefined || sheet.linkHash === binding.linkHash) ? sheet : null };
+  };
   const linkedSheet = async (authorization?: string) => {
     const credential = /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1];
     if (!credential) return null;
@@ -138,11 +168,7 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     const authorization = c.req.header('Authorization');
     if (!await linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
     const body = await c.req.json().catch(() => null);
-    if (!body || Object.keys(body).some((key) => !['fields', 'revision'].includes(key)) || !validRevision(body.revision)
-      || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields)
-      || Object.entries(body.fields).some(([key, value]) => !RESPONDENT_FIELDS.has(key) || typeof value !== 'string')) {
-      return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
-    }
+    if (!validAnswers(body) || !validRevision(body.revision)) return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
     // Recheck after reading the body, immediately before the write.
     const stored = await linkedSheet(authorization);
     if (!stored) return c.json({ error: 'Link unavailable.' }, 404);
@@ -151,8 +177,76 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     await store.set(`sheet:${saved.id}`, saved);
     return c.json(participantView(saved));
   });
+  // A link connects this browser to its interview. A browser's own map with answers needs an explicit choice first:
+  // merge both, keep the interview's answers or replace them with the browser's. The own map is then deleted.
+  app.post('/api/participant/connect', async (c) => {
+    const authorization = c.req.header('Authorization');
+    if (!await linkedSheet(authorization)) return c.json({ error: 'Link unavailable.' }, 404);
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Object.keys(body).some((key) => key !== 'choice')
+      || (body.choice !== undefined && !['merge', 'interview', 'mine'].includes(body.choice))) return c.json({ error: 'Choose merge, interview or mine.' }, 400);
+    // Recheck after reading the body, immediately before any write.
+    const stored = await linkedSheet(authorization);
+    if (!stored) return c.json({ error: 'Link unavailable.' }, 404);
+    const binding = await respondentBinding(c);
+    const own = binding?.sheet && sourceOf(binding.sheet) === 'self' && binding.sheet.id !== stored.id ? binding.sheet : null;
+    const mine: Record<string, string> = own ? participantView(own).fields : {};
+    const hasAnswers = Object.values(mine).some((value) => value.trim());
+    if (hasAnswers && !body.choice) return c.json({ needsChoice: true, mine, interview: participantView(stored).fields });
+    if (hasAnswers && body.choice !== 'interview') {
+      const answers = body.choice === 'merge' ? mergeAnswers(participantView(stored).fields, mine) : Object.fromEntries(RESPONDENT_FIELD_LIST.map((key) => [key, mine[key] ?? '']));
+      await store.set(`sheet:${stored.id}`, { ...stored, fields: { ...stored.fields, ...answers }, updatedAt: Date.now(), revision: stored.revision + 1 });
+    }
+    const token = binding?.token ?? randomBytes(32).toString('hex');
+    await store.set(`respondent:${hashCredential(token)}`, { sheetId: stored.id, linkHash: stored.linkHash });
+    if (own) await store.del(`sheet:${own.id}`, ...(own.linkHash ? [`link:${own.linkHash}`] : []));
+    setRespondent(c, token);
+    return c.json({ connected: true });
+  });
   app.all('/api/participant/*', (c) => c.json({ error: 'Link unavailable.' }, 404));
   app.all('/api/participant', (c) => c.json({ error: 'Link unavailable.' }, 404));
+
+  // ---------- My map: the browser's own answers, or the interview a link connected it to ----------
+  const meView = (sheet: any) => ({ ...participantView(sheet), source: sourceOf(sheet) });
+  const noMap = { fields: {}, revision: 0, source: 'self' };
+  app.use('/api/me', async (c, next) => {
+    if (c.req.header('Authorization')) return c.json({ error: 'Access denied.' }, 403);
+    await next();
+  });
+  app.get('/api/me', async (c) => {
+    const binding = await respondentBinding(c);
+    return c.json(binding?.sheet ? meView(binding.sheet) : noMap);
+  });
+  app.put('/api/me', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!validAnswers(body) || !(body.revision === 0 || validRevision(body.revision))) return c.json({ error: 'Only approved answer fields and a revision are allowed.' }, 400);
+    const binding = await respondentBinding(c);
+    const stored = binding?.sheet;
+    if ((stored?.revision ?? 0) !== body.revision) return c.json({ error: 'Your map changed elsewhere or is no longer available. Download JSON to keep this draft, then reload.' }, 409);
+    if (!stored) {
+      // The first save creates the map and the browser token; empty visits store nothing.
+      const now = Date.now();
+      const created = { id: crypto.randomUUID(), source: 'self', fields: body.fields, createdAt: now, updatedAt: now, revision: 1 };
+      const token = binding?.token ?? randomBytes(32).toString('hex');
+      await store.set(`sheet:${created.id}`, created);
+      await store.set(`respondent:${hashCredential(token)}`, { sheetId: created.id });
+      setRespondent(c, token);
+      return c.json(meView(created), 201);
+    }
+    // Only answer fields change; interviewer notes on the same sheet are kept.
+    const saved = { ...stored, fields: { ...stored.fields, ...body.fields }, updatedAt: Date.now(), revision: stored.revision + 1 };
+    await store.set(`sheet:${saved.id}`, saved);
+    setRespondent(c, binding.token);
+    return c.json(meView(saved));
+  });
+  app.delete('/api/me', async (c) => {
+    const binding = await respondentBinding(c);
+    if (binding?.sheet && sourceOf(binding.sheet) !== 'self') return c.json({ error: 'Interview answers can’t be cleared here.' }, 409);
+    if (binding?.sheet) await store.del(`sheet:${binding.sheet.id}`, ...(binding.sheet.linkHash ? [`link:${binding.sheet.linkHash}`] : []));
+    if (binding) await store.del(binding.key);
+    deleteCookie(c, RESPONDENT_COOKIE, { path: '/', secure: secureCookie(c) });
+    return c.body(null, 204);
+  });
 
   app.post('/api/sheets/:id/access', async (c) => {
     const sheet = await store.get(`sheet:${c.req.param('id')}`);
@@ -176,8 +270,9 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     return c.body(null, 204);
   });
   app.get('/api/sheets', async (c) => {
+    const source = c.req.query('source');
     const sheets = await Promise.all((await store.keys('sheet:')).map((key) => store.get(key)));
-    return c.json(sheets.filter(Boolean).map(publicSheet));
+    return c.json(sheets.filter((sheet) => sheet && (!source || sourceOf(sheet) === source)).map(publicSheet));
   });
   app.get('/api/sheets/:id', async (c) => {
     const sheet = await store.get(`sheet:${c.req.param('id')}`);
@@ -195,7 +290,7 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
         ? c.json(publicSheet(existing), 200)
         : c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
     }
-    const created = { id: sheet.id, fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 };
+    const created = { id: sheet.id, source: 'interview', fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 };
     await store.set(`sheet:${sheet.id}`, created);
     return c.json(created, 201);
   });

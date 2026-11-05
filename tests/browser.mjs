@@ -170,6 +170,32 @@ try {
   assert.deepEqual(errors, []);
   await checkParticipantFlow({ browser, context, baseURL, directory, store });
 
+  // Self-submitted maps are listed on the admin-only /submissions page, not among interviews.
+  const visitorContext = await browser.newContext();
+  const visitor = await visitorContext.newPage();
+  await visitor.goto(baseURL);
+  await visitor.waitForFunction(() => !document.getElementById('sheet').hidden);
+  await visitor.locator('[name="advice"]').fill('Synthetic submitted advice');
+  await visitor.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved to server');
+  await visitor.goto(`${baseURL}/submissions`);
+  await visitor.waitForURL(`${baseURL}/sign-in`);
+  await visitorContext.close();
+  const submittedId = (await Promise.all((await store.keys('sheet:')).map((key) => store.get(key)))).find((sheet) => sheet.source === 'self').id;
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(baseURL);
+  await page.waitForFunction(() => !document.getElementById('sheet').inert && document.querySelectorAll('#sheet-list a').length > 0);
+  assert.equal(await page.locator(`#sheet-list a[data-id="${submittedId}"]`).count(), 0);
+  await page.locator('#view-switch').click();
+  await page.waitForURL(`${baseURL}/submissions#${submittedId}`);
+  await page.waitForFunction(() => document.querySelector('[name="advice"]').value === 'Synthetic submitted advice');
+  assert.equal(await page.locator('#model-list-label').textContent(), 'Self-submitted maps');
+  assert.equal(await page.locator('[data-action="new"], [data-action="issue-access"]').count(), 0);
+  assert.equal(await page.locator(`#sheet-list a[data-id="${submittedId}"]`).count(), 1);
+  await page.locator('[data-action="delete"]').click();
+  await page.locator('#confirm-delete [value="delete"]').click();
+  await page.locator('#empty').waitFor({ state: 'visible' });
+  console.log('Submissions page passed');
+
   // Signing out returns to My map; the interview list is gone.
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(baseURL);

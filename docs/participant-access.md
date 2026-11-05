@@ -15,7 +15,9 @@ This remains one feature: backend authorization, isolated participant UI and sec
 - Anyone holding the link can edit the 27 dimension/grid fields and `good`, `surprised`, `missing`, `advice`. Identity, context, discipline and follow-up contacts remain private.
 - The owner can issue a replacement or revoke access; replacement invalidates the old credential immediately. Since 2026-11-05 links last until replaced or revoked; links issued earlier keep their seven-day expiry.
 - Deliver the random credential only in a URL fragment; participant API requests use an Authorization header. Store only its SHA-256 hash in SQLite. Do not persist it in browser storage or send it in HTTP URLs.
-- Participant saves require an explicit action and a matching revision. Failures retain the draft; conflicts require an explicit reload and manual reconciliation. No automatic retry or merge.
+- Since 2026-11-05 opening a link connects the browser: `POST /api/participant/connect` sets an HttpOnly `am_respondent` cookie whose hash is stored at `respondent:<hash>` as `{ sheetId, linkHash }`. The browser then edits the interview as My map at `/` through `/api/me`, with autosave and a matching revision. Replacing or revoking the link disconnects those browsers.
+- If the browser already has its own map with answers, the respondent chooses: merge (an empty side takes the other; differing answers keep both, the interview's first), keep the interview's answers, or replace them with their own. The own map is then deleted.
+- Saves need a matching revision. Conflicts keep the draft and need a reload.
 - A production operator must provision HTTPS, private account configuration, durable storage and backups. A host deployment and a real-user seven-day completion-window trial remain operational handoff steps.
 
 ## Acceptance evidence

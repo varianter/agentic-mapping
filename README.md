@@ -6,13 +6,15 @@ Three modes, one name each:
 
 | Mode | Route | Who | Storage | Can do |
 | --- | --- | --- | --- | --- |
-| **My map** (`self`) | `/` | Anyone without the admin cookie | One map in browser IndexedDB, never sent to the server | Fill in your own answers, clear, download JSON or PDF |
-| **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; create, replace or revoke private links; sign out |
-| **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Fill in and save their interview, come back later until the link is revoked |
+| **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie. Without `ADMIN_KEY`: browser IndexedDB, never sent to the server | Fill in your own answers (autosaved), clear, download JSON or PDF |
+| **Interviewer** | `/` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews; PDF/JSON; create, replace or revoke private links; read and edit self-submitted maps at `/submissions`; sign out |
+| **Participant** | `/participant#<credential>` | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the link is replaced or revoked |
 
 `/guide.html` is the static interviewer guide.
 
-Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/participant` and `/api/*` return 404 and no store is needed.
+Opening a link in a browser that already has its own map asks whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
+
+Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/participant`, `/submissions` and `/api/*` return 404 and no store is needed.
 
 ## Run
 
@@ -59,10 +61,11 @@ server/store.ts    Upstash and memory/JSON-file stores
 api/index.ts       Vercel entry
 client/boot.js     Starts the mode the server marked: self, interviewer or participant
 client/self.js     My map
-client/self-db.js  My map's IndexedDB record
+client/me-db.js    My map on the server (/api/me)
+client/self-db.js  My map's IndexedDB record (self-only)
 client/app.js      Interviewer editor
 client/db.js       Interview API adapter
-client/participant.js Participant page
+client/participant.js Connects a browser to its interview through a private link
 client/fields.js   Respondent fields, shared with the server
 client/form.js     Shared grids and tabs
 index.html, guide.html, styles.css
@@ -78,7 +81,7 @@ tests/             Bun and Playwright tests
 
 **Preview deployments share production data.** Only share preview URLs and the admin key with people allowed to see production.
 
-Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in` and participant requests.
+Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `/api/me` and participant requests. Anyone can create a self-submitted map, so rate limiting matters.
 
 ## Docs
 

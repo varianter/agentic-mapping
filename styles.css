@@ -219,7 +219,6 @@ body:is([data-self], [data-participant]) .reflect { grid-template-columns: repea
 .self-actions { align-items: center; flex-wrap: wrap; gap: 8px; }
 .self-notice { font-size: 0.85rem; }
 @media print { [data-self-only] { display: none !important; } }
-.participant-actions { flex-wrap: wrap; gap: 8px; }
 #private-link-value { width: 100%; min-width: 0; font: inherit; }
 
 @media (max-width: 600px) {

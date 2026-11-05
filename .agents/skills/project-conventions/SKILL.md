@@ -14,7 +14,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 
 ## Product
 
-- What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. A 3×3 grid per dimension (Individual, Team, Organization). Three modes: `self` (anonymous, one **My map** in browser IndexedDB with respondent fields only), `interviewer` (admin cookie; interviews autosave to Upstash Redis, or a local JSON file in dev) and `participant` (private link, respondent fields only). PDF and JSON downloads in self and interviewer modes.
+- What it is: browser-based capture sheets and an interviewer guide for Variant's "agentic mapping" interviews. A 3×3 grid per dimension (Individual, Team, Organization). Three modes: `self` (anonymous, one **My map** with respondent fields only, saved on the server through `/api/me` and an HttpOnly `am_respondent` browser cookie; IndexedDB only without `ADMIN_KEY`), `interviewer` (admin cookie; interviews autosave to Upstash Redis, or a local JSON file in dev; self-submitted maps at `/submissions`) and `participant` (a private link connects the browser to its interview, then it is edited as My map at `/`). PDF and JSON downloads in self and interviewer modes.
 - Primary users: Variant interviewers running mapping sessions.
 - Language of what users see: English.
 - The app needs a Bun host. `ADMIN_KEY` is optional: without it the app is self-only and needs no store; with it, it needs Upstash Redis KV variables or a local JSON file (see README). `/` is self mode until sign-in at `/sign-in`.
@@ -24,7 +24,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 - Language and runtime: Bun/TypeScript on the server; plain HTML, CSS and vanilla JavaScript ES modules in the browser. No framework, no bundler, no TypeScript in the browser.
 - Main parts:
   - `index.html` + `client/boot.js`: starts the server-marked mode (`data-mode`): `client/self.js`, `client/app.js` (interviewer) or isolated `client/participant.js`; `client/form.js` shares grids/tabs/plain-text form values; `client/fields.js` holds `RESPONDENT_FIELDS`, also imported by the server.
-  - `client/db.js`: same-origin interview API adapter; `client/self-db.js` stores My map in IndexedDB `agentic-mapping-self`.
+  - `client/db.js`: same-origin interview API adapter; `client/me-db.js`: My map on the server (`/api/me`); `client/self-db.js` stores My map in IndexedDB `agentic-mapping-self` in self-only mode.
   - `guide.html`: static interviewer guide.
   - `styles.css`: Variant tokens, layout and `@media print` styles for both pages.
   - `server.ts` + `server/app.ts`: Hono API on Bun, a key-value `Store` (`server/store.ts`: Upstash adapter, Map/JSON-file adapter with `failWrites` for tests), cookie sign-in (`/sign-in` sets HttpOnly `am_admin` = HMAC of `ADMIN_KEY`) and an exact public-file allowlist.
@@ -50,10 +50,11 @@ Run the API suite, syntax checks and browser checks before finishing. `.github/w
 ```
 index.html        capture sheet page (markup + <template id="matrix-template">)
 client/boot.js    starts the server-marked mode: self, interviewer or participant
-client/self.js    My map: one browser-only map, no server calls
-client/self-db.js My map's single IndexedDB record
+client/self.js    My map: server-saved (me-db.js), or browser-only without ADMIN_KEY (self-db.js)
+client/me-db.js   My map API adapter: loadMap, saveMap, clearMap over /api/me
+client/self-db.js My map's single IndexedDB record (self-only mode)
 client/app.js     interviewer editor
-client/participant.js isolated bearer access, explicit saves and draft recovery
+client/participant.js connects the browser to its interview via the link, with the merge choice
 client/fields.js  RESPONDENT_FIELDS, shared with the server
 client/form.js    shared dimensions, tabs and form values
 client/db.js      interview API adapter: allSheets, getSheet, createSheet, putSheet, deleteSheet
@@ -74,24 +75,25 @@ tests/            Bun API tests and Playwright browser checks
 - DOM: build UI with `document.createElement` and `<template>` clones, not `innerHTML` with user data. Delegated clicks use `data-action="…"`.
 - State in CSS: use data attributes and ARIA (`data-variant`, `data-state`, `data-sidebar`, `aria-selected`) rather than toggling classes.
 - Styling: use the `:root` tokens in `styles.css` (`--yellow`, `--ink`, `--paper`, `--danger`…). Britti Sans comes from the Varde CDN. Keep the print layout working (A4 landscape).
-- Data: one JSON value per sheet at `sheet:<id>`: `{ id, fields, createdAt, updatedAt, revision, linkHash? }` (no owner; `linkHash` is never returned by the API). Keys are `sheet:*` and `link:<hash>`. Preserve grid field names (`team_why_next`, etc.). Updates/deletes check the revision before writing (read-check-write, not atomic); never upsert deleted sheets. My map is one record (`me`) in IndexedDB `agentic-mapping-self`/`map` holding only respondent fields; acknowledge only transaction completion.
-- Participant access: `/api/participant` accepts a bearer header and returns only approved string fields plus revision. `link:<hash>` keys hold `{ sheetId }` and last until replaced or revoked (older links keep a seven-day TTL); issue/revoke need the admin cookie. Keep participant code independent of interviewer storage; no automatic participant saves/retries or persistent browser credentials.
+- Data: one JSON value per sheet at `sheet:<id>`: `{ id, source, fields, createdAt, updatedAt, revision, linkHash? }` (no owner; `source` is `self` or `interview`, missing means `interview`; `linkHash` is never returned by the API). Keys are `sheet:*`, `link:<hash>` and `respondent:<hash>` = `{ sheetId, linkHash? }` (a browser cookie's binding; stale when the sheet is gone or its link changed). Preserve grid field names (`team_why_next`, etc.). Updates/deletes check the revision before writing (read-check-write, not atomic); never upsert deleted sheets. In self-only mode My map is one record (`me`) in IndexedDB `agentic-mapping-self`/`map` holding only respondent fields; acknowledge only transaction completion.
+- Participant access: `/api/participant` accepts a bearer header and returns only approved string fields plus revision; `POST /api/participant/connect` binds the browser's `am_respondent` cookie to the interview (asking for `merge`/`interview`/`mine` first if the browser has its own map with answers). `link:<hash>` keys hold `{ sheetId }` and last until replaced or revoked (older links keep a seven-day TTL); issue/revoke need the admin cookie. Keep participant code independent of interviewer storage. The link credential itself is never stored in the browser; only the separate HttpOnly respondent cookie persists.
 - Error handling: catch storage failures and show them in the toolbar status via `setStatus(message, 'error')`. Wrap `localStorage` access in `try/catch`.
 - Accessibility: keep roles, `aria-*` attributes, keyboard support on tabs and visible labels (`.visually-hidden` text) intact.
 - Tests: use Bun tests for API/persistence and Playwright for browser saves/recovery; keep fixtures synthetic and use `memoryStore()` per test; never pass KV variables to tests.
 - Commits: Conventional Commits (`feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`) with a scope.
-- Do not: add a framework, frontend bundler/build step or browser runtime npm dependencies; serve arbitrary repository files or credentials; fall back silently from server mode to browser-only saves. The server marks `/` with the verified mode; `POST /sign-in` sets the cookie and redirects to `/`. Self mode never calls the server. Keep drafts printable on storage failure.
+- Do not: add a framework, frontend bundler/build step or browser runtime npm dependencies; serve arbitrary repository files or credentials; fall back silently from server mode to browser-only saves. The server marks `/` with the verified mode; `POST /sign-in` sets the cookie and redirects to `/`. Self mode calls only `/api/me`, and nothing at all without `ADMIN_KEY`. Keep drafts printable on storage failure.
 
 ## Decisions
 
 - 2026-11-04: PR #10 human review requested implementation beyond the documentation spike. Use the existing Bun/Hono runtime (storage later moved to Upstash Redis in #16); #15 replaced named accounts with one `ADMIN_KEY` (Basic password, username ignored; Bearer stays for participant links); Pages exporter later removed in #18.
 - 2026-11-04: Issue #6 accepted link-only possession and the default 27 grid fields plus `good`, `surprised`, `missing`, `advice`; the admin issues/replaces/revokes seven-day links. `tests/participant.test.ts` and `tests/participant-browser.mjs` cover the restricted API and fresh-browser handoff; the existing check/browser commands include the new modules and checks.
 - 2026-11-04: Issue #12 restores full anonymous editing at `/` with profile/origin-local IndexedDB, preserving authenticated server CRUD and participant isolation.
+- 2026-11-05: Anonymous maps are saved on the server for the admin (`/submissions`), found again through an HttpOnly cookie rather than a fingerprint; links connect a browser to its interview, with a merge/keep/replace choice for an existing own map. Browser-only IndexedDB remains only without `ADMIN_KEY`; old IndexedDB maps are ignored. `tests/respondent.test.ts` covers the API.
 - 2026-11-05: Three modes (self, interviewer, participant). Cookie sign-in replaces Basic auth; `ADMIN_KEY` optional (self-only without it); one My map replaces the anonymous model list and `/preview`; save-local upload removed; links last until revoked. `tests/self-browser.mjs` covers self mode; browser tests sign in through the form.
 
 ## Gotchas
 
-- New app assets must be added to the exact allowlist in `server/app.ts`.
+- New app assets must be added to the exact allowlist in `server/app.ts` and to `includeFiles` in `vercel.json` (`tests/vercel.test.ts` checks the latter).
 - Server data lives in Upstash (`KV_REST_API_URL`/`KV_REST_API_TOKEN`); without them it goes to a local JSON file, which is not durable on Vercel. Tests construct `memoryStore()` directly; never put real KV variables in test code paths.
 - `ADMIN_KEY` is optional but must be 32+ chars when set; never log it, put it in a cookie or add it to the public allowlist.
 - The app sends `Referrer-Policy: no-referrer`, so browsers post forms with `Origin: null`; `/sign-in` and `/sign-out` also accept `Sec-Fetch-Site: same-origin`.

@@ -15,7 +15,7 @@ async function request(path = '', method = 'GET', body) {
   }
   return response.status === 204 ? undefined : response.json();
 }
-export const allSheets = () => request();
+export const allSheets = (source) => request(source ? `?source=${source}` : '');
 export const getSheet = (id) => request(`/${encodeURIComponent(id)}`);
 export const createSheet = (sheet) => request('', 'POST', sheet);
 export const putSheet = (sheet) => request(`/${encodeURIComponent(sheet.id)}`, 'PUT', sheet);

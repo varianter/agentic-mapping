@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { RESPONDENT_FIELDS } from '../client/fields.js';
 
-// My map: one browser-only map with respondent fields, no interviews and no server calls.
+// My map: one map with respondent fields and no interviews. With interviewers enabled it is saved on the
+// server through /api/me only; in self-only mode it stays in the browser with no server calls.
 export async function checkSelfFlow({ browser, baseURL, directory, store, adminEnabled = true }) {
   const errors = [];
   const apiRequests = [];
@@ -12,9 +13,10 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
   context.on('page', (page) => page.on('pageerror', (error) => errors.push(error.message)));
   context.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.pathname.startsWith('/api/') || ['/client/app.js', '/client/db.js', '/client/participant.js'].includes(url.pathname)) apiRequests.push(url.pathname);
+    if ((url.pathname.startsWith('/api/') && !(adminEnabled && url.pathname === '/api/me')) || ['/client/app.js', '/client/db.js', '/client/participant.js'].includes(url.pathname)) apiRequests.push(url.pathname);
   });
-  const saved = (page) => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved in this browser');
+  const savedText = adminEnabled ? 'Saved to server' : 'Saved in this browser';
+  const saved = (page) => page.waitForFunction((text) => document.getElementById('save-status').textContent === text, savedText);
   const page = await context.newPage();
   try {
     await page.goto(baseURL);
@@ -22,6 +24,7 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
     assert.equal(await page.locator('.pill').textContent(), 'My map');
     assert.equal(await page.locator('#sidebar, [data-action="new"], #sheet-list').count(), 0);
     assert.equal(await page.locator('#self-sign-in').isVisible(), adminEnabled);
+    assert.match(await page.locator('.self-notice').textContent(), adminEnabled ? /interviewers can read your answers/ : /never sent to the server/);
     // Only the respondent's own answers are on the page.
     const names = await page.evaluate(() => [...new Set([...document.getElementById('sheet').elements].map((el) => el.name).filter(Boolean))]);
     assert.deepEqual(names.toSorted(), [...RESPONDENT_FIELDS].toSorted());
@@ -31,6 +34,7 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
     await page.locator('[name="org_found_next"]').fill('Synthetic org answer');
     await page.locator('[name="advice"]').fill('Synthetic self advice');
     await saved(page);
+    if (store) assert.equal((await store.keys('sheet:')).length, serverCount + 1);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('[name="advice"]').value === 'Synthetic self advice');
     assert.equal(await page.locator('[name="ind_learn_start"]').inputValue(), 'Synthetic self answer');
@@ -72,9 +76,10 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(apiRequests, []);
+    // Clearing deletes the server copy too.
     if (store) assert.equal((await store.keys('sheet:')).length, serverCount);
     assert.deepEqual(errors, []);
-    console.log(`Self browser passed${adminEnabled ? '' : ' (self-only server)'}: one map, respondent fields only, reload, separate profiles, JSON, PDF, clear, mobile; no server calls.`);
+    console.log(`Self browser passed${adminEnabled ? ' (server-saved)' : ' (self-only server, no server calls)'}: one map, respondent fields only, reload, separate profiles, JSON, PDF, clear, mobile.`);
   } finally {
     await context.close();
   }

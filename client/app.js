@@ -14,6 +14,9 @@ export function initEditor(storage) {
   const toggle = document.getElementById('toggle-sidebar');
   const confirmDelete = document.getElementById('confirm-delete');
   const narrow = matchMedia('(max-width: 900px)');
+  // /submissions lists maps people filled in on their own; / lists interviews.
+  const submissions = document.body.dataset.view === 'submissions';
+  const source = submissions ? 'self' : 'interview';
 
   let current = null; // the interview being edited
   let saveTimer = null;
@@ -24,6 +27,19 @@ export function initEditor(storage) {
   let actionPending = false;
 
   const { readForm, fillForm, markFilledDimensions } = initForm(form);
+
+  if (submissions) {
+    for (const element of document.querySelectorAll('[data-action="new"], [data-action="issue-access"], [data-action="revoke-access"]')) element.remove();
+    document.title = 'Self-submitted maps · Agentic mapping';
+    document.getElementById('sidebar').setAttribute('aria-label', 'Self-submitted maps');
+    document.getElementById('model-list-label').textContent = 'Self-submitted maps';
+    listEmpty.textContent = 'No self-submitted maps yet.';
+    empty.querySelector('h2').textContent = 'No self-submitted maps yet';
+    empty.querySelector('p').textContent = 'Maps people fill in on their own, without an interview link, show up here.';
+    const viewSwitch = document.getElementById('view-switch');
+    viewSwitch.href = '/';
+    viewSwitch.textContent = 'Interviews';
+  }
 
   const displayName = (sheet) => sheet.fields?.name?.trim() || 'Untitled';
 
@@ -104,7 +120,7 @@ export function initEditor(storage) {
   // ---------- Sidebar list ----------
 
   async function renderList() {
-    const sheets = await allSheets();
+    const sheets = await allSheets(source);
     sheets.sort((a, b) => {
       const an = a.fields?.name?.trim(), bn = b.fields?.name?.trim();
       if (!an !== !bn) return an ? -1 : 1; // untitled last
@@ -121,7 +137,8 @@ export function initEditor(storage) {
       const meta = document.createElement('span');
       meta.className = 'sheet-meta';
       const disciplines = [...(sheet.fields?.discipline ?? []), sheet.fields?.discipline_other].filter(Boolean);
-      meta.textContent = [sheet.fields?.date, disciplines.join(', ')].filter(Boolean).join(' · ') || 'No details yet';
+      meta.textContent = [sheet.fields?.date, disciplines.join(', ')].filter(Boolean).join(' · ')
+        || (submissions ? `Updated ${new Date(sheet.updatedAt).toISOString().slice(0, 10)}` : 'No details yet');
       a.append(name, meta);
       li.append(a);
       renderListItemName(sheet, a);

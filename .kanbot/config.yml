@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./config.schema.json
 
-provider: codex
+provider: claude
 repo: varianter/agentic-mapping
 baseBranch: main
 identity:

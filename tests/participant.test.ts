@@ -1,5 +1,8 @@
-import { expect, spyOn, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApp } from '../server/app';
 import { memoryStore } from '../server/store';
 
@@ -9,8 +12,12 @@ const approved = [
   ...['ind', 'team', 'org'].flatMap((dimension) => ['learn', 'why', 'found'].flatMap((question) => ['start', 'good', 'next'].map((level) => `${dimension}_${question}_${level}`))),
   'good', 'surprised', 'missing', 'advice',
 ];
-function setup() {
-  const store = memoryStore();
+const directories: string[] = [];
+afterEach(() => {
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+function setup(file?: string) {
+  const store = memoryStore(file);
   const instance = { ...createApp({ store, adminKey, publicOrigin: origin }), store };
   const send = (path: string, method = 'GET', body?: unknown, authorization?: string) => instance.app.request(`${origin}${path}`, {
     method,
@@ -53,8 +60,11 @@ test('only the admin issues, replaces and revokes credentials, storing only a 25
   expect(await linkKeys()).toEqual([]);
 });
 
-test('participant projection and patch preserve private fields and persist for the interviewer', async () => {
-  const instance = setup();
+test('participant projection and patch preserve private fields and persist for the interviewer after restart', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mapping-'));
+  directories.push(directory);
+  const file = join(directory, 'store.json');
+  const instance = setup(file);
   const sheet = await createSheet(instance);
   const { credential } = await instance.issue(sheet.id);
   const view = await (await instance.participant(credential)).json();
@@ -67,7 +77,7 @@ test('participant projection and patch preserve private fields and persist for t
   expect(saved.fields.good).toBe('<script>synthetic inert answer</script>');
   expect(Object.keys(saved).sort()).toEqual(['fields', 'revision']);
   expect(saved.revision).toBe(2);
-  const reopened = instance;
+  const reopened = setup(file);
   const ownerResponse = await reopened.app.request(`${origin}/api/sheets/${sheet.id}`, { headers: { Authorization: `Basic ${btoa(`admin:${adminKey}`)}` } });
   expect((await ownerResponse.json()).fields).toEqual({ ...sheet.fields, good: saved.fields.good });
   const participantResponse = await reopened.app.request(`${origin}/api/participant`, { headers: { Authorization: `Bearer ${credential}` } });

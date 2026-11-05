@@ -1,18 +1,9 @@
 import { initForm, downloadJson } from './form.js';
-import { filledLocalModels, saveLocalModels } from './save-local.js';
 
-export function initEditor(storage, { localMode, localStore }) {
+// Interviewer editor: server-stored interviews, private links and PDFs.
+export function initEditor(storage) {
   const { allSheets, getSheet, createSheet, putSheet, deleteSheet, issueAccess, revokeAccess } = storage;
-  const savedMessage = localMode ? 'Saved in this browser' : 'Saved to server';
-  const savedLocation = localMode ? 'browser' : 'server';
-  if (localMode) {
-    for (const control of document.querySelectorAll('[data-server-only]')) control.hidden = true;
-    document.getElementById('model-list-label').textContent = 'This browser’s models';
-    document.getElementById('sidebar').setAttribute('aria-label', 'This browser’s models');
-    document.getElementById('local-storage-note').hidden = false;
-    document.querySelector('#empty h2').textContent = 'Choose a model';
-    document.querySelector('#empty p').textContent = 'Choose one from this browser’s list or create a new model. Models are saved only in this browser.';
-  } else document.getElementById('sign-in').hidden = true;
+  const savedMessage = 'Saved to server';
 
   const app = document.getElementById('app');
   const form = document.getElementById('sheet');
@@ -24,7 +15,7 @@ export function initEditor(storage, { localMode, localStore }) {
   const confirmDelete = document.getElementById('confirm-delete');
   const narrow = matchMedia('(max-width: 900px)');
 
-  let current = null; // the sheet being edited
+  let current = null; // the interview being edited
   let saveTimer = null;
   let dirty = false;
   let saving = null;
@@ -48,7 +39,7 @@ export function initEditor(storage, { localMode, localStore }) {
     saveTimer = null;
     if (saving) return saving;
     if (!dirty || !current) return;
-    if (conflicted) throw new Error('Download your draft, then reload the saved sheet and merge your notes.');
+    if (conflicted) throw new Error('Download your draft, then reload the saved interview and merge your notes.');
     saving = (async () => {
       while (dirty && current) {
         const sheet = current;
@@ -56,7 +47,7 @@ export function initEditor(storage, { localMode, localStore }) {
         dirty = false;
         setStatus('Saving…');
         try {
-          const saved = await (localMode && !sheet.revision ? createSheet : putSheet)({ ...sheet, fields });
+          const saved = await putSheet({ ...sheet, fields });
           sheet.revision = saved.revision;
           sheet.updatedAt = saved.updatedAt;
           sheet.fields = fields;
@@ -85,7 +76,7 @@ export function initEditor(storage, { localMode, localStore }) {
     setStatus('Unsaved changes…');
     clearTimeout(saveTimer);
     if (conflicted) {
-      setStatus('Unsaved conflict: download JSON, then reload the saved sheet and merge your notes.', 'error');
+      setStatus('Unsaved conflict: download JSON, then reload the saved interview and merge your notes.', 'error');
       return;
     }
     saveTimer = setTimeout(() => save().catch(reportError), 400);
@@ -174,7 +165,7 @@ export function initEditor(storage, { localMode, localStore }) {
     updateControls();
     dirty = false;
     conflicted = false;
-    setStatus(sheet ? (sheet.revision ? savedMessage : 'Unsaved draft in this tab') : '');
+    setStatus(sheet ? savedMessage : '');
     markCurrent();
   }
 
@@ -189,13 +180,11 @@ export function initEditor(storage, { localMode, localStore }) {
   linkDialog.addEventListener('close', () => { linkOutput.value = ''; });
 
   async function generatePrivateLink() {
-    if (localMode) return;
     await save();
-    const { credential, expiresAt } = await issueAccess(current.id);
+    const { credential } = await issueAccess(current.id);
     const url = new URL('/participant', location.origin);
     url.hash = credential;
     linkOutput.value = url.href;
-    document.getElementById('private-link-expiry').textContent = `Expires ${new Date(expiresAt).toLocaleString()}. Any previous link is now unavailable.`;
     document.getElementById('private-link-copy-status').textContent = '';
     linkDialog.showModal();
   }
@@ -213,7 +202,6 @@ export function initEditor(storage, { localMode, localStore }) {
   });
 
   async function revokePrivateLink() {
-    if (localMode) return;
     await revokeAccess(current.id);
     clearPrivateLink();
     setStatus('Private link revoked. Open participant forms can no longer read or save.');
@@ -237,7 +225,7 @@ export function initEditor(storage, { localMode, localStore }) {
         } catch (error) {
           if (error.status !== 404) throw error;
           showSheet(null);
-          setStatus('Sheet unavailable. Choose one from your list or create a new sheet.', 'error');
+          setStatus('Interview unavailable. Choose one from your list or create a new interview.', 'error');
         }
         await renderList();
         return;
@@ -247,10 +235,8 @@ export function initEditor(storage, { localMode, localStore }) {
       if (latest) {
         history.replaceState(null, '', `#${latest.id}`);
         showSheet(latest);
-      } else if (localMode) await newSheet();
-      else showSheet(null);
+      } else showSheet(null);
     } catch (error) {
-      if (localMode && !current && !location.hash) showLocalDraft();
       if (current) history.replaceState(null, '', `#${current.id}`);
       throw error;
     } finally {
@@ -264,23 +250,11 @@ export function initEditor(storage, { localMode, localStore }) {
     return { id: crypto.randomUUID(), fields: { date: new Date().toISOString().slice(0, 10) }, createdAt: now, updatedAt: now };
   }
 
-  function showLocalDraft() {
-    const sheet = blankSheet();
-    showSheet(sheet);
-    dirty = true;
-    history.replaceState(null, '', `#${sheet.id}`);
-  }
-
   async function newSheet() {
     await save();
-    if (localMode) {
-      showLocalDraft();
-      await save();
-    } else {
-      const sheet = await createSheet(blankSheet());
-      history.pushState(null, '', `#${sheet.id}`);
-      showSheet(sheet);
-    }
+    const sheet = await createSheet(blankSheet());
+    history.pushState(null, '', `#${sheet.id}`);
+    showSheet(sheet);
     await renderList();
   }
 
@@ -288,12 +262,12 @@ export function initEditor(storage, { localMode, localStore }) {
     if (!current) return;
     const target = current;
     document.getElementById('confirm-delete-text').textContent =
-      `“${displayName(target)}” will be removed ${localMode ? 'from this browser' : 'from the server for all your devices'}. This can’t be undone.`;
+      `“${displayName(target)}” will be removed from the server for all your devices. This can’t be undone.`;
     confirmDelete.showModal();
     await new Promise((resolve) => confirmDelete.addEventListener('close', resolve, { once: true }));
     if (confirmDelete.returnValue !== 'delete' || current !== target) return;
     await save();
-    if (target.revision) await deleteSheet(target);
+    await deleteSheet(target);
     showSheet(null);
     history.replaceState(null, '', location.pathname);
     await openFromHash();
@@ -301,7 +275,7 @@ export function initEditor(storage, { localMode, localStore }) {
 
   async function reloadSaved() {
     if (!current) return;
-    if ((dirty || saving) && !confirm(`Discard your unsaved draft and reload the ${savedLocation} copy? Download JSON first to keep your notes.`)) return;
+    if ((dirty || saving) && !confirm(`Discard your unsaved draft and reload the server copy? Download JSON first to keep your notes.`)) return;
     clearTimeout(saveTimer);
     saveTimer = null;
     if (saving) await saving.catch(() => {});
@@ -312,7 +286,7 @@ export function initEditor(storage, { localMode, localStore }) {
       if (error.status !== 404) throw error;
       showSheet(null);
       history.replaceState(null, '', location.pathname);
-      setStatus('Sheet unavailable. Create a new sheet or use your downloaded draft.', 'error');
+      setStatus('Interview unavailable. Create a new interview or use your downloaded draft.', 'error');
     }
     await renderList();
   }
@@ -331,7 +305,7 @@ export function initEditor(storage, { localMode, localStore }) {
     const previousTitle = document.title;
     // The browser uses the document title as the PDF's default file name.
     const fields = readForm();
-    document.title = `Capture sheet - ${displayName({ fields })}${fields.date ? ` - ${fields.date}` : ''}`;
+    document.title = `Interview - ${displayName({ fields })}${fields.date ? ` - ${fields.date}` : ''}`;
     addEventListener('afterprint', () => { document.title = previousTitle; }, { once: true });
     print();
   }
@@ -341,7 +315,7 @@ export function initEditor(storage, { localMode, localStore }) {
   function setSidebar(open) {
     app.dataset.sidebar = open ? 'open' : 'closed';
     toggle.setAttribute('aria-expanded', String(open));
-    toggle.setAttribute('aria-label', open ? 'Hide sheet list' : 'Show sheet list');
+    toggle.setAttribute('aria-label', open ? 'Hide interview list' : 'Show interview list');
     if (!narrow.matches) {
       try { localStorage.setItem('sidebar', open ? 'open' : 'closed'); } catch {}
     }
@@ -394,45 +368,4 @@ export function initEditor(storage, { localMode, localStore }) {
 
   setSidebar(initialSidebar());
   openFromHash().catch(reportError);
-
-  // ---------- Save browser models to the account ----------
-
-  async function offerLocalModels() {
-    const key = 'save-local-dismissed';
-    try { if (sessionStorage.getItem(key)) return; } catch {}
-    let models;
-    try { models = await filledLocalModels(localStore); } catch { return; }
-    if (!models.length) return;
-    const dialog = document.getElementById('save-local');
-    const note = document.getElementById('save-local-status');
-    const confirm = document.getElementById('save-local-confirm');
-    const title = document.getElementById('save-local-title');
-    const label = () => { title.textContent = `Save ${models.length} browser model${models.length === 1 ? '' : 's'} to your account?`; };
-    label();
-    confirm.onclick = async () => {
-      confirm.disabled = true;
-      const total = models.length;
-      const result = await saveLocalModels(localStore, storage, models);
-      models = result.remaining;
-      const message = `Saved ${result.saved} of ${total}`;
-      const names = result.conflicts.map((model) => model.fields.name?.trim() || 'Unnamed model').join(', ');
-      const problems = [result.conflicts.length ? `Not saved, different version already in your account: ${names}.` : '', result.error ? (result.error.message ?? 'Upload failed.') : ''].filter(Boolean).join(' ');
-      const failed = Boolean(result.error || result.conflicts.length);
-      note.textContent = failed ? `${message}. ${problems}${result.error ? ' Save again to retry the rest.' : ''}` : message;
-      setStatus(message, failed ? 'error' : '');
-      confirm.disabled = false;
-      if (result.saved) renderList().catch(reportError);
-      if (!failed) dialog.close('saved');
-      else { confirm.textContent = 'Save again'; label(); }
-    };
-    const dismiss = () => { try { sessionStorage.setItem(key, '1'); } catch {} };
-    // "Not now" submits the form; record it synchronously, since `close` fires a task later
-    // and a reload right after the click would otherwise lose the dismissal.
-    dialog.querySelector('form').addEventListener('submit', dismiss, { once: true });
-    dialog.addEventListener('close', () => {
-      if (dialog.returnValue !== 'saved') dismiss();
-    }, { once: true });
-    dialog.showModal();
-  }
-  if (!localMode && localStore) offerLocalModels();
 }

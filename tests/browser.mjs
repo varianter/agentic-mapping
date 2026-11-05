@@ -6,8 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { checkParticipantFlow } from './participant-browser.mjs';
-import { checkPreviewFlow } from './preview-browser.mjs';
-import { checkLocalFlow, checkSaveLocalFlow } from './local-browser.mjs';
+import { checkSelfFlow } from './self-browser.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'mapping-browser-'));
 const adminKey = 'browser-admin-key-0123456789-abcdefgh';
@@ -18,14 +17,33 @@ const server = Bun.serve({ port: 0, fetch: app.fetch });
 const baseURL = `http://localhost:${server.port}`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true });
 const errors = [];
-const context = await browser.newContext({ httpCredentials: { username: 'admin', password: adminKey }, viewport: { width: 1440, height: 1000 } });
+// Interviewers sign in through the form, which sets the HttpOnly admin cookie.
+async function signIn(page) {
+  await page.goto(`${baseURL}/sign-in`);
+  await page.locator('#key').fill(adminKey);
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(`${baseURL}/`);
+}
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 context.setDefaultTimeout(12000);
 const page = await context.newPage();
 page.on('pageerror', (error) => errors.push(error.message));
 const status = page.locator('#save-status');
 const waitSaved = () => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved to server');
 try {
+  // A wrong key keeps the visitor in self mode.
   await page.goto(`${baseURL}/sign-in`);
+  await page.locator('#key').fill('wrong-admin-key-0123456789-abcdefgh');
+  await page.locator('button[type="submit"]').click();
+  await page.locator('[role="alert"]').waitFor();
+  assert.equal((await context.cookies()).length, 0);
+  await signIn(page);
+  const [cookie] = await context.cookies();
+  assert.equal(cookie.name, 'am_admin');
+  assert.equal(cookie.httpOnly, true);
+  assert.equal(cookie.sameSite, 'Strict');
+  assert.notEqual(cookie.value, adminKey);
+  assert.equal(await page.evaluate(() => document.cookie), '');
   await page.locator('#empty').waitFor({ state: 'visible' });
   await page.locator('[data-action="new"]').first().click();
   await page.waitForFunction(() => !document.getElementById('sheet').inert);
@@ -44,10 +62,10 @@ try {
 
   console.log('Basic create/reload/dimensions passed');
   // A separate browser context sees persisted notes with the same interviewer identity.
-  const secondContext = await browser.newContext({ httpCredentials: { username: 'admin', password: adminKey } });
+  const secondContext = await browser.newContext();
   secondContext.setDefaultTimeout(12000);
   const second = await secondContext.newPage();
-  await second.goto(`${baseURL}/sign-in`);
+  await signIn(second);
   await second.goto(`${baseURL}/#${id}`);
   await second.waitForFunction(() => document.querySelector('[name="name"]').value === 'Cross-device interview');
   await page.locator('[name="name"]').fill('Newer from first device');
@@ -105,7 +123,7 @@ try {
   assert.equal(await page.locator('a[href="legacy.html"]').count(), 0);
   // Unknown hashes never open an unrelated interview.
   await page.goto(`${baseURL}/#${crypto.randomUUID()}`);
-  await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('Sheet unavailable'));
+  await page.waitForFunction(() => document.getElementById('save-status').textContent.includes('Interview unavailable'));
   assert.equal(await page.locator('#sheet').isHidden(), true);
   await page.waitForFunction(() => !document.getElementById('sheet').inert);
   await page.locator(`#sheet-list a[data-id="${id}"]`).click();
@@ -137,7 +155,7 @@ try {
   await page.locator('[data-action="reload"]').click();
   await page.locator('#sheet').waitFor({ state: 'hidden' });
   await page.waitForFunction(() => !document.getElementById('sheet').inert);
-  assert.match(await status.textContent(), /Sheet unavailable\. Create a new sheet or use your downloaded draft\.$/);
+  assert.match(await status.textContent(), /Interview unavailable\. Create a new interview or use your downloaded draft\.$/);
   assert.equal(await page.locator('[data-action="export"]').count() > 0, true);
   await page.locator('[data-action="new"]:visible').first().click();
   await page.waitForFunction(() => !document.getElementById('sheet').hidden && !document.getElementById('sheet').inert);
@@ -151,12 +169,30 @@ try {
   await page.waitForFunction((id) => !document.querySelector(`#sheet-list a[data-id="${id}"]`), id);
   assert.deepEqual(errors, []);
   await checkParticipantFlow({ browser, context, baseURL, directory, store });
-  await checkLocalFlow({ browser, baseURL, directory, store });
-  await checkSaveLocalFlow({ browser, baseURL, adminKey, store });
-  await checkPreviewFlow({ browser, baseURL });
-  console.log('Browser passed: create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, missing hashes, PDF layout, mobile width, delete; no page errors.');
+
+  // Signing out returns to My map; the interview list is gone.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(baseURL);
+  await page.locator('#sign-out').click();
+  await page.waitForURL(`${baseURL}/`);
+  await page.locator('#self-clear').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#sidebar').count(), 0);
+  assert.equal((await context.cookies()).length, 0);
+  assert.equal((await page.request.get(`${baseURL}/api/sheets`)).status(), 401);
+
+  await checkSelfFlow({ browser, baseURL, directory, store });
+  const selfOnly = Bun.serve({ port: 0, fetch: createApp({}).app.fetch });
+  try {
+    const selfOnlyURL = `http://localhost:${selfOnly.port}`;
+    await checkSelfFlow({ browser, baseURL: selfOnlyURL, directory, adminEnabled: false });
+    for (const path of ['/sign-in', '/participant', '/api/sheets']) assert.equal((await fetch(`${selfOnlyURL}${path}`)).status, 404);
+  } finally {
+    selfOnly.stop(true);
+  }
+  assert.deepEqual(errors, []);
+  console.log('Browser passed: cookie sign-in, create, autosave/reload, dimensions, cross-device access/conflicts, offline retry, overlapping edits, missing hashes, PDF layout, mobile width, delete, sign-out, self mode; no page errors.');
 } catch (error) {
-  console.log('Browser failure status:', await status.textContent(), errors);
+  console.log('Browser failure status:', await status.textContent({ timeout: 1000 }).catch(() => '(page unavailable)'), errors);
   throw error;
 } finally {
   await browser.close();

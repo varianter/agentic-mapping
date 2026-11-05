@@ -1,4 +1,4 @@
-// Server-backed storage. Access is gated by the admin key, sent as the Basic password.
+// Server-backed interviews. Access is gated by the HttpOnly admin cookie set at /sign-in.
 async function request(path = '', method = 'GET', body) {
   const response = await fetch(`api/sheets${path}`, {
     method,

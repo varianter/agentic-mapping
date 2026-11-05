@@ -8,45 +8,47 @@
 <link rel="stylesheet" href="styles.css">
 <script type="module" src="client/boot.js"></script>
 </head>
-<body data-storage-mode="">
+<body data-mode="">
 <div class="app" id="app" data-sidebar="open">
 
-  <aside class="sidebar" id="sidebar" aria-label="Capture sheets" data-interviewer>
+  <aside class="sidebar" id="sidebar" aria-label="Interviews" data-interviewer>
     <div class="sidebar-inner">
       <div class="sidebar-head">
         <img class="sidebar-logo" src="img/variant-logo-light.svg" alt="Variant" width="101" height="24">
         <p class="sidebar-title">Agentic mapping</p>
         <button type="button" class="btn" data-variant="primary" data-action="new" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-          New sheet
+          New interview
         </button>
       </div>
-      <p id="model-list-label">Your interviews</p>
-      <p class="sheet-list-empty" id="sheet-list-empty" hidden>No sheets yet.</p>
+      <p id="model-list-label">Interviews</p>
+      <p class="sheet-list-empty" id="sheet-list-empty" hidden>No interviews yet.</p>
       <ul class="sheet-list" id="sheet-list"></ul>
       <div class="sidebar-foot">
-        <a href="/sign-in" id="sign-in">Sign in for registered interviews</a>
-        <p id="local-storage-note" hidden>Models stay in this browser. Clearing browser data removes them. Download a copy as a backup.</p>
-        <button type="button" class="btn" data-action="issue-access" data-needs-sheet data-server-only disabled>Create / replace private link</button>
-        <button type="button" class="btn" data-action="revoke-access" data-needs-sheet data-server-only disabled>Revoke private link</button>
+        <button type="button" class="btn" data-action="issue-access" data-needs-sheet disabled>Create / replace private link</button>
+        <button type="button" class="btn" data-action="revoke-access" data-needs-sheet disabled>Revoke private link</button>
         <a href="guide.html">Interviewer guide</a>
         <button type="button" class="btn" data-action="retry" disabled>Retry storage</button>
         <button type="button" class="btn" data-action="export" data-needs-sheet disabled>Download JSON</button>
         <button type="button" class="btn" data-action="reload" data-needs-sheet disabled>Reload saved</button>
+        <form method="post" action="/sign-out"><button type="submit" class="btn" id="sign-out">Sign out</button></form>
       </div>
     </div>
   </aside>
 
   <main class="main">
     <div class="toolbar">
-      <button type="button" class="btn" data-variant="icon" id="toggle-sidebar" aria-controls="sidebar" aria-expanded="true" aria-label="Hide sheet list" data-interviewer>
+      <button type="button" class="btn" data-variant="icon" id="toggle-sidebar" aria-controls="sidebar" aria-expanded="true" aria-label="Hide interview list" data-interviewer>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
       </button>
       <span class="save-status" id="save-status" role="status" aria-live="polite"></span>
       <span class="spacer"></span>
-      <div class="preview-actions" data-preview-only>
-        <span class="preview-notice">Preview: your answers stay in this browser only and are never sent to the server</span>
-        <button type="button" class="btn" id="preview-clear">Clear preview</button>
+      <div class="self-actions" data-self-only>
+        <span class="self-notice">Saved only in this browser, never sent to the server</span>
+        <a href="/sign-in" id="self-sign-in" hidden>Interviewer sign-in</a>
+        <button type="button" class="btn" id="self-clear">Clear</button>
+        <button type="button" class="btn" id="self-export">Download JSON</button>
+        <button type="button" class="btn" data-variant="primary" id="self-pdf">Download PDF</button>
       </div>
       <div class="participant-actions" data-participant-only>
         <button type="button" class="btn" id="participant-reload" disabled>Reload saved</button>
@@ -64,9 +66,9 @@
     </div>
 
     <div class="empty" id="empty" hidden data-interviewer>
-      <h2>No capture sheets yet</h2>
-      <p>Make one for each conversation. Everything you type is saved to your interviewer account on the server as you go.</p>
-      <button type="button" class="btn" data-variant="primary" data-action="new" disabled>New sheet</button>
+      <h2>No interviews yet</h2>
+      <p>Make one for each conversation. Everything you type is saved to the server as you go.</p>
+      <button type="button" class="btn" data-variant="primary" data-action="new" disabled>New interview</button>
     </div>
 
     <div class="empty" id="participant-unavailable" hidden data-participant-only>
@@ -78,7 +80,7 @@
       <header class="sheet-header">
         <div class="sheet-title">
           <h1>What did you need to learn?</h1>
-          <span class="pill">Capture sheet</span>
+          <span class="pill">Interview</span>
         </div>
         <img class="sheet-logo" src="img/variant-logo-dark.svg" alt="Variant" width="101" height="24">
       </header>
@@ -147,7 +149,7 @@
   <form method="dialog">
     <h2>Private interview link</h2>
     <p>Anyone with this link can edit the approved answers, without signing in. Share it privately.</p>
-    <p id="private-link-expiry"></p>
+    <p>It works until you replace or revoke it. Creating a new link turns off the previous one.</p>
     <label class="lbl" for="private-link-value">Copy this link before closing</label>
     <input type="text" id="private-link-value" readonly autocomplete="off" spellcheck="false">
     <p id="private-link-copy-status" role="status"></p>
@@ -158,25 +160,13 @@
   </form>
 </dialog>
 
-<dialog id="save-local" data-interviewer>
-  <form method="dialog">
-    <h2 id="save-local-title">Save browser models to your account?</h2>
-    <p>They are filled in only in this browser. Saving adds each as a sheet and removes it from this browser.</p>
-    <p id="save-local-status" role="status"></p>
-    <div class="actions">
-      <button class="btn" value="later" autofocus>Not now</button>
-      <button type="button" class="btn" data-variant="primary" id="save-local-confirm">Save</button>
-    </div>
-  </form>
-</dialog>
-
 <dialog id="confirm-delete" data-interviewer>
   <form method="dialog">
-    <h2>Delete this sheet?</h2>
+    <h2>Delete this interview?</h2>
     <p id="confirm-delete-text">It will be removed from the server for all your devices. This can’t be undone.</p>
     <div class="actions">
       <button class="btn" value="cancel" autofocus>Cancel</button>
-      <button class="btn" data-variant="danger" value="delete">Delete sheet</button>
+      <button class="btn" data-variant="danger" value="delete">Delete interview</button>
     </div>
   </form>
 </dialog>

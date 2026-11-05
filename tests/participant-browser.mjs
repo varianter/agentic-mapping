@@ -186,7 +186,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     await fresh.reload();
     await unavailable(fresh);
 
-    // Expiry denies both open forms and newly opened links.
+    // Links issued before links stopped expiring keep their TTL; expiry denies open forms and new visits.
     const expiring = await issueLink();
     await fresh.goto(expiring);
     await loaded(fresh);

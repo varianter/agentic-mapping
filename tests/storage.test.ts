@@ -1,21 +1,22 @@
-import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, expect, spyOn, test } from 'bun:test';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app';
+import { memoryStore, storeFromEnv } from '../server/store';
 
 const directories: string[] = [];
-const databases: { close: () => void }[] = [];
 const adminKey = 'test-admin-key-0123456789-abcdefghij';
 const origin = 'https://mapping.example';
 const sheet = () => ({ id: crypto.randomUUID(), fields: { name: 'Interview', ind_why_next: 'Notes' }, createdAt: 1, updatedAt: 2 });
-function setup() {
+function setup(file?: string) {
+  const store = memoryStore(file);
+  return { ...createApp({ store, adminKey }), store };
+}
+function tempFile() {
   const directory = mkdtempSync(join(tmpdir(), 'mapping-'));
   directories.push(directory);
-  const databasePath = join(directory, 'notes.sqlite');
-  const instance = createApp({ databasePath, adminKey });
-  databases.push(instance.db);
-  return { ...instance, databasePath };
+  return join(directory, 'store.json');
 }
 function request(app: ReturnType<typeof createApp>['app'], path: string, method = 'GET', body?: unknown, key: string | null = adminKey, requestOrigin = origin) {
   const headers: Record<string, string> = {};
@@ -25,27 +26,24 @@ function request(app: ReturnType<typeof createApp>['app'], path: string, method 
   return app.request(`${origin}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
 }
 afterEach(() => {
-  for (const db of databases.splice(0)) db.close();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-test('sheets survive database close and reopen, including edits and deletion', async () => {
-  const { app, db, databasePath } = setup();
+test('sheets survive a restart with the same store file, including edits and deletion', async () => {
+  const file = tempFile();
+  const { app } = setup(file);
   const original = sheet();
   const created = await (await request(app, '/api/sheets', 'POST', original)).json();
   expect(created.revision).toBe(1);
   const edited = { ...created, fields: { name: 'Persisted notes' } };
   expect((await request(app, `/api/sheets/${original.id}`, 'PUT', edited)).status).toBe(200);
-  db.close();
-  databases.pop();
-  const reopened = createApp({ databasePath, adminKey });
-  databases.push(reopened.db);
+  const reopened = setup(file);
   const saved = await (await request(reopened.app, `/api/sheets/${original.id}`)).json();
   expect(saved.fields).toEqual(edited.fields);
   expect(saved.revision).toBe(2);
   expect((await request(reopened.app, `/api/sheets/${original.id}`, 'DELETE', { revision: saved.revision })).status).toBe(204);
-  expect((await request(reopened.app, '/api/sheets')).status).toBe(200);
   expect(await (await request(reopened.app, '/api/sheets')).json()).toEqual([]);
+  expect(await (await request(setup(file).app, '/api/sheets')).json()).toEqual([]);
 });
 
 test('missing or wrong admin keys cannot access or change sheets', async () => {
@@ -104,30 +102,18 @@ test('serves only public assets, never source, credentials or databases', async 
   for (const path of ['/', '/index.html', '/guide.html', '/styles.css', '/client/app.js', '/client/db.js', '/img/variant-logo-dark.svg', '/legacy.html']) {
     expect((await request(app, path)).status).toBe(200);
   }
-  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/sheets.sqlite', '/bun.lock', '/.git/config', '/docs/storage-decision.md']) {
+  for (const path of ['/server.ts', '/server/app.ts', '/.env', '/interviewers.json', '/secrets/accounts.json', '/tls.key', '/tls.pem', '/package.json', '/data/store.json', '/bun.lock', '/.git/config', '/docs/storage-decision.md']) {
     expect((await request(app, path)).status).toBe(404);
   }
-  expect(() => createApp({ databasePath: ':memory:' })).toThrow('ADMIN_KEY');
-  expect(() => createApp({ databasePath: ':memory:', adminKey: 'short' })).toThrow('ADMIN_KEY');
-});
-
-test('an online backup restores notes into an isolated database', async () => {
-  const { backupDatabase } = await import('../scripts/backup');
-  const { app, databasePath } = setup();
-  const original = sheet();
-  await request(app, '/api/sheets', 'POST', original);
-  const destination = join(databasePath, '..', 'backup.sqlite');
-  backupDatabase(databasePath, destination);
-  const restored = createApp({ databasePath: destination, adminKey });
-  databases.push(restored.db);
-  expect((await (await request(restored.app, `/api/sheets/${original.id}`)).json()).fields).toEqual(original.fields);
+  expect(() => createApp({ store: memoryStore() })).toThrow('ADMIN_KEY');
+  expect(() => createApp({ store: memoryStore(), adminKey: 'short' })).toThrow('ADMIN_KEY');
 });
 
 test('failed commits return an error and leave stored notes unchanged', async () => {
-  const { app, db } = setup();
+  const { app, store } = setup();
   const original = sheet();
   const created = await (await request(app, '/api/sheets', 'POST', original)).json();
-  db.exec('PRAGMA query_only = ON');
+  store.failWrites = true;
   const response = await request(app, `/api/sheets/${original.id}`, 'PUT', { ...created, fields: { name: 'Must not be acknowledged' } });
   expect(response.status).toBe(503);
   expect((await response.json()).error).toContain('Keep your draft');
@@ -174,4 +160,35 @@ test('home selects verified storage modes and sign-in explicitly challenges then
   ]) {
     expect((await request(app, path, method, body, null)).status).toBe(401);
   }
+});
+
+test('parallel apps with separate stores never see each other\'s sheets', async () => {
+  const [one, two] = [setup(), setup()];
+  await request(one.app, '/api/sheets', 'POST', sheet());
+  expect(await (await request(two.app, '/api/sheets')).json()).toEqual([]);
+});
+
+test('test stores ignore KV variables and never contact Upstash', async () => {
+  const saved = { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+  process.env.KV_REST_API_URL = 'https://kv.invalid';
+  process.env.KV_REST_API_TOKEN = 'synthetic-token';
+  const network = spyOn(globalThis, 'fetch');
+  try {
+    const { app } = setup();
+    expect((await request(app, '/api/sheets', 'POST', sheet())).status).toBe(201);
+    expect(network).not.toHaveBeenCalled();
+  } finally {
+    network.mockRestore();
+    for (const [name, value] of [['KV_REST_API_URL', saved.url], ['KV_REST_API_TOKEN', saved.token]] as const) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+});
+
+test('entrypoint store is a local JSON file without KV variables', async () => {
+  const file = tempFile();
+  const store = storeFromEnv({ LOCAL_STORE_FILE: file });
+  await store.set('sheet:x', { id: 'x' });
+  expect(existsSync(file)).toBe(true);
+  expect(await storeFromEnv({ LOCAL_STORE_FILE: file }).get('sheet:x')).toEqual({ id: 'x' });
 });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-export async function checkParticipantFlow({ browser, context, baseURL, directory, db }) {
+export async function checkParticipantFlow({ browser, context, baseURL, directory, store }) {
   const credentials = new Set();
   const participantContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   participantContext.setDefaultTimeout(12000);
@@ -60,7 +60,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     await owner.locator('[name="good"]').fill(inertAnswer);
     await saved(owner);
     const id = new URL(owner.url()).hash.slice(1);
-    const stored = () => JSON.parse(db.query('SELECT fields FROM sheets WHERE id = ?').get(id).fields);
+    const stored = async () => (await store.get(`sheet:${id}`)).fields;
 
     // Issuance/copy is intentional credential delivery; never print the link.
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: baseURL });
@@ -82,7 +82,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     for (const name of ['name', 'context', 'interviewer', 'discipline', 'talk_to']) assert.equal(await participant.locator(`[name="${name}"]`).count(), 0);
     await participant.locator('[name="ind_learn_start"]').fill('Participant completed the answer');
     await participant.locator('[name="good"]').fill('Clear feedback improves the handoff');
-    assert.equal(stored().ind_learn_start, 'Synthetic initial answer');
+    assert.equal((await stored()).ind_learn_start, 'Synthetic initial answer');
     await participant.locator('#participant-save').click();
     await saved(participant);
     await participant.reload();
@@ -91,7 +91,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     await owner.reload();
     await loaded(owner);
     assert.equal(await owner.locator('[name="ind_learn_start"]').inputValue(), 'Participant completed the answer');
-    for (const [key, value] of [['name', privateValues[0]], ['context', privateValues[1]], ['talk_to', privateValues[2]]]) assert.equal(stored()[key], value);
+    for (const [key, value] of [['name', privateValues[0]], ['context', privateValues[1]], ['talk_to', privateValues[2]]]) assert.equal((await stored())[key], value);
     const participantMarkup = await participant.content();
     assert.ok(!privateValues.some((value) => participantMarkup.includes(value)), 'Private answers must not enter the participant document');
 
@@ -129,7 +129,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     await participant.locator('#participant-save').click();
     await participant.waitForFunction(() => document.getElementById('save-status').textContent.includes('Newer answers'));
     assert.equal(await participant.locator('[name="good"]').inputValue(), 'Stale participant answer');
-    assert.equal(stored().good, 'Newer interviewer answer');
+    assert.equal((await stored()).good, 'Newer interviewer answer');
     assert.equal(await participant.locator('#participant-save').isDisabled(), true);
     const exporting = participant.waitForEvent('download');
     await participant.locator('#participant-export').click();
@@ -162,18 +162,18 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     assert.equal(await participant.locator('#participant-save').isDisabled(), true);
     release();
     await participant.waitForFunction(() => document.getElementById('save-status').textContent === 'Unsaved changes. Choose Save answers again.');
-    assert.equal(stored().good, 'First participant snapshot');
+    assert.equal((await stored()).good, 'First participant snapshot');
     await participant.unroute('**/api/participant');
     await participant.locator('#participant-save').click();
     await saved(participant);
-    assert.equal(stored().good, 'Later participant input');
+    assert.equal((await stored()).good, 'Later participant input');
 
     // Replacement invalidates already-open saves and fresh visits.
     const replacement = await issueLink();
     await participant.locator('[name="good"]').fill('Draft after replacement');
     await participant.locator('#participant-save').click();
     await unavailable(participant);
-    assert.equal(stored().good, 'Later participant input');
+    assert.equal((await stored()).good, 'Later participant input');
     const fresh = await participantContext.newPage();
     await fresh.goto(link);
     await unavailable(fresh);
@@ -190,7 +190,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, director
     const expiring = await issueLink();
     await fresh.goto(expiring);
     await loaded(fresh);
-    db.query('UPDATE participant_links SET expiresAt = ? WHERE sheetId = ?').run(Date.now() - 1, id);
+    await store.set(`link:${(await store.get(`sheet:${id}`)).linkHash}`, { sheetId: id }, Date.now() - 1);
     await fresh.locator('[name="good"]').fill('Draft after expiry');
     await fresh.locator('#participant-save').click();
     await unavailable(fresh);

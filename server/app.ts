@@ -3,8 +3,12 @@ import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { resolve } from 'node:path';
 import type { Store } from './store';
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { RESPONDENT_FIELDS as RESPONDENT_FIELD_LIST } from '../client/fields.js';
+import { createHmac } from 'node:crypto';
+import { RESPONDENT_FIELDS as RESPONDENT_FIELD_LIST, isRespondentField, mergeAnswers, storedAnswers } from './domain/fields';
+import { hashCredential, newToken, sameDigest } from './domain/credentials';
+import { createSheet, deleteSheet, getSheet, listSheets, publicSheet, removeSheet, saveFields, sourceOf, validRevision, validSheet } from './domain/sheets';
+import { findBinding } from './domain/respondents';
+import { issueLink, linkedSheet as findLinkedSheet } from './domain/links';
 
 const PUBLIC_FILES = new Map([
   ['/', 'index.html'],
@@ -13,7 +17,6 @@ const PUBLIC_FILES = new Map([
   ...['index.html', 'guide.html', 'styles.css', 'client/boot.js', 'client/fields.js', 'client/form.js', 'client/self.js', 'client/self-db.js', 'client/me-db.js', 'client/participant.js', 'client/app.js', 'client/db.js', 'client/import.js', 'img/variant-logo-dark.svg', 'img/variant-logo-light.svg'].map((path) => [`/${path}`, path]),
 ]);
 const PUBLIC_ASSETS = new Set([...PUBLIC_FILES.keys()].filter((path) => /\.(js|css|svg)$/.test(path)));
-const RESPONDENT_FIELDS = new Set<string>(RESPONDENT_FIELD_LIST);
 const SESSION_COOKIE = 'am_admin';
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 // A random browser token (only its hash is stored) that finds this browser's own map or connected interview.
@@ -26,34 +29,14 @@ const signInPage = (error = '') => `<!doctype html>
 <body><h1>Interviewer sign-in</h1><p>Sign in with the admin key to create and manage interviews.</p>
 ${error ? `<p role="alert">${escapeHtml(error)}</p>` : ''}<form method="post" action="/sign-in"><label for="key">Admin key</label><input type="password" id="key" name="key" autocomplete="current-password" required autofocus><button type="submit">Sign in</button></form>
 <a href="/">Fill in your own map instead</a></body></html>`;
-const hashCredential = (credential: string) => createHash('sha256').update(credential).digest('hex');
 // The admin cookie holds a key-derived token, never the key; rotating ADMIN_KEY signs everyone out.
 export const sessionToken = (adminKey: string) => createHmac('sha256', adminKey).update('agentic-mapping-session-v1').digest('hex');
-const sameDigest = (a: string, b: string) => timingSafeEqual(Buffer.from(hashCredential(a), 'hex'), Buffer.from(hashCredential(b), 'hex'));
 const localHost = (hostname: string) => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
-function participantView(row: any) {
-  return { fields: Object.fromEntries(Object.entries(row.fields).filter(([key, value]) => RESPONDENT_FIELDS.has(key) && typeof value === 'string')), revision: row.revision };
-}
-const sourceOf = (sheet: any) => sheet.source ?? 'interview';
+const participantView = (row: any) => ({ fields: storedAnswers(row.fields), revision: row.revision });
 const validAnswers = (body: any) => Boolean(body) && typeof body === 'object' && Object.keys(body).every((key) => ['fields', 'revision'].includes(key))
   && body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)
-  && Object.entries(body.fields).every(([key, value]) => RESPONDENT_FIELDS.has(key) && typeof value === 'string');
-// Per answer: an empty side takes the other; differing answers keep both, the interview's first.
-function mergeAnswers(interview: Record<string, string>, mine: Record<string, string>) {
-  return Object.fromEntries(RESPONDENT_FIELD_LIST.map((key) => {
-    const [ours, theirs] = [interview[key] ?? '', mine[key] ?? ''];
-    return [key, !theirs.trim() || ours.trim() === theirs.trim() ? ours : !ours.trim() ? theirs : `${ours}\n\n${theirs}`];
-  }));
-}
+  && Object.entries(body.fields).every(([key, value]) => isRespondentField(key) && typeof value === 'string');
 const root = resolve(import.meta.dir, '..');
-const validId = (id: unknown) => typeof id === 'string' && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id);
-const validRevision = (revision: unknown) => Number.isSafeInteger(revision) && Number(revision) > 0;
-function validSheet(sheet: any) {
-  return sheet && validId(sheet.id) && sheet.fields && typeof sheet.fields === 'object' && !Array.isArray(sheet.fields)
-    && Object.entries(sheet.fields).every(([key, value]) => key.length <= 100 && (typeof value === 'string' || (Array.isArray(value) && value.every((item) => typeof item === 'string'))))
-    && Number.isSafeInteger(sheet.createdAt) && sheet.createdAt >= 0 && Number.isSafeInteger(sheet.updatedAt) && sheet.updatedAt >= 0
-    && [undefined, 'self', 'interview'].includes(sheet.source);
-}
 export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }: { store?: Store; adminKey?: string; publicOrigin?: string; allowedOrigins?: string[] }) {
   if (adminKey !== undefined && (typeof adminKey !== 'string' || adminKey.length < 32)) throw new Error('Set ADMIN_KEY to a secret of at least 32 characters, or leave it unset for self-only mode.');
   if (adminKey !== undefined && !store) throw new Error('Interviewer mode needs a store.');
@@ -143,24 +126,9 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
     }
     await next();
   });
-  const publicSheet = ({ linkHash: _linkHash, ...sheet }: any) => sheet;
   // A binding counts only while its sheet exists and, for interviews, the link that connected it is still current.
-  const respondentBinding = async (c: Context) => {
-    const token = /^[a-f0-9]{64}$/.exec(getCookie(c, RESPONDENT_COOKIE) ?? '')?.[0];
-    if (!token) return null;
-    const key = `respondent:${hashCredential(token)}`;
-    const binding = await store.get(key);
-    const sheet = binding && await store.get(`sheet:${binding.sheetId}`);
-    return { token, key, sheet: sheet && (binding.linkHash === undefined || sheet.linkHash === binding.linkHash) ? sheet : null };
-  };
-  const linkedSheet = async (authorization?: string) => {
-    const credential = /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1];
-    if (!credential) return null;
-    const hash = hashCredential(credential);
-    const link = await store.get(`link:${hash}`);
-    const sheet = link && await store.get(`sheet:${link.sheetId}`);
-    return sheet?.linkHash === hash ? sheet : null;
-  };
+  const respondentBinding = (c: Context) => findBinding(store, getCookie(c, RESPONDENT_COOKIE));
+  const linkedSheet = (authorization?: string) => findLinkedSheet(store, /^Bearer ([a-f0-9]{64})$/i.exec(authorization ?? '')?.[1]);
   app.get('/api/participant', async (c) => {
     const sheet = await linkedSheet(c.req.header('Authorization'));
     return sheet ? c.json(participantView(sheet)) : c.json({ error: 'Link unavailable.' }, 404);
@@ -198,9 +166,9 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
       const answers = body.choice === 'merge' ? mergeAnswers(participantView(stored).fields, mine) : Object.fromEntries(RESPONDENT_FIELD_LIST.map((key) => [key, mine[key] ?? '']));
       await store.set(`sheet:${stored.id}`, { ...stored, fields: { ...stored.fields, ...answers }, updatedAt: Date.now(), revision: stored.revision + 1 });
     }
-    const token = binding?.token ?? randomBytes(32).toString('hex');
+    const token = binding?.token ?? newToken();
     await store.set(`respondent:${hashCredential(token)}`, { sheetId: stored.id, linkHash: stored.linkHash });
-    if (own) await store.del(`sheet:${own.id}`, ...(own.linkHash ? [`link:${own.linkHash}`] : []));
+    if (own) await removeSheet(store, own);
     setRespondent(c, token);
     return c.json({ connected: true });
   });
@@ -228,7 +196,7 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
       // The first save creates the map and the browser token; empty visits store nothing.
       const now = Date.now();
       const created = { id: crypto.randomUUID(), source: 'self', fields: body.fields, createdAt: now, updatedAt: now, revision: 1 };
-      const token = binding?.token ?? randomBytes(32).toString('hex');
+      const token = binding?.token ?? newToken();
       await store.set(`sheet:${created.id}`, created);
       await store.set(`respondent:${hashCredential(token)}`, { sheetId: created.id });
       setRespondent(c, token);
@@ -243,7 +211,7 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
   app.delete('/api/me', async (c) => {
     const binding = await respondentBinding(c);
     if (binding?.sheet && sourceOf(binding.sheet) !== 'self') return c.json({ error: 'Interview answers can’t be cleared here.' }, 409);
-    if (binding?.sheet) await store.del(`sheet:${binding.sheet.id}`, ...(binding.sheet.linkHash ? [`link:${binding.sheet.linkHash}`] : []));
+    if (binding?.sheet) await removeSheet(store, binding.sheet);
     if (binding) await store.del(binding.key);
     deleteCookie(c, RESPONDENT_COOKIE, { path: '/', secure: secureCookie(c) });
     return c.body(null, 204);
@@ -251,63 +219,35 @@ export function createApp({ store, adminKey, publicOrigin, allowedOrigins = [] }
 
   // Each interview has one stable link, derived from the admin key and its ID, so the interviewer can always show it.
   // Only its hash is stored; deleting the interview turns it off, and rotating ADMIN_KEY turns off every link.
-  const participantCredential = (id: string) => createHmac('sha256', adminKey).update(`agentic-mapping-participant-v1:${id}`).digest('hex');
   app.post('/api/sheets/:id/access', async (c) => {
-    const sheet = await store.get(`sheet:${c.req.param('id')}`);
-    if (!sheet || sourceOf(sheet) !== 'interview') return c.json({ error: 'Sheet unavailable.' }, 404);
-    const credential = participantCredential(sheet.id);
-    const linkHash = hashCredential(credential);
-    // Older random or expiring links are replaced by the stable one the first time it is shown.
-    if (sheet.linkHash !== linkHash || !await store.get(`link:${linkHash}`)) {
-      await store.set(`link:${linkHash}`, { sheetId: sheet.id });
-      if (sheet.linkHash !== linkHash) await store.set(`sheet:${sheet.id}`, { ...sheet, linkHash });
-      if (sheet.linkHash && sheet.linkHash !== linkHash) await store.del(`link:${sheet.linkHash}`);
-    }
-    return c.json({ credential });
+    const sheet = await getSheet(store, c.req.param('id'));
+    const credential = sheet && await issueLink(store, adminKey, sheet);
+    return credential ? c.json({ credential }) : c.json({ error: 'Sheet unavailable.' }, 404);
   });
-  app.get('/api/sheets', async (c) => {
-    const source = c.req.query('source');
-    const sheets = await Promise.all((await store.keys('sheet:')).map((key) => store.get(key)));
-    return c.json(sheets.filter((sheet) => sheet && (!source || sourceOf(sheet) === source)).map(publicSheet));
-  });
+  app.get('/api/sheets', async (c) => c.json((await listSheets(store, c.req.query('source') as any)).map(publicSheet)));
   app.get('/api/sheets/:id', async (c) => {
-    const sheet = await store.get(`sheet:${c.req.param('id')}`);
+    const sheet = await getSheet(store, c.req.param('id'));
     return sheet ? c.json(publicSheet(sheet)) : c.json({ error: 'Sheet unavailable.' }, 404);
   });
   app.post('/api/sheets', async (c) => {
     const sheet = await c.req.json().catch(() => null);
     if (!validSheet(sheet)) return c.json({ error: 'Invalid sheet.' }, 400);
-    // Identical create/import retries are safe; an ID collision never overwrites data.
-    const existing = await store.get(`sheet:${sheet.id}`);
-    if (existing) {
-      const sameFields = Object.keys(existing.fields).length === Object.keys(sheet.fields).length
-        && Object.entries(sheet.fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(existing.fields[key]));
-      return sameFields && existing.createdAt === sheet.createdAt && existing.updatedAt === sheet.updatedAt && sourceOf(existing) === (sheet.source ?? sourceOf(existing))
-        ? c.json(publicSheet(existing), 200)
-        : c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
-    }
-    // Uploads keep a self-submitted map's source; everything else is an interview.
-    const created = { id: sheet.id, source: sheet.source ?? 'interview', fields: sheet.fields, createdAt: sheet.createdAt, updatedAt: sheet.updatedAt, revision: 1 };
-    await store.set(`sheet:${sheet.id}`, created);
-    return c.json(created, 201);
+    const { status, sheet: saved } = await createSheet(store, sheet);
+    if (status === 'conflict') return c.json({ error: 'Sheet ID already exists; nothing was overwritten.' }, 409);
+    return c.json(publicSheet(saved), status === 'created' ? 201 : 200);
   });
   app.put('/api/sheets/:id', async (c) => {
     const sheet = await c.req.json().catch(() => null);
     if (!validSheet(sheet) || sheet.id !== c.req.param('id') || !validRevision(sheet.revision)) return c.json({ error: 'Invalid sheet or revision.' }, 400);
-    const stored = await store.get(`sheet:${sheet.id}`);
-    if (!stored) return c.json({ error: 'Sheet unavailable.' }, 404);
-    if (stored.revision !== sheet.revision) return c.json({ error: 'Another device changed this sheet. Download your draft, then reload and merge your notes.' }, 409);
-    const saved = { ...stored, fields: sheet.fields, updatedAt: Date.now(), revision: stored.revision + 1 };
-    await store.set(`sheet:${sheet.id}`, saved);
-    return c.json(publicSheet(saved));
+    const saved = await saveFields(store, sheet.id, (sheet as any).revision, sheet.fields, { replace: true });
+    if (!saved.ok) return saved.reason === 'missing' ? c.json({ error: 'Sheet unavailable.' }, 404) : c.json({ error: 'Another device changed this sheet. Download your draft, then reload and merge your notes.' }, 409);
+    return c.json(publicSheet(saved.sheet));
   });
   app.delete('/api/sheets/:id', async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!validRevision(body?.revision)) return c.json({ error: 'Revision required.' }, 400);
-    const stored = await store.get(`sheet:${c.req.param('id')}`);
-    if (!stored) return c.json({ error: 'Sheet unavailable.' }, 404);
-    if (stored.revision !== body.revision) return c.json({ error: 'Sheet changed; reload before deleting.' }, 409);
-    await store.del(`sheet:${stored.id}`, ...(stored.linkHash ? [`link:${stored.linkHash}`] : []));
+    const deleted = await deleteSheet(store, c.req.param('id'), body.revision);
+    if (!deleted.ok) return deleted.reason === 'missing' ? c.json({ error: 'Sheet unavailable.' }, 404) : c.json({ error: 'Sheet changed; reload before deleting.' }, 409);
     return c.body(null, 204);
   });
   app.all('/api/*', (c) => c.json({ error: 'Endpoint unavailable.' }, 404));

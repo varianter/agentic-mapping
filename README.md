@@ -34,7 +34,7 @@ If storage fails, use **Retry storage**. The draft stays editable, and **Downloa
 
 ## Existing notes and recovery
 
-There is no browser-note migration: the earlier IndexedDB storage was never used. Notes live on the server. If a sheet is unavailable, use **Download JSON** to keep your draft and create a new sheet.
+There is no browser-note migration: the earlier IndexedDB storage was never used. Signed-in notes live on the server; anonymous models stay in this browser's IndexedDB. If a sheet is unavailable, use **Download JSON** to keep your draft and create a new sheet.
 
 **Saved to server** means a committed save. On a network failure, use **Retry storage** or **Download JSON** in the sidebar before closing the tab. Unsaved server drafts stay in memory and trigger a leave-page warning; they are not stored in IndexedDB. If another device has changed the sheet, automatic saving stops: download the draft, choose **Reload saved**, and manually merge the downloaded notes. Unknown sheet URLs show an unavailable state rather than another interview.
 

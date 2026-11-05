@@ -12,7 +12,8 @@ test('configured Bun process retains notes across a server restart', async () =>
   const port = reservation.port;
   reservation.stop(true);
   const origin = `http://localhost:${port}`;
-  const headers = { Authorization: `Basic ${btoa(`admin:${adminKey}`)}`, Origin: origin, 'Content-Type': 'application/json' };
+  const { sessionToken } = await import('../server/app');
+  const headers = { Cookie: `am_admin=${sessionToken(adminKey)}`, Origin: origin, 'Content-Type': 'application/json' };
   const env: Record<string, string | undefined> = { ...process.env, PORT: String(port), APP_ORIGIN: origin, LOCAL_STORE_FILE: join(directory, 'store.json'), ADMIN_KEY: adminKey };
   delete env.KV_REST_API_URL;
   delete env.KV_REST_API_TOKEN;
@@ -48,19 +49,23 @@ test('configured Bun process retains notes across a server restart', async () =>
   }
 }, 20000);
 
-test('Bun entrypoint refuses startup without a long enough ADMIN_KEY', () => {
-  for (const ADMIN_KEY of ['', 'too-short']) {
-    const child = Bun.spawnSync([process.execPath, 'server.ts'], { cwd: root, env: { ...process.env, ADMIN_KEY }, stdout: 'pipe', stderr: 'pipe' });
-    expect(child.exitCode).not.toBe(0);
-    expect(child.stderr.toString()).toContain('ADMIN_KEY');
-  }
+test('Bun entrypoint refuses startup with a too short ADMIN_KEY', () => {
+  const child = Bun.spawnSync([process.execPath, 'server.ts'], { cwd: root, env: { ...process.env, ADMIN_KEY: 'too-short' }, stdout: 'pipe', stderr: 'pipe' });
+  expect(child.exitCode).not.toBe(0);
+  expect(child.stderr.toString()).toContain('ADMIN_KEY');
 });
 
 test('loadConfig fails clearly without storage on Vercel and adds preview origins', async () => {
   const { loadConfig } = await import('../server/config');
   const base = { ADMIN_KEY: 'x'.repeat(32) };
   expect(() => loadConfig({ ...base, VERCEL: '1' })).toThrow('Config error: set KV_REST_API_URL');
-  expect(() => loadConfig({})).toThrow('ADMIN_KEY');
+  expect(() => loadConfig({ ADMIN_KEY: 'too-short' })).toThrow('ADMIN_KEY');
+  // Without ADMIN_KEY the app is self-only and needs no storage, even on Vercel.
+  for (const env of [{}, { ADMIN_KEY: '' }, { VERCEL: '1' }]) {
+    const config = loadConfig(env);
+    expect(config.adminKey).toBeUndefined();
+    expect(config.store).toBeUndefined();
+  }
   const preview = loadConfig({ ...base, VERCEL: '1', VERCEL_ENV: 'preview', KV_REST_API_URL: 'https://kv.example', KV_REST_API_TOKEN: 't', APP_ORIGIN: 'https://prod.example', VERCEL_URL: 'a-1.vercel.app', VERCEL_BRANCH_URL: 'a-git-b.vercel.app' });
   expect(preview.allowedOrigins).toEqual(['https://prod.example', 'https://a-1.vercel.app', 'https://a-git-b.vercel.app']);
   expect(loadConfig({ ...base, VERCEL_ENV: 'production', VERCEL_URL: 'a-1.vercel.app' }).allowedOrigins).toEqual([]);

@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { memoryStore } from "../server/store";
-import { createApp } from "../server/app";
+import { createApp, sessionToken } from "../server/app";
 
 const adminKey = "vercel-test-admin-key-0123456789-abcd";
-const auth = { Authorization: `Basic ${btoa(`a:${adminKey}`)}` };
+const auth = { Cookie: `am_admin=${sessionToken(adminKey)}` };
 const sheet = {
   id: crypto.randomUUID(),
   fields: {},
@@ -46,7 +46,7 @@ test("Vercel entry serves only allowlisted files and requires credentials", asyn
           .status,
       ).toBe(404);
       expect((await app.request(`https://x-1.vercel.app${path}`)).status).toBe(
-        401,
+        404,
       );
     }
     expect(
@@ -55,7 +55,7 @@ test("Vercel entry serves only allowlisted files and requires credentials", asyn
     expect(
       (
         await app.request("https://x-1.vercel.app/api/sheets", {
-          headers: { Authorization: `Basic ${btoa("a:wrong")}` },
+          headers: { Cookie: "am_admin=wrong" },
         })
       ).status,
     ).toBe(401);

@@ -3,15 +3,13 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp } from '../server/app';
+import { createApp, sessionToken } from '../server/app';
+import { RESPONDENT_FIELDS } from '../client/fields.js';
 import { memoryStore } from '../server/store';
 
 const origin = 'https://mapping.example';
 const adminKey = 'test-admin-key-0123456789-abcdefghij';
-const approved = [
-  ...['ind', 'team', 'org'].flatMap((dimension) => ['learn', 'why', 'found'].flatMap((question) => ['start', 'good', 'next'].map((level) => `${dimension}_${question}_${level}`))),
-  'good', 'surprised', 'missing', 'advice',
-];
+const approved = RESPONDENT_FIELDS;
 const directories: string[] = [];
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
@@ -19,12 +17,12 @@ afterEach(() => {
 function setup(file?: string) {
   const store = memoryStore(file);
   const instance = { ...createApp({ store, adminKey, publicOrigin: origin }), store };
-  const send = (path: string, method = 'GET', body?: unknown, authorization?: string) => instance.app.request(`${origin}${path}`, {
+  const send = (path: string, method = 'GET', body?: unknown, authorization?: string, cookie?: string) => instance.app.request(`${origin}${path}`, {
     method,
-    headers: { ...(authorization ? { Authorization: authorization } : {}), Origin: origin, 'Content-Type': 'application/json' },
+    headers: { ...(authorization ? { Authorization: authorization } : {}), ...(cookie ? { Cookie: cookie } : {}), Origin: origin, 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const owner = (path: string, method = 'GET', body?: unknown, key = adminKey) => send(path, method, body, `Basic ${btoa(`admin:${key}`)}`);
+  const owner = (path: string, method = 'GET', body?: unknown, key = adminKey) => send(path, method, body, undefined, `am_admin=${sessionToken(key)}`);
   const participant = (credential?: string, method = 'GET', body?: unknown, path = '/api/participant') => send(path, method, body, credential ? `Bearer ${credential}` : undefined);
   const issue = async (id: string) => (await owner(`/api/sheets/${id}/access`, 'POST', {})).json();
   return { ...instance, send, owner, participant, issue };
@@ -36,10 +34,13 @@ async function createSheet(instance: ReturnType<typeof setup>) {
 test('only the admin issues, replaces and revokes credentials, storing only a 256-bit credential hash', async () => {
   const instance = setup();
   const sheet = await createSheet(instance);
+  const writes = spyOn(instance.store, 'set');
   const first = await instance.issue(sheet.id);
   expect(first.credential).toMatch(/^[a-f0-9]{64}$/);
-  expect(first.expiresAt - Date.now()).toBeGreaterThan(7 * 24 * 60 * 60 * 1000 - 5000);
-  expect(first.expiresAt - Date.now()).toBeLessThanOrEqual(7 * 24 * 60 * 60 * 1000);
+  // Links last until replaced or revoked: no expiry is returned or stored.
+  expect(first.expiresAt).toBeUndefined();
+  expect(writes.mock.calls.find(([key]) => key.startsWith('link:'))).toHaveLength(2);
+  writes.mockRestore();
   const linkKeys = () => instance.store.keys('link:');
   const hash = createHash('sha256').update(first.credential).digest('hex');
   expect(await linkKeys()).toEqual([`link:${hash}`]);
@@ -78,7 +79,7 @@ test('participant projection and patch preserve private fields and persist for t
   expect(Object.keys(saved).sort()).toEqual(['fields', 'revision']);
   expect(saved.revision).toBe(2);
   const reopened = setup(file);
-  const ownerResponse = await reopened.app.request(`${origin}/api/sheets/${sheet.id}`, { headers: { Authorization: `Basic ${btoa(`admin:${adminKey}`)}` } });
+  const ownerResponse = await reopened.app.request(`${origin}/api/sheets/${sheet.id}`, { headers: { Cookie: `am_admin=${sessionToken(adminKey)}` } });
   expect((await ownerResponse.json()).fields).toEqual({ ...sheet.fields, good: saved.fields.good });
   const participantResponse = await reopened.app.request(`${origin}/api/participant`, { headers: { Authorization: `Bearer ${credential}` } });
   expect(await participantResponse.json()).toEqual(saved);
@@ -153,6 +154,7 @@ test('missing, invalid, expired, revoked and replaced credentials cannot read or
   await unavailable('invalid');
   await unavailable(crypto.getRandomValues(new Uint8Array(32)).toHex());
   const first = await instance.issue(sheet.id);
+  // Links issued before links stopped expiring keep their TTL and still fail closed once it passes.
   await instance.store.set(`link:${(await instance.store.get(`sheet:${sheet.id}`)).linkHash}`, { sheetId: sheet.id }, Date.now() - 1);
   await unavailable(first.credential);
   const second = await instance.issue(sheet.id);
@@ -224,8 +226,8 @@ test('private responses suppress caching/referrers; participant shell needs no i
   expect((await instance.send('/participant')).headers.get('WWW-Authenticate')).toBeNull();
   for (const path of ['/data/store.json', '/secrets/accounts.json', '/.env', '/server/app.ts', '/.git/config']) {
     const response = await instance.participant(credential, 'GET', undefined, path);
-    expect(response.status).toBe(403);
-    expect(JSON.stringify(await response.json())).not.toContain(credential);
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain(credential);
   }
 });
 

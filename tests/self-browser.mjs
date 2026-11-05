@@ -19,6 +19,35 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
   const page = await context.newPage();
   try {
     await page.goto(baseURL);
+    const clearingContext = await browser.newContext();
+    const clearing = await clearingContext.newPage();
+    let releaseSave;
+    let saveStarted;
+    const saving = new Promise((resolve) => { saveStarted = resolve; });
+    await clearing.route('**/*', async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() === 'POST' && url.pathname === '/' && request.headers().accept?.includes('application/json')) {
+        const response = await route.fetch();
+        saveStarted();
+        await new Promise((resolve) => { releaseSave = resolve; });
+        await route.fulfill({ response });
+      } else {
+        await route.continue();
+      }
+    });
+    await clearing.goto(baseURL);
+    await clearing.locator('[name="good"]').fill('Pending first save before clear');
+    await saving;
+    await clearing.locator('[commandfor="confirm-clear"][command="show-modal"]').click();
+    await clearing.evaluate(() => document.querySelector('#confirm-clear form').requestSubmit());
+    await clearing.waitForTimeout(50);
+    releaseSave();
+    await clearing.waitForURL(`${baseURL}/`);
+    await clearing.waitForTimeout(600);
+    if (store) assert.equal((await store.keys('sheet:')).length, serverCount);
+    await clearingContext.close();
+
     await page.locator('sheet-tabs[data-ready]').waitFor();
     assert.equal(await page.locator('.pill').textContent(), 'My map');
     assert.equal(await page.locator('.sidebar, #sheet-list').count(), 0);
@@ -52,11 +81,13 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
     assert.equal(await other.locator('[name="advice"]').inputValue(), '');
     await other.context().close();
 
+    await page.locator('[name="advice"]').fill('Synthetic exported draft');
     const downloading = page.waitForEvent('download');
     await page.locator('a[href="/me.json"]').click();
     const path = join(directory, 'my-map.json');
     await (await downloading).saveAs(path);
-    assert.equal((await Bun.file(path).json()).fields.advice, 'Synthetic self advice');
+    assert.equal((await Bun.file(path).json()).fields.advice, 'Synthetic exported draft');
+    await saved(page);
 
     await page.evaluate(() => {
       window.print = () => { window.printed = document.title; dispatchEvent(new Event('afterprint')); };
@@ -75,9 +106,10 @@ export async function checkSelfFlow({ browser, baseURL, directory, store, adminE
     await page.locator('#confirm-clear').waitFor({ state: 'visible' });
     await page.locator('#confirm-clear [command="close"]').click();
     assert.equal(await page.locator('#confirm-clear').isVisible(), false);
-    assert.equal(await page.locator('[name="advice"]').inputValue(), 'Synthetic self advice');
+    assert.equal(await page.locator('[name="advice"]').inputValue(), 'Synthetic exported draft');
     await page.locator('[commandfor="confirm-clear"][command="show-modal"]').click();
-    await page.locator('#confirm-clear button[type="submit"]').click();
+    await page.locator('[name="advice"]').fill('Pending answer before clear');
+    await page.evaluate(() => document.querySelector('#confirm-clear form').requestSubmit());
     await page.waitForURL(`${baseURL}/`);
     assert.equal(await page.locator('[name="advice"]').inputValue(), '');
 

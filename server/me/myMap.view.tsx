@@ -27,13 +27,13 @@ export function MyMapPage({ fields, revision, interview, adminEnabled, form }: M
               <ConfirmButton id="confirm-clear" label="Clear">
                 <h2 id="confirm-clear-title">Delete your map?</h2>
                 <p>Your answers are deleted from the server. This can’t be undone.</p>
-                <form method="post" action="/clear" class="actions">
+                <form method="post" action="/clear" class="actions" data-clear-map>
                   <button type="button" class="btn" commandfor="confirm-clear" command="close" autofocus>Cancel</button>
                   <button type="submit" class="btn" data-variant="danger">Delete my map</button>
                 </form>
               </ConfirmButton>
             )}
-            <DownloadLink href="/me.json" />
+            <DownloadLink href="/me.json" currentForm />
             <PrintButton title={`My agentic map - ${today()}`} />
           </Toolbar>
           <Sheet audience="respondent" action="/" revision={revision} fields={fields} pill={interview ? 'Your interview' : 'My map'} form={form} />

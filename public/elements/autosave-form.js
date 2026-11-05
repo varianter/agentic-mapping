@@ -10,6 +10,8 @@ class AutosaveForm extends HTMLElement {
   #saving = null;
   #conflicted = false;
   #releasing = false;
+  #clearing = false;
+  #releasingClear = false;
 
   connectedCallback() {
     this.#form = this.querySelector('form');
@@ -17,6 +19,8 @@ class AutosaveForm extends HTMLElement {
     this.dataset.ready = '';
     this.#form.addEventListener('input', () => this.#changed());
     this.#form.addEventListener('submit', (event) => this.#submitted(event));
+    document.querySelector('[data-clear-map]')?.addEventListener('submit', (event) => this.#clear(event));
+    document.querySelector('[data-current-form]')?.addEventListener('click', (event) => this.#download(event));
     addEventListener('beforeunload', (event) => {
       if (this.#dirty || this.#saving) event.preventDefault();
     });
@@ -45,6 +49,39 @@ class AutosaveForm extends HTMLElement {
     this.flush();
   }
 
+  async #clear(event) {
+    if (this.#releasingClear) return;
+    event.preventDefault();
+    if (this.#clearing) return;
+    this.#clearing = true;
+    clearTimeout(this.#timer);
+    await this.#flush(true);
+    if (this.#dirty) {
+      this.#clearing = false;
+      this.#setStatus('Could not clear until your changes are saved.', 'error');
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve));
+    this.#releasingClear = true;
+    if (event.submitter) event.target.requestSubmit(event.submitter);
+    else event.target.requestSubmit();
+    this.#releasingClear = false;
+  }
+
+  #download(event) {
+    event.preventDefault();
+    const fields = Object.fromEntries(new FormData(this.#form));
+    delete fields.revision;
+    const blob = new Blob([JSON.stringify({ fields })], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = event.currentTarget;
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = link.download || 'my-agentic-map.json';
+    download.click();
+    setTimeout(() => URL.revokeObjectURL(url));
+  }
+
   get #status() {
     return document.getElementById(this.getAttribute('status'));
   }
@@ -57,6 +94,7 @@ class AutosaveForm extends HTMLElement {
   }
 
   #changed() {
+    if (this.#clearing) return;
     this.#dirty = true;
     clearTimeout(this.#timer);
     if (this.#conflicted) return;
@@ -66,7 +104,12 @@ class AutosaveForm extends HTMLElement {
 
   // Saves until no edits are left; typing during a save sends a second snapshot with the new revision.
   async flush() {
+    return this.#flush(false);
+  }
+
+  async #flush(allowClearing) {
     clearTimeout(this.#timer);
+    if (this.#clearing && !allowClearing) return;
     if (this.#saving) return this.#saving;
     if (!this.#dirty || this.#conflicted) return;
     this.#saving = this.#saveAll().finally(() => { this.#saving = null; });

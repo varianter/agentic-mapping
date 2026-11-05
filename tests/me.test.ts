@@ -51,6 +51,8 @@ test('autosave posts the same form for JSON; stale revisions conflict and keep w
   const html = await page.text();
   expect(html).toContain('role="alert"');
   expect(sheetForm(html).fields.good).toBe('Stale draft');
+  expect(sheetForm(html).revision).toBe(1);
+  expect((await me('/', { method: 'POST', form: { revision: '1', good: 'Stale draft' }, headers: json })).status).toBe(409);
   expect((await me('/', { method: 'POST', form: { revision: '0', good: 'Duplicate' }, headers: json })).status).toBe(409);
   expect(sheetForm(await (await me('/')).text()).fields).toMatchObject({ good: 'First', advice: 'Second' });
 });

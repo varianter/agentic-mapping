@@ -65,9 +65,31 @@ test('saving without JS redirects; autosave gets JSON; stale revisions conflict 
   const draft = await stale.text();
   expect(draft).toContain('Another device changed this sheet');
   expect(sheetForm(draft).fields.name).toBe('Stale device');
+  expect(sheetForm(draft).revision).toBe(2);
   expect((await owner(path, { method: 'POST', form: fields({ revision: '2' }), headers: json })).status).toBe(409);
   // The sidebar lists it by name, with its details.
   expect(await (await owner(path)).text()).toContain('<span class="sheet-name">Renamed</span><span class="sheet-meta">');
+});
+
+test('validation errors name invalid fields and preserve omitted discipline selections as empty', async () => {
+  const { owner } = setup();
+  const { path } = await newInterview(owner);
+  await owner(path, { method: 'POST', form: fields({ discipline: ['UX', 'Developer'] }) });
+  const invalid = fields({ revision: '2', name: 'x'.repeat(100_001) });
+
+  const page = await owner(path, { method: 'POST', form: invalid });
+  expect(page.status).toBe(422);
+  const html = await page.text();
+  expect(html).toContain('name:');
+  expect(html).toContain('100000');
+  expect(html).not.toMatch(/value="(?:UX|Developer)" checked/);
+
+  const response = await owner(path, { method: 'POST', form: invalid, headers: json });
+  const body = await response.json();
+  expect(response.status).toBe(422);
+  expect(body.error).toContain('name:');
+  expect(body.error).toContain('100000');
+  expect(body.fieldErrors.name[0]).toContain('100000');
 });
 
 test('tampered fields are refused; nothing changes', async () => {

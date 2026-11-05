@@ -36,9 +36,15 @@ export function formAction<S extends z.ZodType, P extends object>({ schema, load
     }
     const values = await formValues(c);
     const parsed = schema.safeParse(values);
+    const flattened = parsed.success ? undefined : z.flattenError(parsed.error);
+    const fieldErrors = flattened?.fieldErrors as FieldErrors | undefined;
+    const validationMessages = [
+      ...(flattened?.formErrors ?? []),
+      ...Object.entries(fieldErrors ?? {}).flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`)),
+    ];
     const result: SubmitResult = parsed.success
       ? await onSubmit(c, parsed.data, props)
-      : { fieldErrors: z.flattenError(parsed.error).fieldErrors as FieldErrors, formError: z.flattenError(parsed.error).formErrors[0] ?? 'Check the highlighted fields.', status: 422 };
+      : { fieldErrors, formError: validationMessages.join(' ') || 'Check the highlighted fields.', status: 422 };
     if ('redirect' in result) return wantsJson(c) ? c.json(result.json ?? { ok: true }) : c.redirect(result.redirect, 303);
     const status = result.status ?? 422;
     if (wantsJson(c)) return c.json({ error: result.formError, fieldErrors: result.fieldErrors ?? {} }, status);

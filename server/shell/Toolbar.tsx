@@ -23,9 +23,9 @@ export function PrintButton({ title }: { title: string }) {
   );
 }
 
-export function DownloadLink({ href }: { href: string }) {
+export function DownloadLink({ href, currentForm = false }: { href: string; currentForm?: boolean }) {
   return (
-    <a class="btn" href={href} download>
+    <a class="btn" href={href} download data-current-form={currentForm ? '' : undefined}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4H7a2 2 0 0 0-2 2v4l-2 2 2 2v4a2 2 0 0 0 2 2h1M16 4h1a2 2 0 0 1 2 2v4l2 2-2 2v4a2 2 0 0 1-2 2h-1"/></svg>
       <span class="btn-text">Download JSON</span>
     </a>

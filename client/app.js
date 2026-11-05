@@ -441,13 +441,16 @@ export function initEditor(storage, { localMode, localStore }) {
       confirm.disabled = true;
       const total = models.length;
       const result = await saveLocalModels(localStore, storage, models);
-      models = models.slice(result.saved);
+      models = result.remaining;
       const message = `Saved ${result.saved} of ${total}`;
-      note.textContent = result.error ? `${message}. ${result.error.message ?? 'Upload failed.'} Save again to retry the rest.` : message;
-      setStatus(message, result.error ? 'error' : '');
+      const names = result.conflicts.map((model) => model.fields.name?.trim() || 'Unnamed model').join(', ');
+      const problems = [result.conflicts.length ? `Not saved, different version already in your account: ${names}.` : '', result.error ? (result.error.message ?? 'Upload failed.') : ''].filter(Boolean).join(' ');
+      const failed = Boolean(result.error || result.conflicts.length);
+      note.textContent = failed ? `${message}. ${problems}${result.error ? ' Save again to retry the rest.' : ''}` : message;
+      setStatus(message, failed ? 'error' : '');
       confirm.disabled = false;
       if (result.saved) renderList().catch(reportError);
-      if (!result.error) dialog.close('saved');
+      if (!failed) dialog.close('saved');
       else { confirm.textContent = 'Save again'; label(); }
     };
     dialog.addEventListener('close', () => {

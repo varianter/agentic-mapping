@@ -390,11 +390,43 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     await page.reload();
     await page.locator('#save-local').waitFor({ state: 'visible' });
     await page.locator('#save-local-confirm').click();
-    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 1 of 3');
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 2 of 3');
     assert.deepEqual(JSON.parse(sql(ids[1]).fields), { name: 'Different' });
-    assert.deepEqual(await localIds(page), [ids[1], ids[2], ids[3]].sort());
+    assert.equal(sql(ids[2]) !== null, true);
+    assert.match(await page.locator('#save-local-status').textContent(), /Browser two/);
+    assert.deepEqual(await localIds(page), [ids[1], ids[3]].sort());
+    await page.locator('#save-local-confirm').click();
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 0 of 1');
+    assert.deepEqual(await localIds(page), [ids[1], ids[3]].sort());
     await context.close();
     cleanup();
+
+    // 401 on the 2nd upload: stops, keeps the rest, no page error.
+    ({ context, page, errors } = await session(seeded));
+    await page.route('**/api/sheets', (route) => {
+      const request = route.request();
+      if (request.method() === 'POST' && request.postData().includes(ids[1])) return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"Unauthorized"}' });
+      return route.continue();
+    });
+    await page.reload();
+    await page.locator('#save-local').waitFor({ state: 'visible' });
+    await page.locator('#save-local-confirm').click();
+    await page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved 1 of 3');
+    assert.deepEqual(await localIds(page), [ids[1], ids[2], ids[3]].sort());
+    assert.deepEqual(errors, []);
+    await context.close();
+    cleanup();
+
+    // IndexedDB unavailable: no dialog, no error.
+    ({ context, page, errors } = await session([]));
+    await page.addInitScript(() => { indexedDB.open = () => { throw new DOMException('IndexedDB unavailable', 'SecurityError'); }; });
+    await page.reload();
+    await page.locator('#sheet-list').waitFor({ state: 'attached' });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assert.equal(await page.locator('#save-local').isVisible(), false);
+    assert.notEqual(await status(page).getAttribute('data-state'), 'error');
+    assert.deepEqual(errors, []);
+    await context.close();
 
     // Only blank models: no dialog.
     ({ context, page, errors } = await session([seeded[3]]));
@@ -408,7 +440,7 @@ export async function checkSaveLocalFlow({ browser, baseURL, adminKey, db }) {
     assert.equal(await page.locator('#save-local').isVisible(), false);
     assert.deepEqual(errors, []);
     await context.close();
-    console.log('Save-local passed: save all, Not now, partial failure/retry, 409 conflict, blank-only.');
+    console.log('Save-local passed: save all, Not now, partial failure/retry, 401, 409 skip-and-continue, IndexedDB unavailable, blank-only.');
   } finally {
     cleanup();
   }

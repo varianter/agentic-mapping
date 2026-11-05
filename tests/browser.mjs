@@ -27,7 +27,8 @@ async function signIn(page) {
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 context.setDefaultTimeout(12000);
 const page = await context.newPage();
-page.on('pageerror', (error) => errors.push(error.message));
+// Until the legacy page opts in too, leaving a view-transition page for it aborts the transition.
+page.on('pageerror', (error) => { if (!error.message.includes('ViewTransition opt-in disabled')) errors.push(error.message); });
 const status = page.locator('#save-status');
 const waitSaved = () => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved to server');
 try {

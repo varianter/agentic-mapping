@@ -16,6 +16,8 @@
   --paper: #F2F2F2;
   --grey-200: #C9C9C9;
   --grey-300: #A8A8A8;
+  --grey-400: #8C8C8C; /* 3:1 on white: input borders */
+  --grey-500: #767676; /* 4.5:1 on white: placeholder text */
   --grey-600: #555555;
   --link: #0F66BF;
   --link-hover: #0B4D8F;
@@ -105,7 +107,9 @@ a:hover { color: var(--link-hover); }
 .btn[data-variant="primary"]:hover { background: #FFE26B; }
 .btn[data-variant="danger"] { border-color: var(--danger); color: var(--danger); }
 .btn[data-variant="danger"]:hover { background: #FFF2F0; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; background: transparent; }
+/* Explicit colours instead of opacity, so disabled labels stay readable on light and dark surfaces. */
+.btn:disabled,
+.btn:disabled:hover { cursor: not-allowed; background: transparent; color: var(--grey-600); border-color: var(--grey-300); }
 .btn[data-variant="icon"] { padding: 8px; width: 44px; }
 .btn svg { width: 20px; height: 20px; flex: none; }
 
@@ -145,6 +149,10 @@ a:hover { color: var(--link-hover); }
 .sidebar-title { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.2; }
 .sidebar .btn { border-color: var(--yellow); }
 .sidebar .btn[data-variant="primary"]:hover { background: #FFE26B; }
+.sidebar .btn:disabled,
+.sidebar .btn:disabled:hover { background: transparent; color: var(--grey-200); border-color: var(--grey-600); }
+.sidebar :focus-visible,
+.reflect :focus-visible { outline-color: var(--yellow); }
 
 .sheet-list {
   flex: 1;
@@ -176,6 +184,7 @@ a:hover { color: var(--link-hover); }
 
 .sidebar-foot { display: grid; gap: 12px; padding: 0 8px; font-size: 14px; }
 .sidebar-foot .btn { color: var(--white); border-color: var(--white); font-size: 14px; }
+.sidebar-foot .btn:hover { color: var(--ink); }
 .sidebar-foot a { color: var(--white); }
 .sidebar-foot a:hover { color: var(--yellow); }
 
@@ -261,7 +270,7 @@ body[data-participant] .reflect { grid-template-columns: repeat(3, minmax(0, 1fr
 
 .field {
   background: var(--white);
-  border: 1px solid var(--grey-200);
+  border: 1px solid var(--grey-400);
   border-radius: var(--radius-md);
 }
 .field:focus-within { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
@@ -281,7 +290,7 @@ body[data-participant] .reflect { grid-template-columns: repeat(3, minmax(0, 1fr
   outline: none;
 }
 .field textarea { field-sizing: content; min-height: 3lh; }
-::placeholder { color: var(--grey-300); }
+::placeholder { color: var(--grey-500); }
 
 /* Top row: who */
 .who {

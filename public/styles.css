@@ -535,6 +535,58 @@
     .steps .time { justify-self: start; padding: 8px 16px; }
     .rules, .guide-dims { grid-template-columns: minmax(0, 1fr); }
   }
+
+  /* ---------- Groups: the start page's id box and the interviewer's Groups page ---------- */
+
+  :is(.notice, .group-new) .field { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .notice form .actions { justify-content: flex-start; }
+  .own-maps {
+    margin-block: 24px;
+    & h2 { margin: 0 0 8px; font-size: 18px; }
+    & ul { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; font-size: 18px; }
+  }
+  .notice .join-links { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 16px; }
+
+  .sidebar-group {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+    margin: 0; padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--ink-hover);
+    font-weight: 600;
+    & a { font-size: 13px; font-weight: 400; color: var(--grey-200); &:hover { color: var(--yellow); } }
+  }
+
+  .groups-page {
+    display: grid;
+    gap: 32px;
+    max-inline-size: 48rem;
+    margin: 48px auto;
+    padding: 0 16px;
+    & h1 { margin: 16px 0 8px; font-size: 36px; line-height: 1.15; }
+    & .groups-head p { margin: 0; font-size: 18px; color: var(--grey-600); }
+  }
+  .group-new {
+    display: grid;
+    gap: 12px;
+    & h2 { margin: 0; font-size: 22px; }
+    & form { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 12px; }
+    & .hint { margin: 0; }
+    & .actions { grid-column: 1 / -1; justify-content: flex-start; }
+  }
+  .group-list {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    & > li { display: grid; gap: 12px; padding: 20px 24px; border: 1px solid var(--grey-300); border-radius: var(--radius-lg); }
+    & h2 { margin: 0; font-size: 22px; }
+    & .group-row-head .hint { margin: 2px 0 0; }
+    & input { flex: 1; min-inline-size: 0; font: inherit; font-size: 14px; padding: 6px 12px; border: 1px solid var(--grey-400); border-radius: var(--radius-pill); color: var(--ink); background: var(--white); }
+  }
+  .group-row-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .group-rename { display: flex; flex-wrap: wrap; gap: 8px; & .form-error { flex-basis: 100%; } }
+  .groups-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 14px; & form { display: contents; } }
 }
 
 /* ---------- Print / PDF ---------- */

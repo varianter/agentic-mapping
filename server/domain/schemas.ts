@@ -21,3 +21,7 @@ export const sheetSchema = z.strictObject({
 }).transform(({ revision, ...fields }) => ({ revision, fields: defined(fields as Record<string, string | string[] | undefined>) }));
 
 export const revisionSchema = z.object({ revision: revision.pipe(z.number().positive()) });
+
+// Groups: a name, and on creation an optional id (from the name when empty). `createGroup` checks the rest.
+export const groupSchema = z.strictObject({ name: z.string().max(200), slug: z.string().max(100).optional() });
+export const renameGroupSchema = z.strictObject({ name: z.string().max(200) });

@@ -6,15 +6,15 @@ Three modes, one name each:
 
 | Mode | Route | Who | Storage | Can do |
 | --- | --- | --- | --- | --- |
-| **My map** (`self`) | `/` | Anyone without the admin cookie | Server (respondent answer fields only), found again through an HttpOnly browser cookie | Fill in your own answers (a plain form; autosaved with JS), clear, download JSON (`/me.json`) or PDF |
-| **Interviewer** | `/interviews` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create, fill, delete interviews (`/interviews/:id`); PDF/JSON (`/interviews/:id.json`); upload JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions/:id`; sign out |
-| **Participant** | `/connect#<credential>` (old `/participant#…` links redirect) | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map at `/` until the interview is deleted |
+| **My map** (`self`) | `/` asks for a group id, then `/<group>`; `/map` without a group | Anyone without the admin cookie | Server (respondent answer fields only), saved in the group, found again through an HttpOnly browser cookie (one map per group) | Fill in your own answers (a plain form; autosaved with JS), clear, download JSON (`/<group>/me.json`, `/map/me.json`) or PDF |
+| **Interviewer** | `/groups` after `/sign-in` | Holder of the admin cookie | Upstash Redis, or local JSON file | Create and rename groups (one per company) and copy their links; inside a group (`/<group>/…`, or no prefix without one): create, fill, delete interviews (`/interviews/:id`); PDF/JSON (`/interviews/:id.json`); upload JSON; copy each interview's connect URL; read and edit self-submitted maps at `/submissions/:id`; sign out |
+| **Participant** | `/connect#<credential>` (old `/participant#…` links redirect) | Holder of a private link | Server, respondent answer fields only | Connect this browser to the interview, then edit it as My map in the interview's group until the interview is deleted |
 
 `/guide` is the interviewer guide.
 
 `/connect` is the one page that needs JavaScript: it posts the fragment credential in a form body, so it never travels in a URL. Opening a link in a browser that already has its own map asks (a server-rendered form) whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
 
-Without `ADMIN_KEY` the app is self-only: `/sign-in`, `/connect`, `/interviews` and `/submissions` return 404. My map is still saved in the store (local JSON file, or Upstash).
+Without `ADMIN_KEY` the app is self-only: `/` goes to `/map`, and `/sign-in`, `/connect`, `/groups`, `/interviews`, `/submissions` and group URLs return 404. My map is still saved in the store (local JSON file, or Upstash).
 
 ## Run
 
@@ -57,7 +57,8 @@ api/index.ts        Vercel entry
 server/app.tsx      Middleware order and route mounts
 server/config.ts    Env config checks
 server/store.ts     Upstash and memory/JSON-file stores
-server/me/          My map at / (form; autosave via public/elements)
+server/me/          start page at /, My map at /map and /<group> (form; autosave via public/elements)
+server/groups/      /groups: create and rename groups
 server/interviews/  Interview list, editor, new, upload, connect URL
 server/submissions/ Self-submitted maps
 server/connect/     /connect: private link → browser cookie, merge choice
@@ -79,7 +80,7 @@ tests/              Bun tests
 
 **Preview deployments share production data.** Only share preview URLs and the admin key with people allowed to see production.
 
-Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /` and `POST /connect`. Anyone can create a self-submitted map, so rate limiting matters.
+Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /map`, `POST /<group>` and `POST /connect`. Anyone can create a self-submitted map, so rate limiting matters.
 
 ## Docs
 

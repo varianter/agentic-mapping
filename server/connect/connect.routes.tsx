@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { answersOf } from '../domain/fields';
+import { mapPath } from '../domain/groups';
 import { linkedSheet } from '../domain/links';
 import { CHOICES, connect, findBinding, ownMapFor } from '../domain/respondents';
+import { groupOf } from '../domain/sheets';
 import { requireAdminEnabled } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formValues } from '../framework/formAction';
@@ -12,7 +14,8 @@ import { ChoicePage, ConnectPage, UnavailablePage } from './connect.view';
 const connectSchema = z.strictObject({ credential: z.string(), choice: z.enum(CHOICES).optional() });
 const count = (fields: Record<string, string>) => Object.values(fields).filter((value) => value.trim()).length;
 
-// A private link connects this browser to its interview, then My map at / edits it.
+// A private link connects this browser to its interview, then My map in the interview's group edits it
+// (`/<slug>`, or `/map` without a group). Only the browser's own map in that group is offered for merging.
 // The credential is never stored in the browser; only the separate HttpOnly respondent cookie is.
 export const connectRoutes = new Hono<AppEnv>()
   .get('/connect', requireAdminEnabled, (c) => c.render(<ConnectPage />))
@@ -26,7 +29,7 @@ export const connectRoutes = new Hono<AppEnv>()
       c.status(404);
       return c.render(<UnavailablePage />);
     }
-    const binding = await findBinding(store, respondentToken(c));
+    const binding = await findBinding(store, respondentToken(c), groupOf(interview));
     const own = ownMapFor(binding, interview);
     if (own && !parsed.data.choice) {
       return c.render(<ChoicePage credential={parsed.data.credential} mine={count(answersOf(own.fields))} interview={count(answersOf(interview.fields))} />);
@@ -38,5 +41,5 @@ export const connectRoutes = new Hono<AppEnv>()
       return c.render(<UnavailablePage />);
     }
     setRespondentToken(c, await connect(store, binding, current, parsed.data.choice));
-    return c.redirect('/', 303);
+    return c.redirect(mapPath(groupOf(current)), 303);
   });

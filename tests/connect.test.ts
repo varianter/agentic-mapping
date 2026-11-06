@@ -19,7 +19,7 @@ function setup() {
     return { id, path, credential };
   };
   const connect = (me: Send, credential: string, choice?: string) => me('/connect', { method: 'POST', form: { credential, ...(choice ? { choice } : {}) } });
-  const myMap = async (me: Send) => sheetForm(await (await me('/')).text());
+  const myMap = async (me: Send) => sheetForm(await (await me('/map')).text());
   return { ...base, linkOf, interview, connect, myMap };
 }
 
@@ -65,30 +65,30 @@ test('a link connects the browser to its interview until the interview is delete
   const { id, path, credential } = await interview({ name: 'Private synthetic name', good: 'Interview answer' });
   const connected = await connect(me, credential);
   expect(connected.status).toBe(303);
-  expect(connected.headers.get('Location')).toBe('/');
+  expect(connected.headers.get('Location')).toBe('/map');
   const cookie = connected.headers.get('Set-Cookie')!;
   expect(cookie).toMatch(/^am_respondent=[a-f0-9]{64};.*HttpOnly/);
   expect(cookie).not.toContain(credential);
-  const page = await (await me('/')).text();
+  const page = await (await me('/map')).text();
   expect(page).toContain('Your interview');
   expect(page).not.toContain('Private synthetic name');
   expect(page).not.toContain('confirm-clear');
   expect(await myMap(me)).toMatchObject({ revision: 1, fields: { good: 'Interview answer' } });
-  await me('/', { method: 'POST', form: { revision: '1', advice: 'Added later' } });
+  await me('/map', { method: 'POST', form: { revision: '1', advice: 'Added later' } });
   expect((await store.get(`sheet:${id}`)).fields).toEqual({ name: 'Private synthetic name', good: 'Interview answer', advice: 'Added later' });
   // The name on an interview is the interviewer's: no field for it, and a posted one is refused.
   expect(page).not.toContain('name="name"');
-  expect((await me('/', { method: 'POST', form: { revision: '2', name: 'Renamed' }, headers: json })).status).toBe(422);
+  expect((await me('/map', { method: 'POST', form: { revision: '2', name: 'Renamed' }, headers: json })).status).toBe(422);
   expect((await store.get(`sheet:${id}`)).fields.name).toBe('Private synthetic name');
   // Interview answers can't be cleared from My map.
-  expect((await me('/clear', { method: 'POST', form: {} })).status).toBe(409);
+  expect((await me('/map/clear', { method: 'POST', form: {} })).status).toBe(409);
   // Showing the link again keeps the browser connected.
   await owner(path);
-  expect(await (await me('/')).text()).toContain('Your interview');
+  expect(await (await me('/map')).text()).toContain('Your interview');
   // Conflicts keep the newer answers in both directions.
   expect((await owner(path, { method: 'POST', form: { revision: '1', good: 'Interviewer stale' } })).status).toBe(409);
   expect((await owner(path, { method: 'POST', form: { revision: '2', good: 'Interviewer newer' } })).status).toBe(303);
-  expect((await me('/', { method: 'POST', form: { revision: '2', good: 'Participant stale' } })).status).toBe(409);
+  expect((await me('/map', { method: 'POST', form: { revision: '2', good: 'Participant stale' } })).status).toBe(409);
   expect((await store.get(`sheet:${id}`)).fields.good).toBe('Interviewer newer');
   // Deleting the interview disconnects browsers it connected; they fall back to an empty own map.
   expect((await owner(`${path}/delete`, { method: 'POST', form: { revision: '3' } })).status).toBe(303);
@@ -130,7 +130,7 @@ for (const [choice, expected] of [
   test(`an own map asks first, then "${choice}" sets the interview answers and deletes the own map`, async () => {
     const { store, browser, interview, connect } = setup();
     const me = browser();
-    await me('/', { method: 'POST', form: { revision: '0', good: 'My answer', tools: 'tdd\nCodex', advice: 'My advice', surprised: 'Same' } });
+    await me('/map', { method: 'POST', form: { revision: '0', good: 'My answer', tools: 'tdd\nCodex', advice: 'My advice', surprised: 'Same' } });
     const [ownKey] = await store.keys('sheet:');
     const { id, credential } = await interview({ name: 'Private synthetic name', good: 'Interview answer', tools: 'Claude Code\nTDD', missing: 'Interview only', surprised: 'Same' });
     const asked = await connect(me, credential);
@@ -146,14 +146,14 @@ for (const [choice, expected] of [
     expect(fields.name).toBe('Private synthetic name');
     for (const key of RESPONDENT_FIELDS) expect(fields[key] ?? '').toBe((expected as Record<string, string>)[key] ?? '');
     expect(await store.get(ownKey)).toBeNull();
-    expect(await (await me('/')).text()).toContain('Your interview');
+    expect(await (await me('/map')).text()).toContain('Your interview');
   });
 }
 
 test('an empty own map connects without asking', async () => {
   const { browser, interview, connect } = setup();
   const me = browser();
-  await me('/', { method: 'POST', form: { revision: '0', good: '  ' } });
+  await me('/map', { method: 'POST', form: { revision: '0', good: '  ' } });
   const { credential } = await interview({ good: 'Interview answer' });
   expect((await connect(me, credential)).status).toBe(303);
 });
@@ -188,7 +188,7 @@ test('failed commits keep stored answers and log no credential, answers or reque
   const logged = spyOn(console, 'error').mockImplementation(() => {});
   try {
     store.failWrites = true;
-    const response = await me('/', { method: 'POST', form: { revision: '1', good: 'Secret draft' } });
+    const response = await me('/map', { method: 'POST', form: { revision: '1', good: 'Secret draft' } });
     expect(response.status).toBe(503);
     const failedConnect = await connect(browser(), credential);
     expect(failedConnect.status).toBe(503);

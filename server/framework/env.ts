@@ -1,3 +1,4 @@
+import type { Group } from '../domain/groups';
 import type { Store } from '../store';
 
 // What every request handler can read from the context, set once in app.tsx.
@@ -12,5 +13,7 @@ export type AppEnv = {
     origin: string;
     // Cookies need the Secure flag (HTTPS request or HTTPS origin configured).
     secure: boolean;
+    // The group an interviewer page is in (null without one), set by `resolveGroup`.
+    group: Group | null;
   };
 };

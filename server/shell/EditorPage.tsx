@@ -1,4 +1,5 @@
 import type { FormState } from '../framework/formAction';
+import { groupPrefix, type Group } from '../domain/groups';
 import { displayName, type Sheet } from '../domain/sheets';
 import type { ImportResult } from '../domain/import';
 import { Layout } from './Layout';
@@ -14,16 +15,16 @@ const KINDS = {
   submissions: { one: 'map', pill: 'Self-submitted map', print: 'Self-submitted map - {name}', toggle: 'Show map list', empty: 'No self-submitted maps yet', emptyText: 'Maps people fill in on their own, without an interview link, show up here.' },
 };
 
-export type EditorProps = { kind: SidebarKind; sheet: Sheet; sheets: Sheet[]; connectUrl?: string; toolSuggestions?: string[] };
+export type EditorProps = { kind: SidebarKind; group: Group | null; sheet: Sheet; sheets: Sheet[]; connectUrl?: string; toolSuggestions?: string[] };
 
 // The interviewer's editor for one sheet: the list beside it, the whole sheet, and its actions.
-export function EditorPage({ kind, sheet, sheets, connectUrl, toolSuggestions, form }: EditorProps & { form: FormState }) {
+export function EditorPage({ kind, group, sheet, sheets, connectUrl, toolSuggestions, form }: EditorProps & { form: FormState }) {
   const labels = KINDS[kind];
-  const action = `/${kind}/${sheet.id}`;
+  const action = `${groupPrefix(group?.slug)}/${kind}/${sheet.id}`;
   return (
     <Layout title={displayName(sheet)} scripts={SCRIPTS}>
       <div class="app">
-        <Sidebar kind={kind} sheets={sheets} currentId={sheet.id} />
+        <Sidebar kind={kind} sheets={sheets} currentId={sheet.id} group={group} />
         <main class="main">
           <Toolbar status={form.formError ? 'Not saved' : form.saved ? 'Saved to server' : ''} state={form.formError ? 'error' : ''}>
             <SidebarToggle label={labels.toggle} />
@@ -59,18 +60,18 @@ export function EditorPage({ kind, sheet, sheets, connectUrl, toolSuggestions, f
   );
 }
 
-export function EmptyListPage({ kind, sheets }: { kind: SidebarKind; sheets: Sheet[] }) {
+export function EmptyListPage({ kind, group, sheets }: { kind: SidebarKind; group: Group | null; sheets: Sheet[] }) {
   const labels = KINDS[kind];
   return (
     <Layout title={labels.empty}>
       <div class="app">
-        <Sidebar kind={kind} sheets={sheets} />
+        <Sidebar kind={kind} sheets={sheets} group={group} />
         <main class="main">
           <Toolbar><SidebarToggle label={labels.toggle} /></Toolbar>
           <div class="empty" id="empty">
             <h2>{labels.empty}</h2>
             <p>{labels.emptyText}</p>
-            {kind === 'interviews' && <form method="post" action="/interviews"><button type="submit" class="btn" data-variant="primary">New interview</button></form>}
+            {kind === 'interviews' && <form method="post" action={`${groupPrefix(group?.slug)}/interviews`}><button type="submit" class="btn" data-variant="primary">New interview</button></form>}
           </div>
         </main>
       </div>
@@ -78,11 +79,11 @@ export function EmptyListPage({ kind, sheets }: { kind: SidebarKind; sheets: She
   );
 }
 
-export function NoticePage({ kind, sheets, title, message }: { kind: SidebarKind; sheets: Sheet[]; title: string; message: string }) {
+export function NoticePage({ kind, group, sheets, title, message }: { kind: SidebarKind; group: Group | null; sheets: Sheet[]; title: string; message: string }) {
   return (
     <Layout title={title}>
       <div class="app">
-        <Sidebar kind={kind} sheets={sheets} />
+        <Sidebar kind={kind} sheets={sheets} group={group} />
         <main class="main">
           <Toolbar><SidebarToggle label={KINDS[kind].toggle} /></Toolbar>
           <div class="empty">

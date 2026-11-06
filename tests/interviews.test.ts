@@ -25,10 +25,10 @@ test('interviewer pages need the admin cookie; respondents and wrong cookies are
       expect((await send(target, { method: 'POST', form: fields(), headers })).status).toBe(401);
     }
   }
-  // Signed-in interviewers start from their list.
+  // Signed-in interviewers start from their groups.
   const home = await owner('/');
   expect(home.status).toBe(303);
-  expect(home.headers.get('Location')).toBe('/interviews');
+  expect(home.headers.get('Location')).toBe('/groups');
 });
 
 test('a new interview opens with today’s date, the full sheet and its connect URL', async () => {
@@ -170,8 +170,8 @@ test('cross-site posts and oversized bodies are refused', async () => {
 
 test('interviewers get every tool others listed as suggestions, most used first, not the open sheet’s own', async () => {
   const { owner, browser } = setup();
-  await browser()('/', { method: 'POST', form: { revision: '0', tools: 'TDD\nSynthetic self tool' } });
-  await browser()('/', { method: 'POST', form: { revision: '0', tools: 'TDD' } });
+  await browser()('/map', { method: 'POST', form: { revision: '0', tools: 'TDD\nSynthetic self tool' } });
+  await browser()('/map', { method: 'POST', form: { revision: '0', tools: 'TDD' } });
   const other = await newInterview(owner);
   await owner(other.path, { method: 'POST', form: fields({ tools: 'tdd\nPairing' }) });
   const { path } = await newInterview(owner);

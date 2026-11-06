@@ -1,18 +1,22 @@
 import { Hono } from 'hono';
+import { groupPrefix } from '../domain/groups';
 import { importSheets } from '../domain/import';
 import { issueLink } from '../domain/links';
 import { blankInterview, createSheet, listSheets } from '../domain/sheets';
 import { requireAdmin } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
+import { resolveGroup } from '../framework/group';
 import { importMessage, NoticePage } from '../shell/EditorPage';
 import { sheetEditorRoutes } from '../shell/sheetEditor';
 
-// Interviews: create, edit, delete, upload, and each interview's connect URL.
+// Interviews: create, edit, delete, upload, and each interview's connect URL; mounted at `/interviews` and
+// `/:group/interviews`, so new and uploaded sheets go into the URL's group.
 export const interviewRoutes = new Hono<AppEnv>()
-  .use(requireAdmin)
+  .use(requireAdmin, resolveGroup)
   .post('/', async (c) => {
-    const { sheet } = await createSheet(c.get('store'), blankInterview());
-    return c.redirect(`/interviews/${sheet.id}`, 303);
+    const group = c.get('group')?.slug ?? null;
+    const { sheet } = await createSheet(c.get('store'), blankInterview(group));
+    return c.redirect(`${groupPrefix(group)}/interviews/${sheet.id}`, 303);
   })
   // Store dumps and Download JSON files; each sheet goes through the normal create and never overwrites.
   .post('/import', async (c) => {
@@ -22,14 +26,15 @@ export const interviewRoutes = new Hono<AppEnv>()
       c.status(422);
       message = 'Choose a store or Download JSON file to upload.';
     } else {
-      const result = await importSheets(c.get('store'), await file.text()).catch((error) => {
+      const result = await importSheets(c.get('store'), await file.text(), c.get('group')?.slug ?? null).catch((error) => {
         if (error instanceof SyntaxError || error?.message === 'The file holds no sheets.') return null;
         throw error;
       });
       if (!result) c.status(422);
       message = !result ? `${file.name} isn’t a store or Download JSON file.` : result.total ? importMessage(result) : `${file.name} holds no sheets.`;
     }
-    return c.render(<NoticePage kind="interviews" sheets={await listSheets(c.get('store'), 'interview')} title="Upload" message={message} />);
+    const group = c.get('group');
+    return c.render(<NoticePage kind="interviews" group={group} sheets={await listSheets(c.get('store'), { source: 'interview', group: group?.slug ?? null })} title="Upload" message={message} />);
   })
   .route('/', sheetEditorRoutes({
     kind: 'interviews',

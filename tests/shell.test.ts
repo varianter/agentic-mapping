@@ -19,7 +19,8 @@ test('hashed assets are immutable; unknown or unhashed paths are not served', as
 });
 
 test('pages send a strict CSP, same-origin referrers and no caching; 404s render a page', async () => {
-  const response = await app().request(`${origin}/no-such-page`, { headers: { Accept: 'text/html' } });
+  // One segment could be a group id (the join page answers that); two can't.
+  const response = await app().request(`${origin}/no/such-page`, { headers: { Accept: 'text/html' } });
   expect(response.status).toBe(404);
   expect(response.headers.get('Content-Type')).toContain('text/html');
   expect(await response.text()).toContain('Page not found');

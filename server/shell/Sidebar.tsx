@@ -1,10 +1,11 @@
 import { asset } from '../framework/assets';
+import { groupPrefix, type Group } from '../domain/groups';
 import { displayName, type Sheet } from '../domain/sheets';
 
 export type SidebarKind = 'interviews' | 'submissions';
 const LABELS = {
-  interviews: { list: 'Interviews', empty: 'No interviews yet.', other: { href: '/submissions', label: 'Self-submitted maps' } },
-  submissions: { list: 'Self-submitted maps', empty: 'No self-submitted maps yet.', other: { href: '/interviews', label: 'Interviews' } },
+  interviews: { list: 'Interviews', empty: 'No interviews yet.', other: { kind: 'submissions', label: 'Self-submitted maps' } },
+  submissions: { list: 'Self-submitted maps', empty: 'No self-submitted maps yet.', other: { kind: 'interviews', label: 'Interviews' } },
 };
 
 const meta = (sheet: Sheet, kind: SidebarKind) => {
@@ -14,16 +15,21 @@ const meta = (sheet: Sheet, kind: SidebarKind) => {
 };
 
 // The interviewer's list beside the sheet: real links, so switching sheets is a normal navigation.
-// On phones it is a popover opened from the toolbar (see SidebarToggle).
-export function Sidebar({ kind, sheets, currentId }: { kind: SidebarKind; sheets: Sheet[]; currentId?: string }) {
+// On phones it is a popover opened from the toolbar (see SidebarToggle). Everything in it is in one group.
+export function Sidebar({ kind, sheets, currentId, group }: { kind: SidebarKind; sheets: Sheet[]; currentId?: string; group: Group | null }) {
   const labels = LABELS[kind];
+  const prefix = groupPrefix(group?.slug);
   return (
     <aside class="sidebar" id="sidebar" popover="auto" aria-label={labels.list}>
       <div class="sidebar-head">
         <img class="sidebar-logo" src={asset('img/variant-logo-light.svg')} alt="Variant" width="101" height="24" />
         <p class="sidebar-title">Agentic mapping</p>
+        <p class="sidebar-group" id="current-group">
+          <span>{group ? group.name : 'No group'}</span>
+          <a href="/groups" id="switch-group">Switch group</a>
+        </p>
         {kind === 'interviews' && (
-          <form method="post" action="/interviews">
+          <form method="post" action={`${prefix}/interviews`}>
             <button type="submit" class="btn" data-variant="primary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               New interview
@@ -36,7 +42,7 @@ export function Sidebar({ kind, sheets, currentId }: { kind: SidebarKind; sheets
       <ul class="sheet-list" id="sheet-list" aria-labelledby="sheet-list-label">
         {sheets.map((sheet) => (
           <li>
-            <a href={`/${kind}/${sheet.id}`} data-id={sheet.id} aria-current={sheet.id === currentId ? 'page' : undefined} data-untitled={displayName(sheet) === 'Untitled' ? '' : undefined}>
+            <a href={`${prefix}/${kind}/${sheet.id}`} data-id={sheet.id} aria-current={sheet.id === currentId ? 'page' : undefined} data-untitled={displayName(sheet) === 'Untitled' ? '' : undefined}>
               <span class="sheet-name">{displayName(sheet)}</span>
               <span class="sheet-meta">{meta(sheet, kind)}</span>
             </a>
@@ -44,9 +50,9 @@ export function Sidebar({ kind, sheets, currentId }: { kind: SidebarKind; sheets
         ))}
       </ul>
       <nav class="sidebar-foot" aria-label="More">
-        <a href={labels.other.href} id="view-switch">{labels.other.label}</a>
+        <a href={`${prefix}/${labels.other.kind}`} id="view-switch">{labels.other.label}</a>
         <a href="/guide">Interviewer guide</a>
-        <form method="post" action="/interviews/import" enctype="multipart/form-data">
+        <form method="post" action={`${prefix}/interviews/import`} enctype="multipart/form-data">
           <label for="upload-file">Upload JSON</label>
           <input type="file" id="upload-file" name="file" accept="application/json,.json" required />
           <button type="submit" class="link-button">Upload</button>

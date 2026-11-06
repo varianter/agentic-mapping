@@ -11,7 +11,8 @@ import { isAdmin, sessionToken } from './framework/auth';
 import { wantsJson } from './framework/respond';
 import { ErrorPage } from './shell/ErrorPage';
 import { guideRoutes } from './guide/guide.routes';
-import { meRoutes } from './me/me.routes';
+import { groupMapRoutes, meRoutes } from './me/me.routes';
+import { groupRoutes } from './groups/groups.routes';
 import { connectRoutes } from './connect/connect.routes';
 import { interviewRoutes } from './interviews/interviews.routes';
 import { submissionRoutes } from './submissions/submissions.routes';
@@ -33,7 +34,8 @@ function checkConfig({ store, adminKey, publicOrigin }: AppConfig) {
 }
 
 // Middleware order matters: headers wrap everything, the renderer comes before CSRF so refusals render as pages,
-// and interviewer-only features are mounted behind their own `requireAdmin`.
+// and interviewer-only features are mounted behind their own `requireAdmin`. Group routes (`/:group/…`) come last,
+// so a group id never hides a page; reserved ids keep it that way for pages added later.
 export function createApp(config: AppConfig) {
   checkConfig(config);
   const { store, adminKey, publicOrigin, allowedOrigins = [] } = config;
@@ -80,7 +82,7 @@ export function createApp(config: AppConfig) {
   app.use(jsxRenderer(({ children }) => <>{children}</>));
   // Uploads may hold every sheet; everything else is one sheet at most.
   app.use((c, next) => bodyLimit({
-    maxSize: (c.req.path === '/interviews/import' ? 10 : 1) * 1024 * 1024,
+    maxSize: (c.req.path.endsWith('/interviews/import') ? 10 : 1) * 1024 * 1024,
     onError: (c) => (wantsJson(c) ? c.json({ error: 'Too large to save.' }, 413) : c.text('Too large to save.', 413)),
   })(c, next));
   app.use(csrf({ origin: origins.size ? (origin) => origins.has(origin) : undefined }));
@@ -92,6 +94,10 @@ export function createApp(config: AppConfig) {
   app.route('/', connectRoutes);
   app.route('/interviews', interviewRoutes);
   app.route('/submissions', submissionRoutes);
+  app.route('/groups', groupRoutes);
+  app.route('/:group/interviews', interviewRoutes);
+  app.route('/:group/submissions', submissionRoutes);
+  app.route('/', groupMapRoutes);
 
   app.notFound((c) => {
     if (wantsJson(c)) return c.json({ error: 'Not found.' }, 404);

@@ -1,13 +1,18 @@
 import type { Store } from '../store';
 import { listItems, type Answers, type Fields } from './fields';
+import { validSlug } from './groups';
 
 // One JSON value per sheet at `sheet:<id>`. `source` is `self` or `interview` (missing means interview);
-// `linkHash` ties an interview to its participant link and never leaves the server.
+// `group` is the slug of the group it belongs to (missing means no group); `linkHash` ties an interview to its
+// participant link and never leaves the server.
 export type Source = 'self' | 'interview';
-export type Sheet = { id: string; source?: Source; fields: Fields; createdAt: number; updatedAt: number; revision: number; linkHash?: string };
-export type SheetInput = { id: string; source?: Source; fields: Fields; createdAt: number; updatedAt: number };
+export type Sheet = { id: string; source?: Source; group?: string; fields: Fields; createdAt: number; updatedAt: number; revision: number; linkHash?: string };
+export type SheetInput = { id: string; source?: Source; group?: string; fields: Fields; createdAt: number; updatedAt: number };
+// Which group a list or a page is about: a slug, or null for sheets without a group.
+export type Scope = string | null;
 
 export const sourceOf = (sheet: Pick<Sheet, 'source'>): Source => sheet.source ?? 'interview';
+export const groupOf = (sheet: Pick<Sheet, 'group'>): Scope => sheet.group ?? null;
 export const publicSheet = ({ linkHash: _linkHash, ...sheet }: Sheet) => sheet;
 export const displayName = (sheet: Pick<Sheet, 'fields'>) => (typeof sheet.fields?.name === 'string' && sheet.fields.name.trim()) || 'Untitled';
 export const validId = (id: unknown): id is string => typeof id === 'string' && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id);
@@ -17,7 +22,7 @@ export function validSheet(sheet: any): sheet is SheetInput {
   return sheet && validId(sheet.id) && sheet.fields && typeof sheet.fields === 'object' && !Array.isArray(sheet.fields)
     && Object.entries(sheet.fields).every(([key, value]) => key.length <= 100 && (typeof value === 'string' || (Array.isArray(value) && value.every((item) => typeof item === 'string'))))
     && Number.isSafeInteger(sheet.createdAt) && sheet.createdAt >= 0 && Number.isSafeInteger(sheet.updatedAt) && sheet.updatedAt >= 0
-    && [undefined, 'self', 'interview'].includes(sheet.source);
+    && [undefined, 'self', 'interview'].includes(sheet.source) && (sheet.group === undefined || validSlug(sheet.group));
 }
 
 // Named interviews first, alphabetically; untitled last; ties by most recent.
@@ -32,9 +37,10 @@ export type Saved = { ok: true; sheet: Sheet } | { ok: false; reason: 'missing' 
 
 export const getSheet = async (store: Store, id: string): Promise<Sheet | null> => (validId(id) ? store.get(`sheet:${id}`) : null);
 
-export async function listSheets(store: Store, source?: Source): Promise<Sheet[]> {
+// Every sheet, or only one source and/or one group (`group: null` is the sheets without a group).
+export async function listSheets(store: Store, { source, group }: { source?: Source; group?: Scope } = {}): Promise<Sheet[]> {
   const sheets: (Sheet | null)[] = await Promise.all((await store.keys('sheet:')).map((key) => store.get(key)));
-  return sheets.filter((sheet): sheet is Sheet => Boolean(sheet) && (!source || sourceOf(sheet!) === source)).toSorted(byName);
+  return sheets.filter((sheet): sheet is Sheet => Boolean(sheet) && (!source || sourceOf(sheet!) === source) && (group === undefined || groupOf(sheet!) === group)).toSorted(byName);
 }
 
 // Tools and techniques others have listed, most used first, for autocomplete. Each sheet counts once per item,
@@ -63,17 +69,18 @@ export async function createSheet(store: Store, input: SheetInput): Promise<{ st
   if (existing) {
     const sameFields = Object.keys(existing.fields).length === Object.keys(input.fields).length
       && Object.entries(input.fields).every(([key, value]) => JSON.stringify(value) === JSON.stringify(existing.fields[key]));
-    const same = sameFields && existing.createdAt === input.createdAt && existing.updatedAt === input.updatedAt && sourceOf(existing) === (input.source ?? sourceOf(existing));
+    const same = sameFields && existing.createdAt === input.createdAt && existing.updatedAt === input.updatedAt && sourceOf(existing) === (input.source ?? sourceOf(existing))
+      && groupOf(existing) === (input.group ?? null);
     return { status: same ? 'exists' : 'conflict', sheet: existing };
   }
   // Uploads keep a self-submitted map's source; everything else is an interview.
-  const created: Sheet = { id: input.id, source: input.source ?? 'interview', fields: input.fields, createdAt: input.createdAt, updatedAt: input.updatedAt, revision: 1 };
+  const created: Sheet = { id: input.id, source: input.source ?? 'interview', ...(input.group ? { group: input.group } : {}), fields: input.fields, createdAt: input.createdAt, updatedAt: input.updatedAt, revision: 1 };
   await store.set(`sheet:${created.id}`, created);
   return { status: 'created', sheet: created };
 }
 
-export function blankInterview(now = Date.now()): SheetInput {
-  return { id: crypto.randomUUID(), source: 'interview', fields: { date: new Date(now).toISOString().slice(0, 10) }, createdAt: now, updatedAt: now };
+export function blankInterview(group: Scope = null, now = Date.now()): SheetInput {
+  return { id: crypto.randomUUID(), source: 'interview', ...(group ? { group } : {}), fields: { date: new Date(now).toISOString().slice(0, 10) }, createdAt: now, updatedAt: now };
 }
 
 // Read-check-write, not atomic: `stored` is the sheet this request just read, and the revision the editor saw

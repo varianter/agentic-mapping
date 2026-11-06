@@ -1,6 +1,7 @@
 # Storage and access decision
 
-> Superseded: `legacy.html`, `client/legacy.js`, Import JSON and `pages.yml` were removed in #18; references below are historical.
+> Superseded: `legacy.html`, `client/legacy.js`, Import JSON and `pages.yml` were removed in #18.
+> Superseded on 2026-11-05 by the server-rendered rework: `server/app.ts`, `client/*`, `index.html` and the JSON API (`/api/sheets`, `/api/me`, `/api/participant*`) are gone. See `.agents/skills/project-conventions/SKILL.md` for the current routes; references below are historical.
 
 Design and implementation, 2026-11-04. Human review requested actual persistent storage in this PR. The app now uses the existing Bun/Hono runtime with file-backed SQLite, a single admin key (`ADMIN_KEY`) and no per-sheet owner. Workers/D1 remains an alternative if the owner chooses managed hosting. Participant completion links now follow the approved defaults documented in [the implementation map](participant-access.md).
 

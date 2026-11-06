@@ -1,10 +1,15 @@
 {
   "framework": null,
   "bunVersion": "1.x",
-  "routes": [{ "src": "/(.*)", "dest": "/api" }],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api"
+    }
+  ],
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{index.html,guide.html,styles.css,client/{boot,fields,form,self,self-db,me-db,participant,app,db,import}.js,img/variant-logo-{dark,light}.svg}"
+      "includeFiles": "{tsconfig.json,server/**/*,public/**/*}"
     }
   }
 }

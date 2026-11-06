@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { resize } from './browser-helpers.mjs';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -16,28 +17,33 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     created.on('page', (page) => page.on('pageerror', (error) => errors.push(error.message)));
     created.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.pathname.startsWith('/api/sheets') || ['/client/app.js', '/client/db.js'].includes(url.pathname)) violations.push('Interviewer code or data requested');
+      if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/interviews') || url.pathname.startsWith('/submissions')) violations.push('Interviewer code or data requested');
       if ([...credentials].some((credential) => request.url().includes(credential))) violations.push('Credential in HTTP URL');
-      if (request.headers().referer) violations.push('Referrer sent');
-      if (url.pathname !== '/api/participant/connect' && request.headers().authorization) violations.push('Credential sent outside the connect request');
+      // Referrer-Policy: same-origin. Referrers never carry the fragment, and never leave the app's origin.
+      const referer = request.headers().referer;
+      if (referer && ([...credentials].some((credential) => referer.includes(credential)) || new URL(referer).origin !== url.origin)) violations.push('Referrer leaked');
+      // The credential travels only in the /connect form body, never in a header or another request.
+      if (request.headers().authorization) violations.push('Credential in a header');
+      if (url.pathname !== '/connect' && [...credentials].some((credential) => (request.postData() ?? '').includes(credential))) violations.push('Credential sent outside the connect request');
     });
     contexts.push(created);
     return created.newPage();
   }
   const saved = (page) => page.waitForFunction(() => document.getElementById('save-status').textContent === 'Saved to server');
-  const loaded = (page) => page.waitForFunction(() => !document.getElementById('sheet').hidden && !document.getElementById('sheet').inert);
+  const loaded = (page) => page.locator('autosave-form[data-ready]').waitFor();
   const connected = async (page) => {
     await page.waitForURL(`${baseURL}/`);
     await loaded(page);
   };
   const unavailable = async (page) => {
-    await page.locator('#participant-unavailable').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('#sheet').isHidden(), true);
+    await page.locator('#connect-status', { hasText: 'Link unavailable' }).waitFor();
+    assert.equal(await page.locator('#sheet').count(), 0);
     assert.equal(await page.locator('#sheet-list').count(), 0);
   };
   try {
-    await owner.goto(baseURL);
-    await owner.locator('[data-action="new"]').first().click();
+    await owner.goto(`${baseURL}/interviews`);
+    await owner.locator('#sidebar button[type="submit"]').first().click();
+    await owner.waitForURL(/\/interviews\/[0-9a-f-]{36}$/);
     await loaded(owner);
     await owner.locator('[name="name"]').fill(privateValues[0]);
     await owner.locator('[name="context"]').fill(privateValues[1]);
@@ -46,7 +52,7 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     const inertAnswer = '<script>window.participantScriptExecuted = true</script>';
     await owner.locator('[name="good"]').fill(inertAnswer);
     await saved(owner);
-    const id = new URL(owner.url()).hash.slice(1);
+    const id = new URL(owner.url()).pathname.split('/').pop();
     const stored = async () => (await store.get(`sheet:${id}`)).fields;
 
     // The open interview always shows its connect URL; copying is intentional credential delivery, so never print it.
@@ -55,8 +61,8 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     assert.equal(await owner.locator('#connect-link-value').getAttribute('readonly'), '');
     const link = await owner.locator('#connect-link-value').inputValue();
     credentials.add(new URL(link).hash.slice(1));
-    await owner.locator('#copy-connect-link').click();
-    await owner.waitForFunction(() => document.getElementById('connect-link-status').textContent === 'Connect URL copied.');
+    await owner.locator('copy-button button').click();
+    await owner.locator('#connect-link [role="status"]', { hasText: 'Connect URL copied.' }).waitFor();
     assert.ok(await owner.evaluate(async (expected) => (await navigator.clipboard.readText()) === expected, link), 'Clipboard must contain the connect URL');
     assert.equal(await owner.locator('[data-action="issue-access"], [data-action="revoke-access"]').count(), 0);
 
@@ -65,11 +71,11 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     await participant.goto(link);
     await connected(participant);
     assert.equal(await participant.locator('.pill').textContent(), 'Your interview');
-    assert.match(await participant.locator('.self-notice').textContent(), /Your interviewer can read your answers/);
-    assert.equal(await participant.locator('#self-clear').isVisible(), false);
+    assert.match(await participant.locator('.toolbar-notice').textContent(), /Your interviewer can read your answers/);
+    assert.equal(await participant.locator('#confirm-clear').count(), 0);
     assert.equal(await participant.locator('[name="good"]').inputValue(), inertAnswer);
     assert.equal(await participant.evaluate(() => window.participantScriptExecuted), undefined);
-    assert.equal(await participant.locator('#sheet [name]').count(), 31);
+    assert.equal(await participant.locator('#sheet [name]:not([name="revision"])').count(), 31);
     for (const name of ['name', 'context', 'interviewer', 'discipline', 'talk_to']) assert.equal(await participant.locator(`[name="${name}"]`).count(), 0);
     const [cookie] = (await participant.context().cookies()).filter((item) => item.name === 'am_respondent');
     assert.equal(cookie.httpOnly, true);
@@ -120,8 +126,8 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     await local.goto(link);
     await local.locator('#connect-choice').waitFor({ state: 'visible' });
     assert.match(await local.locator('#connect-choice-text').textContent(), /2 answers/);
-    await local.keyboard.press('Escape');
-    await local.locator('#connect-choice').waitFor({ state: 'visible' });
+    // The choice page is server-rendered: the address bar holds no credential.
+    assert.ok(![...credentials].some((credential) => local.url().includes(credential)));
     await local.locator('#connect-choice [value="merge"]').click();
     await connected(local);
     assert.equal(await local.locator('[name="good"]').inputValue(), 'Newer interviewer answer\n\nMy own answer');
@@ -137,21 +143,30 @@ export async function checkParticipantFlow({ browser, context, baseURL, store })
     await participant.reload();
     await loaded(participant);
     assert.equal(await participant.locator('.pill').textContent(), 'Your interview');
-    await participant.goto(`${baseURL}/participant#invalid`);
+    await participant.goto(`${baseURL}/connect#invalid`);
     await unavailable(participant);
-    await participant.goto(`${baseURL}/participant`);
+    await participant.goto(`${baseURL}/connect`);
     await unavailable(participant);
+    // A wrong but well-formed credential is refused by the server.
+    await participant.goto(`${baseURL}/connect#${'0'.repeat(64)}`);
+    await participant.locator('#participant-unavailable').waitFor();
+    // Links shared before /connect existed still work.
+    await newBrowser().then(async (old) => {
+      await old.goto(link.replace('/connect#', '/participant#'));
+      await connected(old);
+      assert.equal(await old.locator('.pill').textContent(), 'Your interview');
+    });
 
     // Missing participant credentials never load the signed-in owner's list.
     const signedIn = await context.newPage();
     const ownerDataRequests = [];
-    signedIn.on('request', (request) => { if (new URL(request.url()).pathname.startsWith('/api/')) ownerDataRequests.push('API requested'); });
-    await signedIn.goto(`${baseURL}/participant`);
+    signedIn.on('request', (request) => { if (/^\/(api|interviews|submissions)\b/.test(new URL(request.url()).pathname)) ownerDataRequests.push('Interviewer data requested'); });
+    await signedIn.goto(`${baseURL}/connect`);
     await unavailable(signedIn);
     assert.deepEqual(ownerDataRequests, []);
     await signedIn.close();
 
-    await participant.setViewportSize({ width: 390, height: 844 });
+    await resize(participant, { width: 390, height: 844 });
     await participant.goto(baseURL);
     await loaded(participant);
     assert.equal(await participant.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

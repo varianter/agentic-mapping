@@ -18,7 +18,9 @@ class SheetTabs extends HTMLElement {
       tab.id = `tab-${panel.dataset.dim}`;
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-controls', panel.id);
-      tab.textContent = panel.dataset.name;
+      const label = document.createElement('span');
+      label.textContent = panel.dataset.name;
+      tab.append(label);
       panel.setAttribute('role', 'tabpanel');
       panel.setAttribute('aria-labelledby', tab.id);
       return tab;

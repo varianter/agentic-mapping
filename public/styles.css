@@ -379,6 +379,8 @@
     font: 600 16px/1 var(--font-sans);
     cursor: pointer;
     &:hover { background: var(--white); }
+    /* Trim the label to its cap height so the filled dot centres on the letters, not the line box. */
+    & span { text-box: trim-both cap alphabetic; }
     &[aria-selected="true"] { background: var(--ink); color: var(--white); }
     &[data-filled]::after { content: ""; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 1.5px var(--ink); }
     &[aria-selected="true"][data-filled]::after { box-shadow: none; }

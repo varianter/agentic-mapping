@@ -40,13 +40,13 @@ description: This project's stack, exact commands (install, run, test, lint, typ
 | Install      | `bun install`                                                        |
 | Run locally  | `bun start` (or `bun dev`) for self-only. For interviewer mode, follow README to set `ADMIN_KEY` (32+ chars) in a private `.env` (no KV variables: data goes to `LOCAL_STORE_FILE`, default `./data/store.json`), then sign in at http://localhost:4321/sign-in. `PORT` overrides the port. |
 | Syntax check | `bun run check` (checks `public/*.js` and `public/elements/*.js`). |
-| Test         | `bun test` (server: form posts through `app.request`); `bun run test:browser` (Playwright). Install Chromium once with `bunx playwright install chromium`; set `CHROMIUM_PATH` to use a system Chromium. CI also installs Linux dependencies. |
+| Test         | `bun test` (server: form posts through `app.request`). No browser tests. |
 | Lint         | None configured.                                                    |
 | Format       | None configured. Match surrounding style by hand.                    |
 | Typecheck    | None configured (`tsconfig.json` sets `hono/jsx` for Bun and editors). |
 | Build        | None. Bun runs the TSX; `public/` is served with hashes computed at startup. |
 
-Run the server suite, syntax checks and browser checks before finishing. `.github/workflows/checks.yml` runs all three. Browser checks use synthetic notes and an in-memory store and can refresh the committed screenshot with `UPDATE_EVIDENCE=1 bun run test:browser`.
+Run the server suite and syntax checks before finishing. `.github/workflows/checks.yml` runs both. Browser testing (Playwright or similar) is not used in this repo: don't add browser tests, browser-test dependencies or screenshot evidence; cover behaviour with `bun test`.
 
 ## Layout
 
@@ -60,7 +60,7 @@ server/framework/      formAction, assets, auth, respondentCookie, env, respond
 server/shell/          Layout, Sheet, Sidebar, Toolbar, EditorPage, sheetEditor
 server/store.ts        Store interface, Upstash and memory/JSON-file adapters
 public/                styles.css, img/, connect.js, elements/*.js
-tests/                 Bun tests and Playwright browser checks
+tests/                 Bun tests
 .github/workflows      checks.yml (tests), kanbot-merged.yml
 ```
 
@@ -78,7 +78,7 @@ tests/                 Bun tests and Playwright browser checks
 - Participant access: `POST /connect` takes the credential in a form body (never a URL or header) and binds the browser's `am_respondent` cookie to the interview, asking for `merge`/`interview`/`mine` first if the browser has its own map with answers. Each interview has one stable link, `HMAC(ADMIN_KEY, 'agentic-mapping-participant-v1:' + id)` (`server/domain/links.ts`), shown as a read-only connect URL on the interview page, which stores `link:<hash>` = `{ sheetId }` plus `linkHash` on the sheet. No revoke: deleting the interview or rotating `ADMIN_KEY` turns it off (older random links are replaced on first show). The link credential itself is never stored in the browser; only the separate HttpOnly respondent cookie persists.
 - Error handling: store failures render a 503 page (or JSON for scripts) and are logged without request details. `<autosave-form>` shows failures in the toolbar status (`#save-status`, `data-state="error"`) and keeps the draft on the page.
 - Accessibility: keep roles, `aria-*` attributes, keyboard support on tabs and visible labels (`.visually-hidden` text) intact.
-- Tests: Bun tests drive the app with `app.request()` form posts (`tests/helpers.ts`: `setup`, a `browser()` cookie jar, `sheetForm()` to read a rendered form); Playwright covers autosave, tabs, dialogs, popover, print, connect and a run with JS disabled. Keep fixtures synthetic and use `memoryStore()` per test; never pass KV variables to tests.
+- Tests: Bun tests drive the app with `app.request()` form posts (`tests/helpers.ts`: `setup`, a `browser()` cookie jar, `sheetForm()` to read a rendered form). No browser tests: client-side behaviour in `public/elements/` is checked by hand. Keep fixtures synthetic and use `memoryStore()` per test; never pass KV variables to tests.
 - Commits: Conventional Commits (`feat`, `fix`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`) with a scope.
 - Do not: add a frontend framework, a bundler/build step or browser runtime npm dependencies (server-side `hono/jsx` is fine); add inline scripts or styles; serve repository files outside `public/`, or credentials; fall back silently to browser-only saves; send interviewer-only fields to respondent pages. Keep drafts printable on storage failure.
 
@@ -89,6 +89,7 @@ tests/                 Bun tests and Playwright browser checks
 - 2026-11-05: Anonymous maps are saved on the server for the admin (`/submissions`), found again through an HttpOnly cookie rather than a fingerprint; links connect a browser to its interview, with a merge/keep/replace choice for an existing own map.
 - 2026-11-05: Three modes (self, interviewer, participant). Cookie sign-in replaces Basic auth; `ADMIN_KEY` optional (self-only without it); one My map; links last until the interview is deleted.
 - 2026-11-05: Architecture rework: server-rendered `hono/jsx` pages in feature folders (modelled on varianter/tid's `apps/web`), forms first with custom-element enhancement, zod + `formAction`, Hono `csrf()` + strict CSP with `Referrer-Policy: same-origin`, hashed immutable assets. IndexedDB self-only storage removed: My map is always stored on the server. The JSON API (`/api/sheets`, `/api/me`, `/api/participant*`) is gone; `/participant` links redirect to `/connect`.
+- 2026-11-06: Browser testing (Playwright) removed; the repo is tested with `bun test` and `bun run check` only.
 
 ## Gotchas
 
@@ -102,4 +103,3 @@ tests/                 Bun tests and Playwright browser checks
 - A `requestSubmit()` called from a `submit` listener is ignored while that event is still dispatching; defer it a task (see `autosave-form`).
 - The participant fragment stays in the address bar, never in HTTP URLs, headers or browser storage; do not capture it in screenshots/logs/analytics.
 - `.claude/agents/`, `.claude/settings.json` and `.codex/agents/` are generated by `kanbot sync`; edit `.kanbot/agents/` instead.
-- Playwright: resize with `resize()` from `tests/browser-helpers.mjs`, which waits for a running cross-document view transition; resizing mid-transition aborts it and Chromium reports a page error.

@@ -6,15 +6,11 @@
     "start": "bun server.ts",
     "dev": "bun --watch server.ts",
     "test": "bun test",
-    "check": "for f in public/*.js public/elements/*.js; do node --check \"$f\" || exit 1; done",
-    "test:browser": "bun tests/browser.mjs"
+    "check": "for f in public/*.js public/elements/*.js; do node --check \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@upstash/redis": "^1.41.0",
     "hono": "^4.13.16",
     "zod": "^4.6.7"
-  },
-  "devDependencies": {
-    "playwright": "1.64.1"
   }
 }

@@ -45,11 +45,9 @@ Never commit secrets or copy production KV variables into a local `.env`.
 ```bash
 bun test                              # server tests (form posts through app.request)
 bun run check                         # syntax-check browser scripts
-bunx playwright install chromium      # once
-bun run test:browser                  # Playwright browser checks
 ```
 
-Tests use in-memory stores and never contact Upstash. No lint, typecheck or formatter is configured.
+Tests use in-memory stores and never contact Upstash. There are no browser (Playwright) tests. No lint, typecheck or formatter is configured.
 
 Files in `public/` are served at content-hashed `/assets/…` URLs; nothing else in the repository is served.
 
@@ -69,7 +67,7 @@ server/shell/       Layout, Sheet form, Sidebar, Toolbar, shared sheet editor ro
 server/domain/      Fields, sheets, respondents, links, import, zod schemas
 server/framework/   formAction, hashed assets, auth, cookies
 public/             styles.css, img/, connect.js, elements/*.js
-tests/              Bun and Playwright tests
+tests/              Bun tests
 ```
 
 ## Deploy (Vercel)

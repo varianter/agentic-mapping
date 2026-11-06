@@ -22,7 +22,7 @@ Board flow:
 3. **Read the `project-conventions` skill first.** It has the commands and conventions for this repo.
 4. **Stay in the plan's scope.** The approved plan in the issue is the contract. Work outside it goes in `risks` or as a proposed new issue, not in the diff. For exploratory variants, build only the approach you were given.
 5. **Small commits, conventional messages.** `feat(scope): …`, `fix: …`, `test: …`, `refactor: …`, `docs: …`, `build: …`, `ci: …`, `chore: …`. One coherent step per commit. Never rewrite history.
-6. **Run tests before finishing.** Narrowest tests while working, then the full suite, lint and typecheck. Never weaken or skip a test to make it pass. Report what you ran.
+6. **Run tests before finishing.** Narrowest tests while working, then the full suite, lint and typecheck. Never weaken or skip a test to make it pass. Report what you ran. Browser testing (Playwright etc.) is not used here; don't add it.
 7. **Leave the worktree clean.** Everything meant for review is committed; no stray files, no running processes.
 8. **No secrets** in code, logs, fixtures, screenshots or commit messages.
 9. **Write short.** Plans, PR descriptions, replies and findings carry only what a human or agent needs to act or understand. One line per bullet; no restating, no process narration.

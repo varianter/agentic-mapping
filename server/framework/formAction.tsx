@@ -22,18 +22,23 @@ export async function formValues(c: Context): Promise<Values> {
 
 // One URL per form. GET renders it; POST validates, submits, then redirects (303), or re-renders with what was
 // typed and the errors (409/422). Scripts send the same body with `Accept: application/json` and get JSON back.
-export function formAction<S extends z.ZodType, P extends object>({ schema, loader, onSubmit, view: View }: {
+// `loader` gives what both submitting and the view need; `page` adds what only a rendered page needs, so
+// redirects and JSON replies skip it.
+export function formAction<S extends z.ZodType, P extends object, V extends object = {}>({ schema, loader, page, onSubmit, view: View }: {
   schema: S;
   loader: (c: Context<AppEnv>) => Promise<P | Response>;
+  page?: (c: Context<AppEnv>, props: P) => Promise<V>;
   onSubmit: (c: Context<AppEnv>, data: z.infer<S>, props: P) => Promise<SubmitResult>;
-  view: FC<P & { form: FormState }>;
+  view: FC<P & V & { form: FormState }>;
 }) {
+  const render = async (c: Context<AppEnv>, props: P, form: FormState) => {
+    const extra = (await page?.(c, props)) ?? ({} as V);
+    return c.render(<View {...props} {...extra} form={form} />);
+  };
   return async (c: Context<AppEnv>) => {
     const props = await loader(c);
     if (props instanceof Response) return props;
-    if (c.req.method === 'GET') {
-      return c.render(<View {...props} form={{ values: {}, fieldErrors: {}, saved: c.req.query('saved') !== undefined }} />);
-    }
+    if (c.req.method === 'GET') return render(c, props, { values: {}, fieldErrors: {}, saved: c.req.query('saved') !== undefined });
     const values = await formValues(c);
     const parsed = schema.safeParse(values);
     const flattened = parsed.success ? undefined : z.flattenError(parsed.error);
@@ -49,6 +54,6 @@ export function formAction<S extends z.ZodType, P extends object>({ schema, load
     const status = result.status ?? 422;
     if (wantsJson(c)) return c.json({ error: result.formError, fieldErrors: result.fieldErrors ?? {} }, status);
     c.status(status);
-    return c.render(<View {...props} form={{ values, fieldErrors: result.fieldErrors ?? {}, formError: result.formError, saved: false }} />);
+    return render(c, props, { values, fieldErrors: result.fieldErrors ?? {}, formError: result.formError, saved: false });
   };
 }

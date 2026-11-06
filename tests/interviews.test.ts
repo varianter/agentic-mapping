@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { adminCookie, json, setup, sheetForm, type Send } from './helpers';
 
 async function newInterview(owner: Send) {
@@ -90,6 +90,23 @@ test('validation errors name invalid fields and preserve omitted discipline sele
   expect(body.error).toContain('name:');
   expect(body.error).toContain('100000');
   expect(body.fieldErrors.name[0]).toContain('100000');
+});
+
+test('autosave reads and writes only its sheet; opening one reads it once, beside the list and link', async () => {
+  const { owner, store } = setup();
+  const { path, id } = await newInterview(owner);
+  await owner(path);
+  const calls = (['get', 'set', 'keys'] as const).map((method) => [method, spyOn(store, method)] as const);
+  const made = () => Object.fromEntries(calls.map(([method, spy]) => [method, spy.mock.calls.map(([key]) => key)]));
+  await owner(path, { method: 'POST', form: fields(), headers: json });
+  expect(made()).toEqual({ get: [`sheet:${id}`], set: [`sheet:${id}`], keys: [] });
+  for (const [, spy] of calls) spy.mockClear();
+  await owner(path);
+  const { get, keys } = made();
+  expect(keys).toEqual(['sheet:']);
+  // Once to open it, once in the list.
+  expect(get.filter((key: string) => key === `sheet:${id}`)).toHaveLength(2);
+  for (const [, spy] of calls) spy.mockRestore();
 });
 
 test('tampered fields are refused; nothing changes', async () => {

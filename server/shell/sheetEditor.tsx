@@ -31,13 +31,15 @@ export function sheetEditorRoutes({ kind, source, connectUrl }: {
 
   const editor = formAction({
     schema: sheetSchema,
-    loader: async (c) => {
-      const found = await find(c, c.req.param('id') ?? '');
-      if (!found) return unavailable(c);
-      const url = (await connectUrl?.(c, found)) ?? undefined;
-      // Issuing a link can store its hash on the sheet; show what is stored now.
-      const sheet = (await find(c, found.id)) ?? found;
-      return { kind, sheet, sheets: await list(c), connectUrl: url };
+    // Typed parameters, so the view's props are inferred from these two.
+    loader: async (c: Context<AppEnv>) => {
+      const sheet = await find(c, c.req.param('id') ?? '');
+      return sheet ? { kind, sheet } : unavailable(c);
+    },
+    // Only rendered pages need the sidebar and the connect URL; both load at once.
+    page: async (c: Context<AppEnv>, { sheet }: { sheet: Sheet }) => {
+      const [url, sheets] = await Promise.all([connectUrl?.(c, sheet), list(c)]);
+      return { sheets, connectUrl: url ?? undefined };
     },
     onSubmit: async (c, { revision, fields }, { sheet }) => {
       const saved = await saveFields(c.get('store'), sheet, revision, fields, { replace: true });

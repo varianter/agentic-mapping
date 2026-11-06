@@ -40,12 +40,8 @@ export function sheetEditorRoutes({ kind, source, connectUrl }: {
       return { kind, sheet, sheets: await list(c), connectUrl: url };
     },
     onSubmit: async (c, { revision, fields }, { sheet }) => {
-      const saved = await saveFields(c.get('store'), sheet.id, revision, fields, { replace: true });
-      if (!saved.ok) {
-        return saved.reason === 'missing'
-          ? { formError: 'This sheet was deleted on another device. Copy your notes to keep them.', status: 404 }
-          : { formError: 'Another device changed this sheet. Copy your notes, then reload and merge them.', status: 409 };
-      }
+      const saved = await saveFields(c.get('store'), sheet, revision, fields, { replace: true });
+      if (!saved.ok) return { formError: 'Another device changed this sheet. Copy your notes, then reload and merge them.', status: 409 };
       return { redirect: `/${kind}/${sheet.id}?saved`, json: { revision: saved.sheet.revision } };
     },
     view: EditorPage,

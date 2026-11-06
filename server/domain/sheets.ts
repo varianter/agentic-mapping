@@ -56,18 +56,17 @@ export function blankInterview(now = Date.now()): SheetInput {
   return { id: crypto.randomUUID(), source: 'interview', fields: { date: new Date(now).toISOString().slice(0, 10) }, createdAt: now, updatedAt: now };
 }
 
-// Read-check-write, not atomic: the revision the editor saw must still be current.
-export async function saveFields(store: Store, id: string, revision: number, fields: Fields, { replace = false } = {}): Promise<Saved> {
-  const stored = await getSheet(store, id);
-  if (!stored) return { ok: false, reason: 'missing' };
+// Read-check-write, not atomic: `stored` is the sheet this request just read, and the revision the editor saw
+// must still be current.
+export async function saveFields(store: Store, stored: Sheet, revision: number, fields: Fields, { replace = false } = {}): Promise<Saved> {
   if (stored.revision !== revision) return { ok: false, reason: 'conflict' };
   const sheet = { ...stored, fields: replace ? fields : { ...stored.fields, ...fields }, updatedAt: Date.now(), revision: stored.revision + 1 };
-  await store.set(`sheet:${id}`, sheet);
+  await store.set(`sheet:${stored.id}`, sheet);
   return { ok: true, sheet };
 }
 
 // Only answer fields change; interviewer notes on the same sheet are kept.
-export const saveAnswers = (store: Store, sheet: Sheet, revision: number, answers: Answers) => saveFields(store, sheet.id, revision, answers);
+export const saveAnswers = (store: Store, sheet: Sheet, revision: number, answers: Answers) => saveFields(store, sheet, revision, answers);
 
 export async function deleteSheet(store: Store, id: string, revision: number): Promise<Saved> {
   const stored = await getSheet(store, id);

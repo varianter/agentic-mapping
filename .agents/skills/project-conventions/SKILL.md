@@ -29,7 +29,7 @@ description: This project's stack, exact commands (install, run, test, lint, typ
   - `server/domain/`: the rules, independent of HTTP: `fields.ts` (field tables, defined once), `sheets.ts` (get/list/create/save/delete with revision checks), `respondents.ts` (browser bindings, merge), `links.ts` (stable participant links), `groups.ts` (slugs, reserved ids, create/rename, path helpers), `import.ts`, `schemas.ts` (zod form schemas built from the field tables), `credentials.ts`.
   - `server/framework/`: `group.ts` (`resolveGroup`: the URL's group into `c.get('group')`, 404 if unknown), `formAction.tsx` (GET renders; POST validates, then 303 or a 409/422 re-render keeping what was typed; JSON for `Accept: application/json`), `assets.ts` (content-hashed `/assets/*` manifest, served `immutable`), `auth.ts`, `respondentCookie.ts`, `env.ts`.
   - `server/shell/`: shared views: `Layout`, `Sheet` (the sheet form for `respondent` or `interviewer`; respondents never get interviewer fields in the HTML), `Sidebar`, `Toolbar`, `EditorPage`, and `sheetEditor.tsx` (the interviewer's list/editor/download/delete routes for one source).
-  - `public/`: `styles.css` (cascade layers), `img/`, `connect.js`, `elements/` (`autosave-form`, `sheet-tabs`, `tool-list`, `print-button`, `copy-button`; light DOM, never import each other).
+  - `public/`: `styles.css` (cascade layers), `img/`, `connect.js`, `elements/` (`autosave-form`, `sheet-tabs`, `tool-list`, `print-button`, `copy-button`, `sidebar-toggle`; light DOM, never import each other).
   - `server/store.ts`: key-value `Store` (Upstash adapter, Map/JSON-file adapter with `failWrites` for tests). `server/config.ts`: env checks.
 - Package manager or build tool: Bun (`bun.lock`). Do not use npm, yarn or pnpm.
 

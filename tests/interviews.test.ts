@@ -179,3 +179,13 @@ test('interviewers get every tool others listed as suggestions, most used first,
   const html = await (await owner(path)).text();
   expect([...html.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value)).toEqual(['TDD', 'Pairing', 'Synthetic self tool']);
 });
+
+test('the sidebar renders collapsed while the interviewer has hidden it', async () => {
+  const { owner } = setup();
+  const { path } = await newInterview(owner);
+  const open = await (await owner(path)).text();
+  expect(open).toContain('<sidebar-toggle>');
+  expect(open).not.toContain('data-collapsed');
+  const hidden = await (await owner(path, { headers: { Cookie: `${adminCookie}; am_sidebar=closed` } })).text();
+  expect(hidden).toMatch(/<aside class="sidebar"[^>]*data-collapsed=""/);
+});

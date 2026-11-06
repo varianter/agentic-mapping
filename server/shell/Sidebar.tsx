@@ -1,3 +1,5 @@
+import { getCookie } from 'hono/cookie';
+import { useRequestContext } from 'hono/jsx-renderer';
 import { asset } from '../framework/assets';
 import { groupPrefix, type Group } from '../domain/groups';
 import { displayName, type Sheet } from '../domain/sheets';
@@ -8,6 +10,9 @@ const LABELS = {
   submissions: { list: 'Self-submitted maps', empty: 'No self-submitted maps yet.', other: { kind: 'interviews', label: 'Interviews' } },
 };
 
+// Set by <sidebar-toggle>: `closed` while the interviewer has collapsed the list.
+const SIDEBAR_COOKIE = 'am_sidebar';
+
 const meta = (sheet: Sheet, kind: SidebarKind) => {
   const disciplines = [...[sheet.fields.discipline ?? []].flat(), sheet.fields.discipline_other].filter(Boolean);
   return [sheet.fields.date, disciplines.join(', ')].filter(Boolean).join(' · ')
@@ -16,11 +21,13 @@ const meta = (sheet: Sheet, kind: SidebarKind) => {
 
 // The interviewer's list beside the sheet: real links, so switching sheets is a normal navigation.
 // On phones it is a popover opened from the toolbar (see SidebarToggle). Everything in it is in one group.
+// On wide screens the toggle collapses it (to keep the list off a shared screen); the cookie keeps it collapsed across pages.
 export function Sidebar({ kind, sheets, currentId, group }: { kind: SidebarKind; sheets: Sheet[]; currentId?: string; group: Group | null }) {
   const labels = LABELS[kind];
   const prefix = groupPrefix(group?.slug);
+  const collapsed = getCookie(useRequestContext(), SIDEBAR_COOKIE) === 'closed';
   return (
-    <aside class="sidebar" id="sidebar" popover="auto" aria-label={labels.list}>
+    <aside class="sidebar" id="sidebar" popover="auto" aria-label={labels.list} data-collapsed={collapsed ? '' : undefined}>
       <div class="sidebar-head">
         <img class="sidebar-logo" src={asset('img/variant-logo-light.svg')} alt="Variant" width="101" height="24" />
         <p class="sidebar-title">Agentic mapping</p>
@@ -65,8 +72,10 @@ export function Sidebar({ kind, sheets, currentId, group }: { kind: SidebarKind;
 
 export function SidebarToggle({ label }: { label: string }) {
   return (
-    <button type="button" class="btn sidebar-toggle" data-variant="icon" popovertarget="sidebar" aria-label={label}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
-    </button>
+    <sidebar-toggle>
+      <button type="button" class="btn sidebar-toggle" data-variant="icon" popovertarget="sidebar" aria-label={label}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
+    </sidebar-toggle>
   );
 }

@@ -7,12 +7,12 @@ import { Sheet as SheetForm } from './Sheet';
 import { Sidebar, SidebarToggle, type SidebarKind } from './Sidebar';
 import { ConfirmButton, DownloadLink, PrintButton, Toolbar } from './Toolbar';
 
-const SCRIPTS = ['elements/autosave-form.js', 'elements/sheet-tabs.js', 'elements/tool-list.js', 'elements/print-button.js', 'elements/copy-button.js'];
+const SCRIPTS = ['elements/autosave-form.js', 'elements/sheet-tabs.js', 'elements/tool-list.js', 'elements/print-button.js', 'elements/copy-button.js', 'elements/sidebar-toggle.js'];
 
 // What differs between the interviewer's two lists: interviews and self-submitted maps.
 const KINDS = {
-  interviews: { one: 'interview', pill: 'Interview', print: 'Interview - {name} - {date}', toggle: 'Show interview list', empty: 'No interviews yet', emptyText: 'Make one for each conversation. Everything you type is saved to the server as you go.' },
-  submissions: { one: 'map', pill: 'Self-submitted map', print: 'Self-submitted map - {name}', toggle: 'Show map list', empty: 'No self-submitted maps yet', emptyText: 'Maps people fill in on their own, without an interview link, show up here.' },
+  interviews: { one: 'interview', pill: 'Interview', print: 'Interview - {name} - {date}', toggle: 'Interview list', empty: 'No interviews yet', emptyText: 'Make one for each conversation. Everything you type is saved to the server as you go.' },
+  submissions: { one: 'map', pill: 'Self-submitted map', print: 'Self-submitted map - {name}', toggle: 'Map list', empty: 'No self-submitted maps yet', emptyText: 'Maps people fill in on their own, without an interview link, show up here.' },
 };
 
 export type EditorProps = { kind: SidebarKind; group: Group | null; sheet: Sheet; sheets: Sheet[]; connectUrl?: string; toolSuggestions?: string[] };
@@ -63,7 +63,7 @@ export function EditorPage({ kind, group, sheet, sheets, connectUrl, toolSuggest
 export function EmptyListPage({ kind, group, sheets }: { kind: SidebarKind; group: Group | null; sheets: Sheet[] }) {
   const labels = KINDS[kind];
   return (
-    <Layout title={labels.empty}>
+    <Layout title={labels.empty} scripts={['elements/sidebar-toggle.js']}>
       <div class="app">
         <Sidebar kind={kind} sheets={sheets} group={group} />
         <main class="main">
@@ -81,7 +81,7 @@ export function EmptyListPage({ kind, group, sheets }: { kind: SidebarKind; grou
 
 export function NoticePage({ kind, group, sheets, title, message }: { kind: SidebarKind; group: Group | null; sheets: Sheet[]; title: string; message: string }) {
   return (
-    <Layout title={title}>
+    <Layout title={title} scripts={['elements/sidebar-toggle.js']}>
       <div class="app">
         <Sidebar kind={kind} sheets={sheets} group={group} />
         <main class="main">

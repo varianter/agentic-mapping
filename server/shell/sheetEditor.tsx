@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { revisionSchema, sheetSchema } from '../domain/schemas';
-import { deleteSheet, displayName, getSheet, listSheets, publicSheet, saveFields, sourceOf, type Sheet, type Source } from '../domain/sheets';
+import { deleteSheet, displayName, getSheet, listSheets, publicSheet, saveFields, sourceOf, toolSuggestions, type Sheet, type Source } from '../domain/sheets';
 import { requireAdmin } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formAction, formValues } from '../framework/formAction';
@@ -16,6 +16,7 @@ export function sheetEditorRoutes({ kind, source, connectUrl }: {
   connectUrl?: (c: Context<AppEnv>, sheet: Sheet) => Promise<string | null>;
 }) {
   const list = (c: Context<AppEnv>) => listSheets(c.get('store'), source);
+  const ofSource = (sheets: Sheet[]) => sheets.filter((sheet) => sourceOf(sheet) === source);
   const find = async (c: Context<AppEnv>, id: string) => {
     const sheet = await getSheet(c.get('store'), id);
     return sheet && sourceOf(sheet) === source ? sheet : null;
@@ -36,10 +37,10 @@ export function sheetEditorRoutes({ kind, source, connectUrl }: {
       const sheet = await find(c, c.req.param('id') ?? '');
       return sheet ? { kind, sheet } : unavailable(c);
     },
-    // Only rendered pages need the sidebar and the connect URL; both load at once.
+    // Only rendered pages need the sidebar, the connect URL and tool suggestions; all load at once.
     page: async (c: Context<AppEnv>, { sheet }: { sheet: Sheet }) => {
-      const [url, sheets] = await Promise.all([connectUrl?.(c, sheet), list(c)]);
-      return { sheets, connectUrl: url ?? undefined };
+      const [url, all] = await Promise.all([connectUrl?.(c, sheet), listSheets(c.get('store'))]);
+      return { sheets: ofSource(all), connectUrl: url ?? undefined, toolSuggestions: toolSuggestions(all, { exceptId: sheet.id }) };
     },
     onSubmit: async (c, { revision, fields }, { sheet }) => {
       const saved = await saveFields(c.get('store'), sheet, revision, fields, { replace: true });

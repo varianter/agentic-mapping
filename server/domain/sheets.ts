@@ -1,5 +1,5 @@
 import type { Store } from '../store';
-import type { Answers, Fields } from './fields';
+import { listItems, type Answers, type Fields } from './fields';
 
 // One JSON value per sheet at `sheet:<id>`. `source` is `self` or `interview` (missing means interview);
 // `linkHash` ties an interview to its participant link and never leaves the server.
@@ -35,6 +35,26 @@ export const getSheet = async (store: Store, id: string): Promise<Sheet | null> 
 export async function listSheets(store: Store, source?: Source): Promise<Sheet[]> {
   const sheets: (Sheet | null)[] = await Promise.all((await store.keys('sheet:')).map((key) => store.get(key)));
   return sheets.filter((sheet): sheet is Sheet => Boolean(sheet) && (!source || sourceOf(sheet!) === source)).toSorted(byName);
+}
+
+// Tools and techniques others have listed, most used first, for autocomplete. Each sheet counts once per item,
+// ignoring case, shown as most people spell it; the sheet being edited isn't counted. `minSheets` keeps one
+// person's entry from showing to others.
+export function toolSuggestions(sheets: Sheet[], { exceptId, minSheets = 1 }: { exceptId?: string; minSheets?: number } = {}) {
+  const counts = new Map<string, { spellings: Map<string, number>; sheets: number }>();
+  for (const sheet of sheets) {
+    if (sheet.id === exceptId || typeof sheet.fields.tools !== 'string') continue;
+    const items = new Map(listItems(sheet.fields.tools).map((name) => [name.toLowerCase(), name]));
+    for (const [key, name] of items) {
+      const entry = counts.get(key) ?? counts.set(key, { spellings: new Map(), sheets: 0 }).get(key)!;
+      entry.sheets += 1;
+      entry.spellings.set(name, (entry.spellings.get(name) ?? 0) + 1);
+    }
+  }
+  return [...counts.values()].filter((entry) => entry.sheets >= minSheets)
+    .map(({ spellings, sheets }) => ({ name: [...spellings].toSorted((a, b) => b[1] - a[1])[0][0], sheets }))
+    .toSorted((a, b) => b.sheets - a.sheets || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    .slice(0, 500).map((entry) => entry.name);
 }
 
 // Identical create/import retries are safe; an ID collision never overwrites data.

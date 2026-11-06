@@ -27,11 +27,15 @@ export const REFLECTIONS = [
   { name: 'advice', label: 'Day one advice: first, and what can wait' },
 ] as const;
 
+// Answers kept as a list, one item per line: a brain dump of tools and techniques before placing them in the grid.
+export const LIST_ANSWERS = ['tools'];
+export const listItems = (value = '') => value.split('\n').map((item) => item.trim()).filter(Boolean);
+
 // The respondent's own answers: what My map keeps and what a private link may edit.
 // Everything else on the sheet (name, date, interviewer, discipline, context, talk_to) is interviewer-only.
 export const RESPONDENT_FIELDS = [
   ...DIMENSIONS.flatMap((dimension) => GRID_FIELDS.map((field) => `${dimension.key}_${field}`)),
-  'good', ...REFLECTIONS.map((reflection) => reflection.name),
+  'good', 'tools', ...REFLECTIONS.map((reflection) => reflection.name),
 ];
 export const INTERVIEWER_TEXT_FIELDS = ['name', 'date', 'interviewer', 'discipline_other', 'context', 'talk_to'];
 export const LIST_FIELDS = ['discipline'];
@@ -57,9 +61,14 @@ export function withLegacyGrid(fields: Fields = {}): Fields {
 }
 
 // Per answer: an empty side takes the other; differing answers keep both, the interview's first.
+// List answers keep each item once, the interview's first.
 export function mergeAnswers(interview: Answers, mine: Answers): Answers {
   return Object.fromEntries(RESPONDENT_FIELDS.map((key) => {
     const [ours, theirs] = [interview[key] ?? '', mine[key] ?? ''];
+    if (LIST_ANSWERS.includes(key)) {
+      const items = [...listItems(ours), ...listItems(theirs)];
+      return [key, items.filter((item, i) => items.findIndex((other) => other.toLowerCase() === item.toLowerCase()) === i).join('\n')];
+    }
     return [key, !theirs.trim() || ours.trim() === theirs.trim() ? ours : !ours.trim() ? theirs : `${ours}\n\n${theirs}`];
   }));
 }

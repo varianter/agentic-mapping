@@ -6,10 +6,11 @@ import { DIMENSIONS, DISCIPLINES, LEVELS, QUESTIONS, REFLECTIONS, gridField, wit
 // The capture sheet as a real form. Respondents see only their own answers; interviewers see the whole sheet.
 // Without JS, Save posts it; <autosave-form> posts the same body as you type, and <sheet-tabs> turns the three
 // grids into tabs. Print shows all three. `respondentName` lets a respondent name their own map.
+// `toolSuggestions`, what others listed, autocomplete the tools input once <tool-list> adds it.
 export type Audience = 'respondent' | 'interviewer';
 
-export function Sheet({ audience, action, revision, fields, pill, form, statusId = 'save-status', respondentName = false, children }: {
-  audience: Audience; action: string; revision: number; fields: Fields; pill: string; form?: FormState; statusId?: string; respondentName?: boolean; children?: Child;
+export function Sheet({ audience, action, revision, fields, pill, form, statusId = 'save-status', respondentName = false, toolSuggestions = [], children }: {
+  audience: Audience; action: string; revision: number; fields: Fields; pill: string; form?: FormState; statusId?: string; respondentName?: boolean; toolSuggestions?: string[]; children?: Child;
 }) {
   const values = form?.formError ? { ...withLegacyGrid(fields), discipline: [], ...form.values } : withLegacyGrid(fields);
   const text = (name: string) => (typeof values[name] === 'string' ? values[name] as string : '');
@@ -65,6 +66,18 @@ export function Sheet({ audience, action, revision, fields, pill, form, statusId
             <label class="lbl" for="f-good">What really good looks like, to you</label>
             <textarea id="f-good" name="good">{text('good')}</textarea>
           </div>
+        </section>
+
+        {/* A brain dump before the grid. Without JS it's one item per line; <tool-list> adds an item on Enter. */}
+        <section class="field toolbox" aria-labelledby="f-tools-label">
+          <label class="lbl" id="f-tools-label" for="f-tools">Tools and techniques you use</label>
+          <span class="hint" id="f-tools-hint">A brain dump of what you use regularly, from harnesses to apps to skills.</span>
+          <tool-list>
+            <textarea id="f-tools" name="tools" placeholder="One per line" aria-describedby="f-tools-hint">{text('tools')}</textarea>
+            {toolSuggestions.length > 0 && (
+              <datalist id="f-tools-suggestions">{toolSuggestions.map((name) => <option value={name} />)}</datalist>
+            )}
+          </tool-list>
         </section>
 
         <sheet-tabs class="dims" aria-label="Three levels, three questions, three dimensions">

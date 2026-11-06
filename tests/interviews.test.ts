@@ -167,3 +167,15 @@ test('cross-site posts and oversized bodies are refused', async () => {
   expect((await owner(path, { method: 'POST', form: fields(), headers: { Origin: 'https://evil.example', Cookie: adminCookie } })).status).toBe(403);
   expect((await owner(path, { method: 'POST', form: fields({ context: 'x'.repeat(1024 * 1024) }) })).status).toBe(413);
 });
+
+test('interviewers get every tool others listed as suggestions, most used first, not the open sheet’s own', async () => {
+  const { owner, browser } = setup();
+  await browser()('/', { method: 'POST', form: { revision: '0', tools: 'TDD\nSynthetic self tool' } });
+  await browser()('/', { method: 'POST', form: { revision: '0', tools: 'TDD' } });
+  const other = await newInterview(owner);
+  await owner(other.path, { method: 'POST', form: fields({ tools: 'tdd\nPairing' }) });
+  const { path } = await newInterview(owner);
+  await owner(path, { method: 'POST', form: fields({ tools: 'Own tool' }) });
+  const html = await (await owner(path)).text();
+  expect([...html.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value)).toEqual(['TDD', 'Pairing', 'Synthetic self tool']);
+});

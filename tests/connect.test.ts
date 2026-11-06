@@ -123,20 +123,20 @@ test('missing, malformed, unknown and replaced credentials open nothing', async 
 });
 
 for (const [choice, expected] of [
-  ['merge', { good: 'Interview answer\n\nMy answer', advice: 'My advice', missing: 'Interview only', surprised: 'Same' }],
-  ['interview', { good: 'Interview answer', advice: '', missing: 'Interview only', surprised: 'Same' }],
-  ['mine', { good: 'My answer', advice: 'My advice', missing: '', surprised: 'Same' }],
+  ['merge', { good: 'Interview answer\n\nMy answer', tools: 'Claude Code\nTDD\nCodex', advice: 'My advice', missing: 'Interview only', surprised: 'Same' }],
+  ['interview', { good: 'Interview answer', tools: 'Claude Code\nTDD', advice: '', missing: 'Interview only', surprised: 'Same' }],
+  ['mine', { good: 'My answer', tools: 'tdd\nCodex', advice: 'My advice', missing: '', surprised: 'Same' }],
 ] as const) {
   test(`an own map asks first, then "${choice}" sets the interview answers and deletes the own map`, async () => {
     const { store, browser, interview, connect } = setup();
     const me = browser();
-    await me('/', { method: 'POST', form: { revision: '0', good: 'My answer', advice: 'My advice', surprised: 'Same' } });
+    await me('/', { method: 'POST', form: { revision: '0', good: 'My answer', tools: 'tdd\nCodex', advice: 'My advice', surprised: 'Same' } });
     const [ownKey] = await store.keys('sheet:');
-    const { id, credential } = await interview({ name: 'Private synthetic name', good: 'Interview answer', missing: 'Interview only', surprised: 'Same' });
+    const { id, credential } = await interview({ name: 'Private synthetic name', good: 'Interview answer', tools: 'Claude Code\nTDD', missing: 'Interview only', surprised: 'Same' });
     const asked = await connect(me, credential);
     expect(asked.status).toBe(200);
     const html = await asked.text();
-    expect(html).toContain('This browser has your own map with 3 answers. The interview has 3 answers.');
+    expect(html).toContain('This browser has your own map with 4 answers. The interview has 4 answers.');
     expect(html).not.toContain('Private synthetic name');
     // Asking changes nothing.
     expect((await store.get(`sheet:${id}`)).revision).toBe(1);

@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { answersOf } from '../domain/fields';
 import { myMapSchema } from '../domain/schemas';
 import { clearOwnMap, createOwnMap, findBinding } from '../domain/respondents';
-import { saveAnswers, sourceOf } from '../domain/sheets';
+import { listSheets, saveAnswers, sourceOf, toolSuggestions } from '../domain/sheets';
 import type { AppEnv } from '../framework/env';
 import { formAction } from '../framework/formAction';
 import { clearRespondentToken, respondentToken, setRespondentToken } from '../framework/respondentCookie';
@@ -16,6 +16,8 @@ const myMap = formAction({
     const found = await binding(c);
     return { found, fields: found?.sheet?.fields ?? {}, revision: found?.sheet?.revision ?? 0, interview: found?.sheet ? sourceOf(found.sheet) === 'interview' : false, adminEnabled: Boolean(c.get('adminKey')) };
   },
+  // Respondents are anonymous: only suggest what at least two other people listed, never one person's own entry.
+  page: async (c, { found }) => ({ toolSuggestions: toolSuggestions(await listSheets(c.get('store')), { exceptId: found?.sheet?.id, minSheets: 2 }) }),
   onSubmit: async (c, { revision, name, answers }, { found, interview }) => {
     const store = c.get('store');
     const stored = found?.sheet;

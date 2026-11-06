@@ -114,3 +114,18 @@ test('without an admin key My map still saves on the server, with no interviewer
   for (const path of ['/sign-in', '/submissions', '/interviews', '/participant']) expect((await send(path)).status).toBe(404);
   expect((await send('/sign-in', { method: 'POST', form: { key: 'x' } })).status).toBe(404);
 });
+
+test('My map suggests tools at least two other people listed, never one person’s entry or its own', async () => {
+  const { browser } = setup();
+  const save = (tools: string) => browser()('/', { method: 'POST', form: { revision: '0', tools } });
+  await save('Claude Code\nSynthetic private tool');
+  await save('claude code\nTDD');
+  await save('TDD\nClaude Code');
+  const suggestions = (html: string) => [...html.matchAll(/<option value="([^"]+)"/g)].map(([, value]) => value);
+  expect(suggestions(await (await browser()('/')).text())).toEqual(['Claude Code', 'TDD']);
+  const me = browser();
+  await me('/', { method: 'POST', form: { revision: '0', tools: 'Pairing' } });
+  await save('Pairing');
+  // Pairing is listed by me and one other: still only one other person.
+  expect(suggestions(await (await me('/')).text())).toEqual(['Claude Code', 'TDD']);
+});

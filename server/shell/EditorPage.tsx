@@ -6,7 +6,7 @@ import { Sheet as SheetForm } from './Sheet';
 import { Sidebar, SidebarToggle, type SidebarKind } from './Sidebar';
 import { ConfirmButton, DownloadLink, PrintButton, Toolbar } from './Toolbar';
 
-const SCRIPTS = ['elements/autosave-form.js', 'elements/sheet-tabs.js', 'elements/print-button.js', 'elements/copy-button.js'];
+const SCRIPTS = ['elements/autosave-form.js', 'elements/sheet-tabs.js', 'elements/tool-list.js', 'elements/print-button.js', 'elements/copy-button.js'];
 
 // What differs between the interviewer's two lists: interviews and self-submitted maps.
 const KINDS = {
@@ -14,10 +14,10 @@ const KINDS = {
   submissions: { one: 'map', pill: 'Self-submitted map', print: 'Self-submitted map - {name}', toggle: 'Show map list', empty: 'No self-submitted maps yet', emptyText: 'Maps people fill in on their own, without an interview link, show up here.' },
 };
 
-export type EditorProps = { kind: SidebarKind; sheet: Sheet; sheets: Sheet[]; connectUrl?: string };
+export type EditorProps = { kind: SidebarKind; sheet: Sheet; sheets: Sheet[]; connectUrl?: string; toolSuggestions?: string[] };
 
 // The interviewer's editor for one sheet: the list beside it, the whole sheet, and its actions.
-export function EditorPage({ kind, sheet, sheets, connectUrl, form }: EditorProps & { form: FormState }) {
+export function EditorPage({ kind, sheet, sheets, connectUrl, toolSuggestions, form }: EditorProps & { form: FormState }) {
   const labels = KINDS[kind];
   const action = `/${kind}/${sheet.id}`;
   return (
@@ -39,7 +39,7 @@ export function EditorPage({ kind, sheet, sheets, connectUrl, form }: EditorProp
             <DownloadLink href={`${action}.json`} />
             <PrintButton title={labels.print} />
           </Toolbar>
-          <SheetForm audience="interviewer" action={action} revision={sheet.revision} fields={sheet.fields} pill={labels.pill} form={form}>
+          <SheetForm audience="interviewer" action={action} revision={sheet.revision} fields={sheet.fields} pill={labels.pill} form={form} toolSuggestions={toolSuggestions}>
             {connectUrl && (
               <section class="connect-link" id="connect-link" aria-labelledby="connect-link-label">
                 <div>

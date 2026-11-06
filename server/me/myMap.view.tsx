@@ -9,14 +9,14 @@ export type MyMapProps = { fields: Fields; revision: number; interview: boolean;
 const today = () => new Date().toISOString().slice(0, 10);
 
 // My map: the respondent's own answers, or the interview a private link connected this browser to.
-export function MyMapPage({ fields, revision, interview, adminEnabled, form }: MyMapProps & { form: FormState }) {
+export function MyMapPage({ fields, revision, interview, adminEnabled, toolSuggestions, form }: MyMapProps & { toolSuggestions?: string[]; form: FormState }) {
   const notice = interview
     ? 'Saved on the server. Your interviewer can read your answers.'
     : adminEnabled
       ? 'Saved on the server, where Variant’s interviewers can read your answers. This browser remembers your map.'
       : 'Saved on the server. This browser remembers your map.';
   return (
-    <Layout title="My map" scripts={['elements/autosave-form.js', 'elements/sheet-tabs.js', 'elements/print-button.js']}>
+    <Layout title="My map" scripts={['elements/autosave-form.js', 'elements/sheet-tabs.js', 'elements/tool-list.js', 'elements/print-button.js']}>
       <div class="app">
         <main class="main">
           <Toolbar status={form.formError ? 'Not saved' : form.saved ? 'Saved to server' : ''} state={form.formError ? 'error' : ''}>
@@ -36,7 +36,7 @@ export function MyMapPage({ fields, revision, interview, adminEnabled, form }: M
             <DownloadLink href="/me.json" currentForm />
             <PrintButton title={`My agentic map - ${today()}`} />
           </Toolbar>
-          <Sheet audience="respondent" action="/" revision={revision} fields={fields} pill={interview ? 'Your interview' : 'My map'} form={form} respondentName={!interview} />
+          <Sheet audience="respondent" action="/" revision={revision} fields={fields} pill={interview ? 'Your interview' : 'My map'} form={form} respondentName={!interview} toolSuggestions={toolSuggestions} />
         </main>
       </div>
     </Layout>

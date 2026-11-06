@@ -5,11 +5,11 @@ import { DIMENSIONS, DISCIPLINES, LEVELS, QUESTIONS, REFLECTIONS, gridField, wit
 
 // The capture sheet as a real form. Respondents see only their own answers; interviewers see the whole sheet.
 // Without JS, Save posts it; <autosave-form> posts the same body as you type, and <sheet-tabs> turns the three
-// grids into tabs. Print shows all three.
+// grids into tabs. Print shows all three. `respondentName` lets a respondent name their own map.
 export type Audience = 'respondent' | 'interviewer';
 
-export function Sheet({ audience, action, revision, fields, pill, form, statusId = 'save-status', children }: {
-  audience: Audience; action: string; revision: number; fields: Fields; pill: string; form?: FormState; statusId?: string; children?: Child;
+export function Sheet({ audience, action, revision, fields, pill, form, statusId = 'save-status', respondentName = false, children }: {
+  audience: Audience; action: string; revision: number; fields: Fields; pill: string; form?: FormState; statusId?: string; respondentName?: boolean; children?: Child;
 }) {
   const values = form?.formError ? { ...withLegacyGrid(fields), discipline: [], ...form.values } : withLegacyGrid(fields);
   const text = (name: string) => (typeof values[name] === 'string' ? values[name] as string : '');
@@ -29,6 +29,12 @@ export function Sheet({ audience, action, revision, fields, pill, form, statusId
         {form?.formError && <p class="form-error" role="alert">{form.formError}</p>}
 
         <section class="who" aria-label="About the conversation">
+          {!interviewer && respondentName && (
+            <div class="field">
+              <label class="lbl" for="f-name">Your name</label>
+              <input type="text" id="f-name" name="name" autocomplete="name" value={text('name')} />
+            </div>
+          )}
           {interviewer && (
             <>
               <div class="field">

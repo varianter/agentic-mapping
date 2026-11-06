@@ -6,10 +6,12 @@ const text = z.string().max(100_000).optional();
 const revision = z.coerce.number().int().nonnegative();
 const defined = <T>(fields: Record<string, T | undefined>) => Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as Record<string, T>;
 
-export const answersSchema = z.strictObject({
+// My map: the respondent's answers, plus their name, which only an own map stores (on an interview it's interviewer-only).
+export const myMapSchema = z.strictObject({
   revision,
+  name: text,
   ...Object.fromEntries(RESPONDENT_FIELDS.map((name) => [name, text])),
-}).transform(({ revision, ...answers }) => ({ revision, answers: defined(answers as Record<string, string | undefined>) }));
+}).transform(({ revision, name, ...answers }) => ({ revision, name, answers: defined(answers as Record<string, string | undefined>) }));
 
 // Unchecked boxes send nothing, so the discipline list defaults to empty.
 export const sheetSchema = z.strictObject({

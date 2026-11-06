@@ -2,16 +2,17 @@ import { expect, test } from 'bun:test';
 import { RESPONDENT_FIELDS } from '../server/domain/fields';
 import { json, setup, sheetForm } from './helpers';
 
-test('My map renders only respondent fields and opening it stores nothing', async () => {
+test('My map renders only respondent fields and a name, and opening it stores nothing', async () => {
   const { store, browser } = setup();
   const page = await browser()('/');
   expect(page.status).toBe(200);
   const html = await page.text();
   const form = sheetForm(html);
   expect(form.revision).toBe(0);
-  expect(form.names.toSorted()).toEqual([...RESPONDENT_FIELDS].toSorted());
+  expect(form.names.toSorted()).toEqual([...RESPONDENT_FIELDS, 'name'].toSorted());
+  expect(html).toContain('Your name');
   // Interviewer-only fields are not sent at all, rather than hidden.
-  for (const name of ['name="name"', 'name="interviewer"', 'name="talk_to"', 'name="discipline"']) expect(html).not.toContain(name);
+  for (const name of ['name="interviewer"', 'name="talk_to"', 'name="discipline"']) expect(html).not.toContain(name);
   expect(html).toContain('href="/sign-in"');
   expect(await store.keys('')).toEqual([]);
 });
@@ -60,7 +61,7 @@ test('autosave posts the same form for JSON; stale revisions conflict and keep w
 test('only answer fields are accepted, and cross-site posts are refused', async () => {
   const { store, browser } = setup();
   const me = browser();
-  for (const form of [{ revision: '0', name: 'Forbidden' }, { revision: '0', good: ['One', 'Two'] }, { revision: '-1', good: 'x' }, { revision: 'x', good: 'x' }, { good: 'x' }]) {
+  for (const form of [{ revision: '0', interviewer: 'Forbidden' }, { revision: '0', good: ['One', 'Two'] }, { revision: '-1', good: 'x' }, { revision: 'x', good: 'x' }, { good: 'x' }]) {
     expect((await me('/', { method: 'POST', form, headers: json })).status).toBe(422);
   }
   expect((await me('/', { method: 'POST', form: { revision: '0', good: 'x' }, headers: { Origin: 'https://untrusted.example' } })).status).toBe(403);
@@ -78,7 +79,18 @@ test('Download JSON returns the answers as a file', async () => {
   expect(file.headers.get('Content-Disposition')).toContain('my-agentic-map.json');
   const { fields } = await file.json();
   expect(fields.advice).toBe('Synthetic advice');
-  expect(Object.keys(fields).toSorted()).toEqual([...RESPONDENT_FIELDS].toSorted());
+  expect(Object.keys(fields).toSorted()).toEqual([...RESPONDENT_FIELDS, 'name'].toSorted());
+});
+
+test('an own map keeps the name the respondent registers', async () => {
+  const { browser, owner } = setup();
+  const me = browser();
+  await me('/', { method: 'POST', form: { revision: '0', name: 'Synthetic Respondent', good: 'Synthetic' } });
+  expect(sheetForm(await (await me('/')).text()).fields).toMatchObject({ name: 'Synthetic Respondent', good: 'Synthetic' });
+  expect((await (await me('/me.json')).json()).fields.name).toBe('Synthetic Respondent');
+  // The interviewer's list of self-submitted maps shows it.
+  const location = (await owner('/submissions')).headers.get('Location')!;
+  expect(await (await owner(location)).text()).toContain('<span class="sheet-name">Synthetic Respondent</span>');
 });
 
 test('clearing deletes the map and the cookie', async () => {

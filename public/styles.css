@@ -322,6 +322,7 @@
     grid-template-columns: 1fr 1.8fr 1.1fr 1.6fr;
     gap: 16px;
     &:has(> .field:only-child) { grid-template-columns: minmax(0, 1fr); }
+    &:where(:has(> .field:first-child:nth-last-child(2))) { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); }
     & > .field { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; margin: 0; min-inline-size: 0; }
     & label.lbl { display: block; }
     & .field input + label.lbl { margin-block-start: 8px; }
@@ -530,7 +531,8 @@
     .sheet-logo { inline-size: 84px; }
     .pill { font-size: 10px; padding: 3px 10px; }
     .who { gap: 8px; }
-    .who:not(:has(> .field:only-child)) { grid-template-columns: 1fr 1.8fr 1.1fr 1.6fr; }
+    .who:not(:has(> .field:only-child, > .field:first-child:nth-last-child(2))) { grid-template-columns: 1fr 1.8fr 1.1fr 1.6fr; }
+    .who:has(> .field:first-child:nth-last-child(2)) { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); }
     .who > .field { padding: 8px 10px; gap: 3px; }
     .lbl { font-size: 9px; }
     .hint { font-size: 10px; }

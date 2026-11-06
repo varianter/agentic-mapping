@@ -36,7 +36,7 @@ export function MyMapPage({ fields, revision, interview, adminEnabled, form }: M
             <DownloadLink href="/me.json" currentForm />
             <PrintButton title={`My agentic map - ${today()}`} />
           </Toolbar>
-          <Sheet audience="respondent" action="/" revision={revision} fields={fields} pill={interview ? 'Your interview' : 'My map'} form={form} />
+          <Sheet audience="respondent" action="/" revision={revision} fields={fields} pill={interview ? 'Your interview' : 'My map'} form={form} respondentName={!interview} />
         </main>
       </div>
     </Layout>

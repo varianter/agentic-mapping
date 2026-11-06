@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { createApp, sessionToken } from '../server/app';
 import { RESPONDENT_FIELDS } from '../server/domain/fields';
 import { memoryStore } from '../server/store';
-import { adminKey, origin, setup as baseSetup, sheetForm, type Send } from './helpers';
+import { adminKey, json, origin, setup as baseSetup, sheetForm, type Send } from './helpers';
 
 const hash = (credential: string) => createHash('sha256').update(credential).digest('hex');
 
@@ -76,6 +76,10 @@ test('a link connects the browser to its interview until the interview is delete
   expect(await myMap(me)).toMatchObject({ revision: 1, fields: { good: 'Interview answer' } });
   await me('/', { method: 'POST', form: { revision: '1', advice: 'Added later' } });
   expect((await store.get(`sheet:${id}`)).fields).toEqual({ name: 'Private synthetic name', good: 'Interview answer', advice: 'Added later' });
+  // The name on an interview is the interviewer's: no field for it, and a posted one is refused.
+  expect(page).not.toContain('name="name"');
+  expect((await me('/', { method: 'POST', form: { revision: '2', name: 'Renamed' }, headers: json })).status).toBe(422);
+  expect((await store.get(`sheet:${id}`)).fields.name).toBe('Private synthetic name');
   // Interview answers can't be cleared from My map.
   expect((await me('/clear', { method: 'POST', form: {} })).status).toBe(409);
   // Showing the link again keeps the browser connected.

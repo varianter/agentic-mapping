@@ -46,7 +46,7 @@ const stepAction = (survey: Survey, index: number) => formAction({
     const go = (['next', 'back', 'submit'].includes(c.req.query('go') ?? '') ? c.req.query('go') : undefined) as Go;
     const merged = keepSubject(survey, answers, applyStep(answers, step, posted));
     const submit = go === 'submit' && index === survey.steps.length - 1;
-    // Moving on needs this step's required answers; submitting needs every step's.
+    // Moving on needs this step's required answers and even splits; submitting needs every step's.
     if (go === 'next' || submit) {
       const missing = missingRequired(step, merged);
       if (missing.length) return { formError: 'Answer the questions marked required to go on.', fieldErrors: Object.fromEntries(missing.map((name) => [name, ['Answer this to go on.']])), status: 422 };
@@ -54,6 +54,8 @@ const stepAction = (survey: Survey, index: number) => formAction({
       if (uneven) return { formError: `Your ${uneven.group} split adds up to ${uneven.total}%. Make it 100%, or leave it empty.`, fieldErrors: { [uneven.name]: [`Your ${uneven.group} split adds up to ${uneven.total}%, not 100%.`] }, status: 422 };
       const earlier = survey.steps.findIndex((other) => missingRequired(other, merged).length);
       if (submit && earlier >= 0) return { formError: `Step ${earlier + 1}, “${phrase(survey.steps[earlier].title, subjectOf(merged))}”, has a required answer missing. Go back and answer it first.`, status: 422 };
+      const split = survey.steps.findIndex((other) => unevenShares(other, merged).length);
+      if (submit && split >= 0) return { formError: `Step ${split + 1}, “${phrase(survey.steps[split].title, subjectOf(merged))}”, has a split that doesn’t add up to 100%. Go back and fix it first.`, status: 422 };
     }
     const saved = await saveResponse(c.get('store'), wave, found, revision, merged, { submit });
     if (!saved.ok) {

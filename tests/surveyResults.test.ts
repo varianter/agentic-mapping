@@ -1,0 +1,52 @@
+import { expect, test } from 'bun:test';
+import { SURVEY_V1 } from '../server/domain/survey';
+import { summarize } from '../server/domain/surveyResults';
+import type { SurveyResponse } from '../server/domain/waves';
+import { groupWithWave, setup } from './helpers';
+
+let id = 0;
+const response = (answers: SurveyResponse['answers'], submitted = true): SurveyResponse => ({
+  id: String(++id), waveId: 'w', version: 1, answers, createdAt: id, updatedAt: id, revision: 1, ...(submitted ? { submittedAt: id } : {}),
+});
+const many = (count: number, answers: SurveyResponse['answers']) => Array.from({ length: count }, () => response(answers));
+const question = (summary: ReturnType<typeof summarize>, title: string, name: string) => summary.sections.find((section) => section.title === title)!.questions.find((result) => result.question.name === name)!;
+
+test('results count submitted answers per option, split context answers by subject and hide small groups', () => {
+  const responses = [
+    ...many(4, { role: 'developer', context: 'customer', autonomy: 'handoff', models: ['claude', 'gpt'], expectation: 'expects' }),
+    ...many(2, { role: 'ux', context: 'own', autonomy: 'chat', models: ['gpt'], expectation: 'neutral' }),
+    response({ role: 'ux', autonomy: 'workflow' }, false),
+  ];
+  const summary = summarize(SURVEY_V1, responses);
+  expect(summary).toMatchObject({ n: 6, hidden: false });
+  const autonomy = question(summary, 'Models and tools', 'autonomy');
+  expect(autonomy.kind === 'choice' && autonomy.tallies.filter((item) => item.count).map((item) => [item.value, item.count])).toEqual([['chat', 2], ['handoff', 4]]);
+  const models = question(summary, 'Models and tools', 'models');
+  expect(models.kind === 'choice' && models.tallies.find((item) => item.value === 'gpt')!.count).toBe(6);
+  const customers = summary.sections.find((section) => section.title === 'About customers')!;
+  const own = summary.sections.find((section) => section.title === 'About their own organization')!;
+  expect([customers.n, customers.hidden, own.n, own.hidden]).toEqual([4, true, 2, true]);
+  // A role filter under five answers hides everything.
+  expect(summarize(SURVEY_V1, responses, { role: 'ux' })).toMatchObject({ n: 2, hidden: true });
+});
+
+test('interviewers read a wave’s results; drafts are counted apart and never shown', async () => {
+  const { owner, browser, send, store } = setup();
+  await groupWithWave(owner);
+  const [key] = await store.keys('wave:company-a:');
+  const waveId = key.split(':').pop()!;
+  for (const answers of many(5, { role: 'developer', context: 'customer', autonomy: 'parallel', wish: 'Synthetic wish' })) {
+    await store.set(`response:${waveId}:${answers.id}`, { ...answers, waveId });
+  }
+  await browser()('/company-a/survey/1', { method: 'POST', form: { revision: '0', role: 'ux' } });
+  expect((await send(`/company-a/waves/${waveId}`)).headers.get('Location')).toBe('/sign-in');
+  const page = await (await owner(`/company-a/waves/${waveId}`)).text();
+  expect(page).toContain('5 answers');
+  expect(page).toContain('1 in progress, not counted');
+  expect(page).toContain('I run several agents at once: 5 of 5');
+  expect(page).toContain('Synthetic wish');
+  const filtered = await (await owner(`/company-a/waves/${waveId}?role=ux`)).text();
+  expect(filtered).toContain('id="results-hidden"');
+  expect(filtered).not.toContain('Synthetic wish');
+  expect((await owner('/company-a/waves/00000000-0000-0000-0000-000000000000')).status).toBe(404);
+});

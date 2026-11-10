@@ -708,6 +708,50 @@
     & dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; }
   }
 
+  /* ---------- Survey results ---------- */
+
+  .groups-head h1 .pill { vertical-align: middle; font-size: 14px; }
+  .results-page { max-inline-size: 56rem; }
+  .results-filter {
+    display: flex !important; align-items: center; gap: 8px;
+    & select { min-block-size: 32px; padding: 4px 12px; border: 1px solid var(--grey-400); border-radius: var(--radius-pill); background: var(--white); color: var(--ink); font: 400 14px/1.2 var(--font-sans); }
+  }
+  .results-section {
+    display: flex; flex-direction: column; gap: 12px;
+    & > h2 { margin: 12px 0 0; font-size: 28px; & .hint { font-size: 16px; font-weight: 400; } }
+  }
+  .results-question .survey-prompt { font-size: 18px; }
+  .empty-note { margin: 0; padding: 16px 20px; border: 2px dashed var(--grey-300); border-radius: var(--radius-lg); color: var(--grey-600); }
+  .results-bars {
+    display: grid; gap: 8px; margin: 0; padding: 0; list-style: none;
+    & li { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) 5.5rem; align-items: center; gap: 12px; }
+    & .results-count { font-size: 14px; color: var(--grey-600); text-align: end; font-variant-numeric: tabular-nums; }
+    & progress {
+      appearance: none; inline-size: 100%; block-size: 14px; border: 0; border-radius: var(--radius-pill); background: var(--paper); overflow: hidden;
+      &::-webkit-progress-bar { background: var(--paper); border-radius: var(--radius-pill); }
+      &::-webkit-progress-value { background: var(--yellow); border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1.5px var(--ink); }
+      &::-moz-progress-bar { background: var(--yellow); border-radius: var(--radius-pill); }
+    }
+  }
+  .results-table {
+    overflow-x: auto;
+    & table { inline-size: 100%; border-collapse: separate; border-spacing: 4px; font-size: 14px; font-variant-numeric: tabular-nums; }
+    & th { font-weight: 600; text-align: start; vertical-align: bottom; }
+    & thead th { font-size: 13px; color: var(--grey-600); }
+    & tbody th { font-weight: 400; min-inline-size: 12rem; }
+    & td { padding: 6px 8px; text-align: center; border-radius: 8px; background: var(--paper); }
+    /* Shade by share, in quarters: the yellow deepens as more people chose it. */
+    & td[data-share="1"] { background: color-mix(in srgb, var(--yellow) 25%, var(--white)); }
+    & td[data-share="2"] { background: color-mix(in srgb, var(--yellow) 50%, var(--white)); }
+    & td[data-share="3"] { background: color-mix(in srgb, var(--yellow) 75%, var(--white)); }
+    & td[data-share="4"] { background: var(--yellow); }
+    & td:last-child { background: transparent; color: var(--grey-600); }
+  }
+  .results-texts { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; }
+  @media (max-width: 560px) {
+    .results-bars li { grid-template-columns: minmax(0, 1fr) 5rem; & progress { grid-column: 1 / -1; grid-row: 2; } }
+  }
+
   /* The survey has no sidebar, so the window decides. */
   @media (max-width: 560px) {
     .survey-head { grid-template-columns: minmax(0, 1fr); & .sheet-logo { grid-row: 1; inline-size: 96px; } & h1 { font-size: 32px; } }

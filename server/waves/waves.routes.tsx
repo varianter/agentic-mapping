@@ -2,11 +2,14 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Group } from '../domain/groups';
 import { waveSchema } from '../domain/schemas';
+import { surveyFor } from '../domain/survey';
+import { summarize } from '../domain/surveyResults';
 import { createWave, defaultWaveName, getWave, listResponses, listWaves, setWaveStatus, type Wave, type WaveStatus } from '../domain/waves';
 import { requireAdmin } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formAction } from '../framework/formAction';
 import { resolveGroup } from '../framework/group';
+import { ResultsPage } from './results.view';
 import { WavesPage, type WaveRow } from './waves.view';
 
 // The survey's waves in one group, mounted at `/:group/waves`: open, close and reopen them, and their results.
@@ -49,8 +52,21 @@ const status = (to: WaveStatus) => formAction({
   view: ({ wave: _wave, ...props }) => <WavesPage {...props} />,
 });
 
+// Results: submitted answers only, `?role=` for one role's.
+async function results(c: Context<AppEnv>) {
+  const store = c.get('store');
+  const group = groupOf(c);
+  const wave = await getWave(store, group.slug, c.req.param('id'));
+  if (!wave) return c.notFound();
+  const responses = await listResponses(store, wave.id);
+  const role = c.req.query('role') ?? '';
+  const summary = summarize(surveyFor(wave.version), responses, { role: role || undefined });
+  return c.render(<ResultsPage group={group} wave={wave} role={role} drafts={responses.filter((response) => !response.submittedAt).length} {...summary} />);
+}
+
 export const waveRoutes = new Hono<AppEnv>()
   .use(requireAdmin, resolveGroup)
   .on(['GET', 'POST'], '/', create)
+  .get('/:id', results)
   .post('/:id/close', status('closed'))
   .post('/:id/reopen', status('open'));

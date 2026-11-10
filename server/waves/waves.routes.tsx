@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Group } from '../domain/groups';
 import { waveSchema } from '../domain/schemas';
 import { surveyFor } from '../domain/survey';
-import { summarize } from '../domain/surveyResults';
+import { summarize, toCsv } from '../domain/surveyResults';
 import { createWave, defaultWaveName, getWave, listResponses, listWaves, setWaveStatus, type Wave, type WaveStatus } from '../domain/waves';
 import { requireAdmin } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
@@ -64,9 +64,20 @@ async function results(c: Context<AppEnv>) {
   return c.render(<ResultsPage group={group} wave={wave} role={role} drafts={responses.filter((response) => !response.submittedAt).length} {...summary} />);
 }
 
+async function csv(c: Context<AppEnv>) {
+  const store = c.get('store');
+  const group = groupOf(c);
+  const wave = await getWave(store, group.slug, c.req.param('file').slice(0, -'.csv'.length));
+  if (!wave) return c.notFound();
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Survey - ${group.name} - ${wave.name}.csv`)}`);
+  return c.body(toCsv(surveyFor(wave.version), await listResponses(store, wave.id)));
+}
+
 export const waveRoutes = new Hono<AppEnv>()
   .use(requireAdmin, resolveGroup)
   .on(['GET', 'POST'], '/', create)
+  .get('/:file{[0-9a-fA-F-]{36}\\.csv}', csv)
   .get('/:id', results)
   .post('/:id/close', status('closed'))
   .post('/:id/reopen', status('open'));

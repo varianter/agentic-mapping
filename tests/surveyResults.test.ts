@@ -50,3 +50,26 @@ test('interviewers read a wave’s results; drafts are counted apart and never s
   expect(filtered).not.toContain('Synthetic wish');
   expect((await owner('/company-a/waves/00000000-0000-0000-0000-000000000000')).status).toBe(404);
 });
+
+test('the CSV has one row per submitted response, one column per answer, and is safe to open in a spreadsheet', async () => {
+  const { owner, send, store } = setup();
+  await groupWithWave(owner);
+  const [key] = await store.keys('wave:company-a:');
+  const waveId = key.split(':').pop()!;
+  await store.set(`response:${waveId}:a`, { ...response({ role: 'developer', models: ['claude', 'gpt'], wish: '=HYPERLINK("x"), with "quotes"' }), waveId });
+  await store.set(`response:${waveId}:b`, { ...response({ role: 'ux' }, false), waveId });
+  expect((await send(`/company-a/waves/${waveId}.csv`)).status).toBe(303);
+  const download = await owner(`/company-a/waves/${waveId}.csv`);
+  expect(download.headers.get('Content-Type')).toContain('text/csv');
+  expect(download.headers.get('Content-Disposition')).toContain('attachment');
+  const lines = (await download.text()).trimEnd().split('\r\n');
+  expect(lines).toHaveLength(2);
+  const header = lines[0].split(',');
+  expect(header.slice(0, 4)).toEqual(['version', 'submitted', 'role', 'experience']);
+  expect(header).toContain('task_code');
+  expect(header).toContain('models_other');
+  expect(lines[1]).toStartWith('1,');
+  expect(lines[1]).toContain(',developer,');
+  expect(lines[1]).toContain('"claude; gpt"');
+  expect(lines[1]).toContain(`"'=HYPERLINK(""x""), with ""quotes"""`);
+});

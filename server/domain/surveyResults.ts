@@ -1,4 +1,4 @@
-import { otherField, phrase, rowField, type Option, type Question, type Step, type Subject, type Survey, type SurveyAnswers } from './survey';
+import { otherField, phrase, rowField, surveyFields, type Option, type Question, type Step, type Subject, type Survey, type SurveyAnswers } from './survey';
 import type { SurveyResponse } from './waves';
 
 // Fewer answers than this are never shown, so a filter can't single out one person.
@@ -45,3 +45,17 @@ export function summarize(survey: Survey, responses: SurveyResponse[], { role }:
   return { n: included.length, hidden: included.length < MIN_RESPONSES, sections };
 }
 
+// One row per submitted response, one column per answer, in questionnaire order. Lists are joined with "; ".
+export function toCsv(survey: Survey, responses: SurveyResponse[]) {
+  const fields = surveyFields(survey);
+  const cell = (value: unknown) => {
+    const text = Array.isArray(value) ? value.join('; ') : typeof value === 'string' ? value : value === undefined ? '' : String(value);
+    // A leading =, +, - or @ would run as a formula in a spreadsheet: prefix it and quote it.
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return /[",\n\r;]/.test(safe) || safe !== text ? `"${safe.replaceAll('"', '""')}"` : safe;
+  };
+  const rows = responses.filter((response) => response.submittedAt).map((response) => [
+    response.version, new Date(response.submittedAt!).toISOString().slice(0, 10), ...fields.map((name) => response.answers[name]),
+  ].map(cell).join(','));
+  return [['version', 'submitted', ...fields].join(','), ...rows].join('\r\n') + '\r\n';
+}

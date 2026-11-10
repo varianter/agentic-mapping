@@ -21,7 +21,7 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 3. **Models and tools**: model families, then, per provider, how use splits across its tiers (Fable, Opus, Sonnet…; percentages adding up to 100 per provider, compared by size class across providers), who picks the model, tools, main tool, the **autonomy ladder** (0–6), who pays (all that apply).
 4. **How it's going**: six agree/disagree statements, time saved per week, the biggest blocker.
 5. **Your customer / your organization**: expectation ladder, maturity in six areas (not there / emerging / established / leading / don't know), industry, product-development size.
-6. **Last word**: one thing that would help (optional free text), then Submit.
+6. **Last word**: one thing that would help, and what the workplace should set up or enable (both optional free text), then Submit.
 
 ## Data
 

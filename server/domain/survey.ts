@@ -283,9 +283,13 @@ export const SURVEY_V1: Survey = {
     {
       key: 'last',
       title: 'Last word',
-      intro: 'Optional, and the most useful answer for us to read.',
+      intro: 'Optional, and the most useful answers for us to read.',
       questions: [
         { kind: 'text', name: 'wish', prompt: 'One thing that would help you get more out of AI' },
+        {
+          kind: 'text', name: 'workplace', prompt: 'What should your workplace set up or enable so you can do more with AI? What do you miss today?',
+          hint: 'Tools and licences, access, guidelines, time to learn, training, people to learn from…',
+        },
       ],
     },
   ],

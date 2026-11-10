@@ -11,7 +11,7 @@ async function answerAll(me: Send, { context = 'customer', autonomy = 'handoff' 
   await step(me, 3, { revision: String(await revisionOf(me, 3)), models: ['claude', 'gpt'], tools: 'claude-code', main_tool: 'claude-code', autonomy, pays: ['customer', 'me'] }, 'next');
   await step(me, 4, { revision: String(await revisionOf(me, 4)), agree_enjoy: '5', time_saved: '3-8', blocker: 'time' }, 'next');
   await step(me, 5, { revision: String(await revisionOf(me, 5)), expectation: 'encourages', maturity_policy: 'emerging', industry: 'energy', size: '50-200' }, 'next');
-  return step(me, 6, { revision: String(await revisionOf(me, 6)), wish: 'Synthetic wish' }, 'submit');
+  return step(me, 6, { revision: String(await revisionOf(me, 6)), wish: 'Synthetic wish', workplace: 'Synthetic licences' }, 'submit');
 }
 
 test('without an open wave the survey says so, and posts are refused', async () => {
@@ -45,7 +45,7 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   expect(submitted.headers.get('Location')).toBe('/company-a/survey/done');
   const [key] = await store.keys('response:');
   const response = await store.get(key);
-  expect(response).toMatchObject({ version: 1, answers: { role: 'developer', models: ['claude', 'gpt'], tools: ['claude-code'], pays: ['customer', 'me'], autonomy: 'handoff', wish: 'Synthetic wish' } });
+  expect(response).toMatchObject({ version: 1, answers: { role: 'developer', models: ['claude', 'gpt'], tools: ['claude-code'], pays: ['customer', 'me'], autonomy: 'handoff', wish: 'Synthetic wish', workplace: 'Synthetic licences' } });
   expect(response.submittedAt).toBeNumber();
   // Nothing in the store names the browser.
   const token = /^am_respondent=([a-f0-9]{64});/.exec(submitted.headers.get('Set-Cookie') ?? '')![1];

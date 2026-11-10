@@ -68,6 +68,7 @@ test('the CSV has one row per submitted response, one column per answer, and is 
   expect(header.slice(0, 4)).toEqual(['version', 'submitted', 'role', 'experience']);
   expect(header).toContain('task_code');
   expect(header).toContain('models_other');
+  expect(header.slice(-2)).toEqual(['wish', 'workplace']);
   expect(lines[1]).toStartWith('1,');
   expect(lines[1]).toContain(',developer,');
   expect(lines[1]).toContain('"claude; gpt"');

@@ -150,6 +150,8 @@ test('the model split shows every family without JS and holds you on the step un
   expect(page).not.toContain('name="tools" value="other"');
   expect(page).toContain('name="models" value="other"');
   for (const name of ['share_fable', 'share_opus', 'share_sonnet', 'share_haiku', 'share_gpt-pro', 'share_gemini-flash']) expect(page).toContain(`name="${name}"`);
+  // Any whole percentage, like 33 and 67, is a valid input.
+  expect(page).toContain('max="100" step="1"');
   const uneven = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_gpt: '20' }, 'next');
   expect(uneven.status).toBe(422);
   const html = await uneven.text();

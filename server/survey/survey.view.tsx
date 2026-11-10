@@ -87,7 +87,7 @@ function Options({ question, values, subject }: { question: Question; values: Su
               return (
                 <label class="share-tier">
                   <span>{item.label}</span>
-                  <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="5" inputmode="numeric" placeholder="0" /><span>%</span></span>
+                  <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="1" inputmode="numeric" placeholder="0" /><span>%</span></span>
                 </label>
               );
             })}

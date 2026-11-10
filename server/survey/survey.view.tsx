@@ -138,7 +138,7 @@ function Options({ question, values, subject }: { question: Question; values: Su
   }
   const type = question.kind === 'multi' ? 'checkbox' : 'radio';
   const checked = (value: string) => list(values[question.name]).includes(value);
-  if (question.kind === 'single' && question.display === 'chips') {
+  if (question.display === 'chips') {
     return (
       <div class="chips">
         {question.options.map((item) => <label class="chip"><input type={type} name={question.name} value={item.value} checked={checked(item.value)} /><span>{item.label}</span></label>)}

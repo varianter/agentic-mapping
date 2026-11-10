@@ -28,7 +28,7 @@ test('a step accepts only its own questions and their options', () => {
 
 test('saving a step clears unticked checkboxes and keeps everything else', () => {
   const stored = { role: 'developer', models: ['claude'], autonomy: 'chat' };
-  expect(applyStep(stored, step('tools'), { autonomy: 'parallel' })).toEqual({ role: 'developer', models: [], tools: [], autonomy: 'parallel' });
+  expect(applyStep(stored, step('tools'), { autonomy: 'parallel' })).toEqual({ role: 'developer', models: [], tools: [], pays: [], autonomy: 'parallel' });
   expect(missingRequired(step('you'), { role: 'ux' })).toEqual(['context']);
   expect(missingRequired(step('you'), { role: 'ux', context: 'own' })).toEqual([]);
 });

@@ -11,7 +11,7 @@ export type TierGroup = { option: string; label: string; tiers: Tier[] };
 type Base = { name: string; prompt: string; hint?: string; required?: boolean };
 export type Question =
   | Base & { kind: 'single'; options: Option[]; display?: 'cards' | 'chips' | 'select'; other?: boolean }
-  | Base & { kind: 'multi'; options: Option[]; other?: boolean }
+  | Base & { kind: 'multi'; options: Option[]; display?: 'cards' | 'chips'; other?: boolean }
   | Base & { kind: 'matrix'; rows: Row[]; options: Option[]; legend?: boolean }
   // A percentage split, adding up to 100, over the tiers of the families ticked in the `from` question.
   | Base & { kind: 'shares'; from: string; groups: TierGroup[] }
@@ -184,8 +184,8 @@ export const SURVEY_V1: Survey = {
         { kind: 'single', name: 'main_tool', prompt: 'Which one is your main tool?', options: TOOLS, display: 'select' },
         { kind: 'single', name: 'autonomy', prompt: 'Which best describes how you usually work with AI?', hint: 'Pick your usual day, not what you’ve tried once.', options: AUTONOMY },
         {
-          kind: 'single', name: 'pays', prompt: 'Who pays for your AI tools?', display: 'chips',
-          options: [option('customer', 'The customer'), option('employer', 'My employer'), option('me', 'I do'), option('mixed', 'A mix'), option('free', 'Free tiers only')],
+          kind: 'multi', name: 'pays', prompt: 'Who pays for your AI tools?', hint: 'Tick all that apply: it can differ from tool to tool.', display: 'chips',
+          options: [option('customer', 'The customer'), option('employer', 'My employer'), option('me', 'I do'), option('free', 'Free tiers')],
         },
       ],
     },

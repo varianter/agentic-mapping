@@ -13,12 +13,6 @@
       "WebFetch",
       "WebSearch",
       "Write"
-    ],
-    "deny": [
-      "Bash(gh *)",
-      "Bash(git push *)",
-      "Bash(git remote *)",
-      "Bash(git config *)"
     ]
   },
   "attribution": {

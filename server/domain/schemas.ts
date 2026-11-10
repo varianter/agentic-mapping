@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { INTERVIEWER_TEXT_FIELDS, RESPONDENT_FIELDS } from './fields';
+import { otherField, rowField, tierField, type Step } from './survey';
 
 // Form bodies, built from the field tables. Strict: an unknown field is a tampered form, never stored.
 const text = z.string().max(100_000).optional();
@@ -25,3 +26,28 @@ export const revisionSchema = z.object({ revision: revision.pipe(z.number().posi
 // Groups: a name, and on creation an optional id (from the name when empty). `createGroup` checks the rest.
 export const groupSchema = z.strictObject({ name: z.string().max(200), slug: z.string().max(100).optional() });
 export const renameGroupSchema = z.strictObject({ name: z.string().max(200) });
+
+// One survey step: only its own questions, each answer one of the question's options. Free text stays short.
+const choice = (values: string[]) => z.enum(values as [string, ...string[]]).optional();
+const choices = (values: string[]) => z.union([z.string(), z.array(z.string())]).optional()
+  .transform((value) => (value === undefined ? undefined : [value].flat())).pipe(z.array(z.enum(values as [string, ...string[]])).max(values.length).optional());
+const short = z.string().max(200).optional();
+// A whole percentage, or empty for none.
+const percent = z.string().regex(/^(100|[1-9]?\d)?$/, 'Use a whole number from 0 to 100.').optional();
+
+// `wave` is the wave the page was rendered for, so a form left open across waves never saves into the next one.
+export const surveyStepSchema = (step: Step) => z.strictObject({
+  revision,
+  wave: z.string().max(100),
+  ...Object.fromEntries(step.questions.flatMap((question): [string, z.ZodType][] => {
+    if (question.kind === 'text') return [[question.name, z.string().max(5000).optional()]];
+    if (question.kind === 'shares') return question.groups.flatMap((group) => group.tiers.map((item): [string, z.ZodType] => [tierField(question, item), percent]));
+    const values = question.options.map((item) => item.value);
+    if (question.kind === 'matrix') return question.rows.map((row) => [rowField(question, row), choice(values)]);
+    const other = question.kind === 'multi' && question.other === 'list' ? z.string().max(2000).optional() : short;
+    return [[question.name, question.kind === 'multi' ? choices(values) : choice(values)], ...(question.other ? [[otherField(question), other] as [string, z.ZodType]] : [])];
+  })),
+}).transform(({ revision, wave, ...answers }) => ({ revision, wave, answers: defined(answers as Record<string, string | string[] | undefined>) }));
+
+// Waves: a name; the questionnaire version is always the latest.
+export const waveSchema = z.strictObject({ name: z.string().max(200) });

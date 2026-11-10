@@ -34,10 +34,10 @@
     --grey-300: #A8A8A8;
     --grey-400: #8C8C8C; /* 3:1 on white: input borders */
     --grey-500: #767676; /* 4.5:1 on white: placeholder text */
-    --grey-600: #555555;
-    --link: #0F66BF;
-    --link-hover: #0B4D8F;
-    --danger: #B00023;
+    --grey-600: #4D4D4D; /* 7:1 on paper and on a ticked card: secondary text */
+    --link: #0B4D8F; /* 7:1 on paper: links and the focus ring */
+    --link-hover: #083A6B;
+    --danger: #A0001F; /* 7:1 on paper and on --danger-soft */
     --danger-soft: #FFF2F0;
 
     --radius-md: 16px;
@@ -64,6 +64,9 @@
   a { color: var(--link); &:hover { color: var(--link-hover); } }
 
   :focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
+
+  /* Keep focus clear of the sticky toolbar when tabbing back up the page. */
+  html:has(.toolbar) { scroll-padding-block-start: 7rem; }
 
   ::placeholder { color: var(--grey-500); }
 
@@ -339,6 +342,8 @@
     & input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
     & span { border: 2px solid var(--ink); border-radius: var(--radius-pill); padding: 3px 12px; font-size: 14px; line-height: 1.4; white-space: nowrap; cursor: pointer; }
     & input:checked + span { background: var(--yellow); }
+    /* Not by colour alone: yellow is close to white, and forced colours drop it. */
+    & input:checked + span::before { content: "✓ "; content: "✓ " / ""; }
     & input:focus-visible + span { outline: 3px solid var(--link); outline-offset: 2px; }
   }
   .chip-other {
@@ -591,9 +596,209 @@
     & .group-row-head .hint { margin: 2px 0 0; }
     & input { flex: 1; min-inline-size: 0; font: inherit; font-size: 14px; padding: 6px 12px; border: 1px solid var(--grey-400); border-radius: var(--radius-pill); color: var(--ink); background: var(--white); }
   }
-  .group-row-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .group-row-links { display: flex; flex-wrap: wrap; gap: 8px; & form { display: contents; } }
+  .group-row-head .pill { margin-inline-start: 8px; vertical-align: middle; font-size: 12px; padding: 3px 10px; }
+  .pill[data-variant="closed"] { background: var(--grey-200); }
   .group-rename { display: flex; flex-wrap: wrap; gap: 8px; & .form-error { flex-basis: 100%; } }
   .groups-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 14px; & form { display: contents; } }
+
+  /* ---------- Survey: one step per page, anchored options as cards and chips ---------- */
+
+  .survey {
+    inline-size: 100%;
+    max-inline-size: 48rem;
+    margin: 0 auto;
+    padding: 44px 16px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    & .actions { justify-content: flex-start; }
+  }
+  .survey-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px 24px;
+    & h1 { margin: 0; font-size: 40px; line-height: 1.1; letter-spacing: -0.01em; font-weight: 600; }
+    & .survey-progress, & .survey-step-count { grid-column: 1 / -1; }
+  }
+  .survey-lead { margin: 0; font-size: 20px; line-height: 1.45; color: var(--grey-600); }
+  .survey-step-count { margin: -8px 0 0; font-size: 14px; font-weight: 600; color: var(--grey-600); }
+  .survey-progress {
+    display: flex; gap: 6px; margin: 0; padding: 0; list-style: none;
+    & li { flex: 1; block-size: 6px; border-radius: var(--radius-pill); background: var(--grey-200); }
+    & li[data-done] { background: var(--ink); }
+    & li[aria-current="step"] { background: var(--yellow); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  }
+
+  .survey-facts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none;
+    & li { display: flex; flex-direction: column; gap: 4px; padding: 20px 22px; border-radius: var(--radius-lg); background: var(--white); }
+    & strong { font-size: 20px; }
+    & span { color: var(--grey-600); }
+  }
+  .survey-start { margin-block-start: 8px; }
+
+  .survey-step { display: flex; flex-direction: column; gap: 16px; }
+  .survey-question {
+    margin: 0;
+    padding: 20px 24px;
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-inline-size: 0;
+    & > .hint { margin: -6px 0 0; }
+    &[data-invalid] { box-shadow: inset 0 0 0 2px var(--danger); }
+  }
+  .survey-error { display: block; margin-block-start: 4px; font-size: 16px; color: var(--danger); }
+  .survey .form-error {
+    & p { margin: 0; }
+    & ul { margin: 8px 0 0; padding-inline-start: 20px; font-weight: 400; }
+    & a { color: inherit; }
+  }
+  /* A legend can't be a flex item, so float it to keep it in the column's flow. */
+  .survey-prompt { float: left; inline-size: 100%; margin: 0; padding: 0; font-size: 22px; font-weight: 600; line-height: 1.25; & + * { clear: both; } }
+  .survey-required { font-size: 14px; font-weight: 400; color: var(--grey-600); }
+
+  .survey-options {
+    display: grid; gap: 8px;
+    &[data-kind="multi"] { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+  }
+  .survey-option {
+    position: relative;
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 16px;
+    border: 2px solid var(--grey-300);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    & input { flex: none; inline-size: 20px; block-size: 20px; margin: 1px 0 0; accent-color: var(--ink); }
+    & > span { display: flex; flex-direction: column; gap: 2px; }
+    &:hover { border-color: var(--ink); }
+    &:has(input:checked) { border-color: var(--ink); background: color-mix(in srgb, var(--yellow) 35%, var(--white)); }
+    &:has(input:focus-visible) { outline: 3px solid var(--link); outline-offset: 2px; }
+  }
+  .survey-other-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .survey-other { margin-block-start: 4px; & input[type="text"] { inline-size: 20ch; padding: 2px 0; border: 0; border-block-end: 2px solid var(--ink); background: transparent; color: var(--ink); font: 400 14px/1.4 var(--font-sans); } }
+
+  .survey-select {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    & select { min-block-size: 44px; padding: 8px 14px; border: 1px solid var(--grey-400); border-radius: var(--radius-md); background: var(--white); color: var(--ink); font: 400 16px/1.3 var(--font-sans); }
+  }
+
+  .survey-row {
+    margin: 0; padding: 12px 0 0; border: 0; border-block-start: 1px solid var(--grey-200);
+    display: flex; flex-direction: column; gap: 8px; min-inline-size: 0;
+    & legend { float: left; inline-size: 100%; padding: 0; font-weight: 600; & + * { clear: both; } }
+    & .chips { margin: 0; }
+  }
+  .survey-legend {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 8px; margin: 0;
+    & div { padding: 8px 12px; border-radius: var(--radius-md); background: var(--paper); }
+    & dt { font-weight: 600; font-size: 14px; }
+    & dd { margin: 0; font-size: 14px; color: var(--grey-600); }
+  }
+  .survey-text { padding: 12px 16px; & textarea { min-block-size: 4lh; } }
+
+  /* Model tiers: a percentage per tier, by family. <model-shares> hides unticked families and keeps the total. */
+  model-shares { display: flex; flex-direction: column; gap: 12px; }
+  .share-group {
+    margin: 0; padding: 12px 0 0; border: 0; border-block-start: 1px solid var(--grey-200);
+    min-inline-size: 0;
+    & legend { float: left; inline-size: 100%; padding: 0 0 8px; font-weight: 600; & + * { clear: both; } }
+  }
+  .share-group .share-total { margin-block-start: 8px; }
+  .share-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: 8px 16px; }
+  .share-tier {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 6px 6px 6px 14px; border: 2px solid var(--grey-300); border-radius: var(--radius-md);
+    &:focus-within { border-color: var(--ink); }
+    &:has(input:not(:placeholder-shown)) { border-color: var(--ink); background: color-mix(in srgb, var(--yellow) 35%, var(--white)); }
+  }
+  .share-input {
+    display: inline-flex; align-items: center; gap: 4px; font-weight: 600;
+    & input { inline-size: 4.5ch; padding: 4px 6px; border: 0; border-block-end: 2px solid var(--ink); background: transparent; color: var(--ink); font: 600 16px/1.2 var(--font-sans); text-align: end; appearance: textfield; &::-webkit-inner-spin-button { appearance: none; } }
+  }
+  .share-total {
+    margin: 0; padding: 8px 14px; justify-self: start; align-self: flex-start;
+    border-radius: var(--radius-pill); background: var(--paper); font-weight: 600; font-variant-numeric: tabular-nums;
+    &[data-state="done"] { background: var(--yellow); }
+    &[data-state="over"] { background: var(--danger-soft); color: var(--danger); }
+  }
+  /* Without JS the server-rendered total only knows the saved answers: hide it until the element keeps it live. */
+  model-shares:not([data-ready]) .share-total { display: none; }
+  model-shares:not([data-ready]) .share-group:not([data-ticked]) legend::after { content: " (only if you ticked it above)"; font-weight: 400; color: var(--grey-600); }
+
+  /* Next comes first in the form (Enter moves on) and on screen, so the focus order matches. */
+  .survey-nav { display: flex; gap: 12px; margin-block-start: 8px; }
+
+  .ladder {
+    display: flex; flex-direction: column-reverse; gap: 6px; margin: 0; padding: 0; list-style: none;
+    & li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 10px 14px; border: 2px solid var(--grey-200); border-radius: var(--radius-md); }
+    & li .hint { grid-column: 1; }
+    & li .pill { grid-row: 1 / span 2; grid-column: 2; }
+    & li[aria-current="true"] { border-color: var(--ink); background: color-mix(in srgb, var(--yellow) 35%, var(--white)); }
+    & li[data-next] { border-style: dashed; border-color: var(--ink); }
+  }
+  .survey-summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 12px; margin: 0;
+    & div { padding: 20px 22px; border-radius: var(--radius-lg); background: var(--ink); color: var(--white); }
+    & dt { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-200); }
+    & dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; }
+  }
+
+  /* ---------- Survey results ---------- */
+
+  .groups-head h1 .pill { vertical-align: middle; font-size: 14px; }
+  .results-page { max-inline-size: 56rem; }
+  .results-filter {
+    display: flex !important; align-items: center; gap: 8px;
+    & select { min-block-size: 32px; padding: 4px 12px; border: 1px solid var(--grey-400); border-radius: var(--radius-pill); background: var(--white); color: var(--ink); font: 400 14px/1.2 var(--font-sans); }
+  }
+  .results-section {
+    display: flex; flex-direction: column; gap: 12px;
+    & > h2 { margin: 12px 0 0; font-size: 28px; & .hint { font-size: 16px; font-weight: 400; } }
+  }
+  .results-question .survey-prompt { font-size: 18px; }
+  .empty-note { margin: 0; padding: 16px 20px; border: 2px dashed var(--grey-300); border-radius: var(--radius-lg); color: var(--grey-600); }
+  .results-bars {
+    display: grid; gap: 8px; margin: 0; padding: 0; list-style: none;
+    & li { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) 5.5rem; align-items: center; gap: 12px; }
+    & .results-count { font-size: 14px; color: var(--grey-600); text-align: end; font-variant-numeric: tabular-nums; }
+    & progress {
+      appearance: none; inline-size: 100%; block-size: 14px; border: 0; border-radius: var(--radius-pill); background: var(--paper); overflow: hidden;
+      &::-webkit-progress-bar { background: var(--paper); border-radius: var(--radius-pill); }
+      &::-webkit-progress-value { background: var(--yellow); border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1.5px var(--ink); }
+      &::-moz-progress-bar { background: var(--yellow); border-radius: var(--radius-pill); box-shadow: inset 0 0 0 1.5px var(--ink); }
+    }
+  }
+  .results-table {
+    overflow-x: auto;
+    & table { inline-size: 100%; border-collapse: separate; border-spacing: 4px; font-size: 14px; font-variant-numeric: tabular-nums; }
+    & th { font-weight: 600; text-align: start; vertical-align: bottom; }
+    & thead th { font-size: 13px; color: var(--grey-600); }
+    & tbody th { font-weight: 400; min-inline-size: 12rem; }
+    & td { padding: 6px 8px; text-align: center; border-radius: 8px; background: var(--paper); }
+    /* Shade by share, in quarters: the yellow deepens as more people chose it. */
+    & td[data-share="1"] { background: color-mix(in srgb, var(--yellow) 25%, var(--white)); }
+    & td[data-share="2"] { background: color-mix(in srgb, var(--yellow) 50%, var(--white)); }
+    & td[data-share="3"] { background: color-mix(in srgb, var(--yellow) 75%, var(--white)); }
+    & td[data-share="4"] { background: var(--yellow); }
+    & td:last-child { background: transparent; color: var(--grey-600); }
+  }
+  .results-subhead { margin: 4px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-600); }
+  .results-texts { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; }
+  @media (max-width: 560px) {
+    .results-bars li { grid-template-columns: minmax(0, 1fr) 5rem; & progress { grid-column: 1 / -1; grid-row: 2; } }
+  }
+
+  /* The survey has no sidebar, so the window decides. */
+  @media (max-width: 560px) {
+    .survey-head { grid-template-columns: minmax(0, 1fr); & .sheet-logo { grid-row: 1; inline-size: 96px; } & h1 { font-size: 32px; } }
+    .survey-question { padding: 16px; }
+  }
 }
 
 /* ---------- Print / PDF ---------- */

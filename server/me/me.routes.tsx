@@ -4,6 +4,7 @@ import { getGroup, listGroups, mapPath, slugify, validSlug, type Group } from '.
 import { myMapSchema } from '../domain/schemas';
 import { clearOwnMap, createOwnMap, findBinding, findBindings } from '../domain/respondents';
 import { listSheets, saveAnswers, sourceOf, toolSuggestions } from '../domain/sheets';
+import { openWave } from '../domain/waves';
 import { requireAdminEnabled } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formAction } from '../framework/formAction';
@@ -37,7 +38,11 @@ const myMap = formAction({
   },
   // Respondents are anonymous: only suggest what at least two other people in the same group listed, never one
   // person's own entry, and never what other groups listed.
-  page: async (c, { group, found }) => ({ toolSuggestions: toolSuggestions(await listSheets(c.get('store'), { group: group?.slug ?? null }), { exceptId: found?.sheet?.id, minSheets: 2 }) }),
+  // A group's open survey wave is offered beside the map.
+  page: async (c, { group, found }) => {
+    const [sheets, wave] = await Promise.all([listSheets(c.get('store'), { group: group?.slug ?? null }), group ? openWave(c.get('store'), group.slug) : null]);
+    return { toolSuggestions: toolSuggestions(sheets, { exceptId: found?.sheet?.id, minSheets: 2 }), surveyOpen: Boolean(wave) };
+  },
   onSubmit: async (c, { revision, name, answers }, { group, found, interview }) => {
     const store = c.get('store');
     const stored = found?.sheet;

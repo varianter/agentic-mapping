@@ -53,6 +53,7 @@ export function GroupsPage({ rows, origin, renaming, form }: { rows: GroupRow[];
                 <nav class="group-row-links" aria-label={group ? group.name : 'No group'}>
                   <a class="btn" data-variant="small" href={`${prefix}/interviews`}>Interviews</a>
                   <a class="btn" data-variant="small" href={`${prefix}/submissions`}>Self-submitted maps</a>
+                  {group && <a class="btn" data-variant="small" href={`${prefix}/waves`}>Survey</a>}
                 </nav>
                 <copy-button for={`${id}-link`} what="group link" class="connect-link-row">
                   <label class="visually-hidden" for={`${id}-link`}>{`Link for ${group ? group.name : 'maps without a group'}`}</label>

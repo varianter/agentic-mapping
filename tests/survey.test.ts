@@ -45,6 +45,14 @@ test('task rows follow the role, and context questions follow who you work for',
   expect(phrase('{Subject}', subjectOf({ context: 'own' }))).toBe('Your organization');
 });
 
+test('listing other tools ticks Other, emptying the list unticks it, and the list may be longer than a short answer', () => {
+  const tools = step('tools');
+  expect(applyStep({}, tools, { tools: ['cursor'], tools_other: 'Aider\nZed' })).toMatchObject({ tools: ['cursor', 'other'], tools_other: 'Aider\nZed' });
+  expect(applyStep({ tools: ['other'], tools_other: 'Aider' }, tools, { tools: ['cursor', 'other'], tools_other: '\n' }).tools).toEqual(['cursor']);
+  expect(surveyStepSchema(tools).safeParse({ revision: '1', tools_other: 'x'.repeat(1500) }).success).toBe(true);
+  expect(surveyStepSchema(tools).safeParse({ revision: '1', models_other: 'x'.repeat(300) }).success).toBe(false);
+});
+
 test('each ticked provider’s split takes whole percentages and must add up to 100 once started', () => {
   const tools = step('tools');
   const schema = surveyStepSchema(tools);

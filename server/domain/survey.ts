@@ -1,3 +1,5 @@
+import { listItems } from './fields';
+
 // The survey's questions, defined once: steps, forms, schemas, results and the CSV are built from these tables.
 // A wave is pinned to the version it opened with, so results stay comparable; change wording in a new version.
 // Options are anchored sentences, not bare numbers, so answers mean the same thing to everyone, in every wave.
@@ -11,7 +13,8 @@ export type TierGroup = { option: string; label: string; tiers: Tier[] };
 type Base = { name: string; prompt: string; hint?: string; required?: boolean };
 export type Question =
   | Base & { kind: 'single'; options: Option[]; display?: 'cards' | 'chips' | 'select'; other?: boolean }
-  | Base & { kind: 'multi'; options: Option[]; display?: 'cards' | 'chips'; other?: boolean }
+  // `other: 'list'` asks for the others one per line (a chip list with <tool-list>), not as one short text.
+  | Base & { kind: 'multi'; options: Option[]; display?: 'cards' | 'chips'; other?: boolean | 'list' }
   | Base & { kind: 'matrix'; rows: Row[]; options: Option[]; legend?: boolean }
   // A percentage split per family ticked in the `from` question, each adding up to 100 over its tiers.
   | Base & { kind: 'shares'; from: string; groups: TierGroup[] }
@@ -177,7 +180,7 @@ export const SURVEY_V1: Survey = {
             option('unknown', 'Don’t know'),
           ],
         },
-        { kind: 'multi', name: 'tools', prompt: 'Which tools did you use?', options: TOOLS, other: true },
+        { kind: 'multi', name: 'tools', prompt: 'Which tools did you use?', options: TOOLS, other: 'list' },
         { kind: 'single', name: 'main_tool', prompt: 'Which one is your main tool?', options: TOOLS, display: 'select' },
         { kind: 'single', name: 'autonomy', prompt: 'Which best describes how you usually work with AI?', hint: 'Pick your usual day, not what you’ve tried once.', options: AUTONOMY },
         {
@@ -331,6 +334,12 @@ export function applyStep(answers: SurveyAnswers, step: Step, posted: SurveyAnsw
       if (question.kind === 'multi' && name === question.name) continue;
       if (posted[name] !== undefined) result[name] = posted[name];
     }
+  }
+  // A list of others stands for Other: it's ticked exactly while the list has items.
+  for (const question of step.questions) {
+    if (question.kind !== 'multi' || question.other !== 'list') continue;
+    const picked = [result[question.name] ?? []].flat().filter((value) => value !== 'other');
+    result[question.name] = listItems(String(result[otherField(question)] ?? '')).length ? [...picked, 'other'] : picked;
   }
   // A split only covers the families still ticked.
   for (const question of step.questions) {

@@ -122,7 +122,16 @@ function Options({ question, values, subject }: { question: Question; values: Su
       </>
     );
   }
-  const other = question.other && (
+  // A list of others: one per line without JS; <tool-list> adds one on Enter.
+  const other = question.kind === 'multi' && question.other === 'list' ? (
+    <div class="field survey-other-list">
+      <label class="lbl" for={`q-${otherField(question)}`}>Other</label>
+      <span class="hint" id={`q-${otherField(question)}-hint`}>Anything not listed above, one at a time.</span>
+      <tool-list>
+        <textarea id={`q-${otherField(question)}`} name={otherField(question)} placeholder="One per line" aria-describedby={`q-${otherField(question)}-hint`}>{text(values[otherField(question)])}</textarea>
+      </tool-list>
+    </div>
+  ) : question.other && (
     <label class="chip-other survey-other">Other: <input type="text" name={otherField(question)} value={text(values[otherField(question)])} aria-label={`${phrase(question.prompt, subject)}: other`} /></label>
   );
   if (question.kind === 'single' && question.display === 'select') {
@@ -146,11 +155,13 @@ function Options({ question, values, subject }: { question: Question; values: Su
       </div>
     );
   }
-  // Cards: an anchored sentence per option, so each answer means the same thing to everyone.
+  // Cards: an anchored sentence per option, so each answer means the same thing to everyone. With a list of
+  // others, the list stands for Other: the server ticks it while the list has items.
+  const listed = question.kind === 'multi' && question.other === 'list';
   return (
     <>
       <div class="survey-options" data-kind={question.kind}>
-        {question.options.map((item) => (
+        {question.options.filter((item) => !(listed && item.value === 'other')).map((item) => (
           <label class="survey-option">
             <input type={type} name={question.name} value={item.value} checked={checked(item.value)} />
             <span><strong>{item.label}</strong>{item.hint && <span class="hint">{item.hint}</span>}</span>
@@ -172,7 +183,7 @@ export function StepPage({ group, wave: _wave, survey, answers, revision, index,
   const action = `${path}/${index + 1}`;
   const last = index === survey.steps.length - 1;
   return (
-    <Layout title={phrase(step.title, subject)} scripts={['elements/autosave-form.js', 'elements/model-shares.js']}>
+    <Layout title={phrase(step.title, subject)} scripts={['elements/autosave-form.js', 'elements/model-shares.js', 'elements/tool-list.js']}>
       <div class="app">
         <main class="main">
           <Toolbar status={form.formError ? 'Not saved' : form.saved ? 'Saved to server' : ''} state={form.formError ? 'error' : ''}>

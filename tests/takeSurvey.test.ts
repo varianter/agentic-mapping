@@ -126,6 +126,9 @@ test('the model split shows every family without JS and holds you on the step un
   await step(me, 1, { revision: '0', role: 'developer', context: 'customer' }, 'next');
   const page = await (await me('/company-a/survey/3')).text();
   expect(page).toContain('<model-shares from="models">');
+  expect(page).toMatch(/<tool-list><textarea id="q-tools_other" name="tools_other"/);
+  expect(page).not.toContain('name="tools" value="other"');
+  expect(page).toContain('name="models" value="other"');
   for (const name of ['share_fable', 'share_opus', 'share_sonnet', 'share_haiku', 'share_gpt-pro', 'share_gemini-flash']) expect(page).toContain(`name="${name}"`);
   const uneven = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_gpt: '20' }, 'next');
   expect(uneven.status).toBe(422);

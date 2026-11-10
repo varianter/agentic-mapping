@@ -42,7 +42,8 @@ export const surveyStepSchema = (step: Step) => z.strictObject({
     if (question.kind === 'shares') return question.groups.flatMap((group) => group.tiers.map((item): [string, z.ZodType] => [tierField(question, item), percent]));
     const values = question.options.map((item) => item.value);
     if (question.kind === 'matrix') return question.rows.map((row) => [rowField(question, row), choice(values)]);
-    return [[question.name, question.kind === 'multi' ? choices(values) : choice(values)], ...(question.other ? [[otherField(question), short] as [string, z.ZodType]] : [])];
+    const other = question.kind === 'multi' && question.other === 'list' ? z.string().max(2000).optional() : short;
+    return [[question.name, question.kind === 'multi' ? choices(values) : choice(values)], ...(question.other ? [[otherField(question), other] as [string, z.ZodType]] : [])];
   })),
 }).transform(({ revision, ...answers }) => ({ revision, answers: defined(answers as Record<string, string | string[] | undefined>) }));
 

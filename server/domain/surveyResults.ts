@@ -1,4 +1,5 @@
 import { groupTotal, otherField, phrase, rowField, SIZES, surveyFields, tierField, type Option, type Question, type Tier, type Step, type Subject, type Survey, type SurveyAnswers } from './survey';
+import { listItems } from './fields';
 import type { SurveyResponse } from './waves';
 
 // Fewer answers than this are never shown, so a filter can't single out one person.
@@ -19,6 +20,21 @@ export type Section = { title: string; subject: Subject; n: number; hidden: bool
 const values = (answers: SurveyAnswers, name: string) => [answers[name] ?? []].flat().filter(Boolean);
 const tally = (options: Option[], picked: string[][]): Tally[] => options.map((item) => ({ ...item, count: picked.filter((list) => list.includes(item.value)).length }));
 const texts = (responses: SurveyResponse[], name: string) => responses.map((response) => response.answers[name]).filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+
+// Listed others, most named first: each person counts once per item, ignoring case, as most people spell it.
+const listed = (lists: string[]) => {
+  const counts = new Map<string, Map<string, number>>();
+  for (const list of lists) {
+    for (const item of new Map(listItems(list).map((entry) => [entry.toLowerCase(), entry])).values()) {
+      const spellings = counts.get(item.toLowerCase()) ?? counts.set(item.toLowerCase(), new Map()).get(item.toLowerCase())!;
+      spellings.set(item, (spellings.get(item) ?? 0) + 1);
+    }
+  }
+  return [...counts.values()]
+    .map((spellings) => ({ name: [...spellings].toSorted((a, b) => b[1] - a[1])[0][0], count: [...spellings.values()].reduce((sum, n) => sum + n, 0) }))
+    .toSorted((a, b) => b.count - a.count || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    .map(({ name, count }) => `${name} (${count})`);
+};
 
 function result(question: Question, responses: SurveyResponse[], subject: Subject): QuestionResult {
   if (question.kind === 'text') return { kind: 'text', question, answers: texts(responses, question.name) };
@@ -51,7 +67,8 @@ function result(question: Question, responses: SurveyResponse[], subject: Subjec
     };
   }
   const picked = responses.map((response) => values(response.answers, question.name)).filter((list) => list.length);
-  return { kind: 'choice', question, multi: question.kind === 'multi', answered: picked.length, tallies: tally(question.options, picked), others: question.other ? texts(responses, otherField(question)) : [] };
+  const others = question.kind === 'multi' && question.other === 'list' ? listed(texts(responses, otherField(question))) : question.other ? texts(responses, otherField(question)) : [];
+  return { kind: 'choice', question, multi: question.kind === 'multi', answered: picked.length, tallies: tally(question.options, picked), others };
 }
 
 const section = (step: Step, responses: SurveyResponse[], subject: Subject, title = phrase(step.title, subject)): Section => ({
@@ -71,6 +88,7 @@ export function summarize(survey: Survey, responses: SurveyResponse[], { role }:
 // One row per submitted response, one column per answer, in questionnaire order. Lists are joined with "; ".
 export function toCsv(survey: Survey, responses: SurveyResponse[]) {
   const fields = surveyFields(survey);
+  const lists = new Set(survey.steps.flatMap((step) => step.questions).flatMap((question) => (question.kind === 'multi' && question.other === 'list' ? [otherField(question)] : [])));
   const cell = (value: unknown) => {
     const text = Array.isArray(value) ? value.join('; ') : typeof value === 'string' ? value : value === undefined ? '' : String(value);
     // A leading =, +, - or @ would run as a formula in a spreadsheet: prefix it and quote it.
@@ -78,7 +96,7 @@ export function toCsv(survey: Survey, responses: SurveyResponse[]) {
     return /[",\n\r;]/.test(safe) || safe !== text ? `"${safe.replaceAll('"', '""')}"` : safe;
   };
   const rows = responses.filter((response) => response.submittedAt).map((response) => [
-    response.version, new Date(response.submittedAt!).toISOString().slice(0, 10), ...fields.map((name) => response.answers[name]),
+    response.version, new Date(response.submittedAt!).toISOString().slice(0, 10), ...fields.map((name) => (lists.has(name) ? listItems(String(response.answers[name] ?? '')) : response.answers[name])),
   ].map(cell).join(','));
   return [['version', 'submitted', ...fields].join(','), ...rows].join('\r\n') + '\r\n';
 }

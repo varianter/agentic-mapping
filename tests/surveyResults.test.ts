@@ -56,7 +56,7 @@ test('the CSV has one row per submitted response, one column per answer, and is 
   await groupWithWave(owner);
   const [key] = await store.keys('wave:company-a:');
   const waveId = key.split(':').pop()!;
-  await store.set(`response:${waveId}:a`, { ...response({ role: 'developer', models: ['claude', 'gpt'], wish: '=HYPERLINK("x"), with "quotes"' }), waveId });
+  await store.set(`response:${waveId}:a`, { ...response({ role: 'developer', models: ['claude', 'gpt'], tools_other: 'Aider\nZed', wish: '=HYPERLINK("x"), with "quotes"' }), waveId });
   await store.set(`response:${waveId}:b`, { ...response({ role: 'ux' }, false), waveId });
   expect((await send(`/company-a/waves/${waveId}.csv`)).status).toBe(303);
   const download = await owner(`/company-a/waves/${waveId}.csv`);
@@ -71,7 +71,17 @@ test('the CSV has one row per submitted response, one column per answer, and is 
   expect(lines[1]).toStartWith('1,');
   expect(lines[1]).toContain(',developer,');
   expect(lines[1]).toContain('"claude; gpt"');
+  expect(lines[1]).toContain('"Aider; Zed"');
   expect(lines[1]).toContain(`"'=HYPERLINK(""x""), with ""quotes"""`);
+});
+
+test('other tools are counted per item, once per person, ignoring case', () => {
+  const responses = [
+    ...many(2, { tools: ['other'], tools_other: 'Aider\nZed' }),
+    response({ tools: ['other'], tools_other: 'aider\nAIDER\nWarp' }),
+  ];
+  const tools = question(summarize(SURVEY_V1, responses), 'Models and tools', 'tools');
+  expect(tools.kind === 'choice' && tools.others).toEqual(['Aider (3)', 'Zed (2)', 'Warp (1)']);
 });
 
 test('model splits average per provider over splits that add up, and by size across providers', () => {

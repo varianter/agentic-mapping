@@ -12,6 +12,8 @@ Three modes, one name each:
 
 `/guide` is the interviewer guide.
 
+**Survey**: a short, anonymous survey on AI at work, in waves. Interviewers open a wave at `/<group>/waves` and share `/<group>/survey`; people answer six short steps, one response per wave per browser, editable until the wave closes. Results per wave (by role, hidden under 5 answers) and a CSV. See [Survey mode](docs/survey-mode.md).
+
 `/connect` is the one page that needs JavaScript: it posts the fragment credential in a form body, so it never travels in a URL. Opening a link in a browser that already has its own map asks (a server-rendered form) whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
 
 Without `ADMIN_KEY` the app is self-only: `/` goes to `/map`, and `/sign-in`, `/connect`, `/groups`, `/interviews`, `/submissions` and group URLs return 404. My map is still saved in the store (local JSON file, or Upstash).
@@ -64,6 +66,8 @@ server/submissions/ Self-submitted maps
 server/connect/     /connect: private link → browser cookie, merge choice
 server/signIn/      /sign-in, /sign-out
 server/guide/       /guide
+server/survey/      /<group>/survey: the open wave, step by step, and the summary
+server/waves/       /<group>/waves: open, close, reopen, results, CSV
 server/shell/       Layout, Sheet form, Sidebar, Toolbar, shared sheet editor routes
 server/domain/      Fields, sheets, respondents, links, import, zod schemas
 server/framework/   formAction, hashed assets, auth, cookies
@@ -80,9 +84,10 @@ tests/              Bun tests
 
 **Preview deployments share production data.** Only share preview URLs and the admin key with people allowed to see production.
 
-Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /map`, `POST /<group>` and `POST /connect`. Anyone can create a self-submitted map, so rate limiting matters.
+Other Bun hosts work too: keep Bun on loopback behind an HTTPS proxy, set `APP_ORIGIN`, disable proxy caching and rate-limit `/sign-in`, `POST /map`, `POST /<group>`, `POST /<group>/survey/*` and `POST /connect`. Anyone can create a self-submitted map, so rate limiting matters.
 
 ## Docs
 
 - [Storage and access decision](docs/storage-decision.md)
 - [Participant access](docs/participant-access.md)
+- [Survey mode](docs/survey-mode.md)

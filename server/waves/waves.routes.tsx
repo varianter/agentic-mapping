@@ -67,7 +67,7 @@ async function results(c: Context<AppEnv>) {
 async function csv(c: Context<AppEnv>) {
   const store = c.get('store');
   const group = groupOf(c);
-  const wave = await getWave(store, group.slug, c.req.param('file').slice(0, -'.csv'.length));
+  const wave = await getWave(store, group.slug, (c.req.param('file') ?? '').slice(0, -'.csv'.length));
   if (!wave) return c.notFound();
   c.header('Content-Type', 'text/csv; charset=utf-8');
   c.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Survey - ${group.name} - ${wave.name}.csv`)}`);

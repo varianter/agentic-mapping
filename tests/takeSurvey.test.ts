@@ -103,3 +103,13 @@ test('autosave posts a step for JSON; stale revisions conflict; unknown answers 
   expect((await me('/company-a/survey/1', { method: 'POST', form: { revision: '3', role: 'ui' }, headers: json })).status).toBe(409);
   expect(await (await me('/company-a/survey')).text()).toContain('No survey is open right now');
 });
+
+test('My map offers the group’s survey while a wave is open', async () => {
+  const { owner, browser, store } = setup();
+  await groupWithWave(owner);
+  expect(await (await browser()('/company-a')).text()).toContain('href="/company-a/survey"');
+  expect(await (await browser()('/map')).text()).not.toContain('id="take-survey"');
+  const [wave] = await store.keys('wave:company-a:');
+  await owner(`/company-a/waves/${wave.split(':').pop()}/close`, { method: 'POST', form: {} });
+  expect(await (await browser()('/company-a')).text()).not.toContain('id="take-survey"');
+});

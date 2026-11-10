@@ -11,7 +11,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 // My map: the respondent's own answers in a group (or none), or the interview a private link connected this
 // browser to.
-export function MyMapPage({ group, fields, revision, interview, adminEnabled, toolSuggestions, form }: MyMapProps & { toolSuggestions?: string[]; form: FormState }) {
+export function MyMapPage({ group, fields, revision, interview, adminEnabled, toolSuggestions, surveyOpen = false, form }: MyMapProps & { toolSuggestions?: string[]; surveyOpen?: boolean; form: FormState }) {
   const home = mapPath(group?.slug);
   const notice = interview
     ? 'Saved on the server. Your interviewer can read your answers.'
@@ -24,6 +24,7 @@ export function MyMapPage({ group, fields, revision, interview, adminEnabled, to
         <main class="main">
           <Toolbar status={form.formError ? 'Not saved' : form.saved ? 'Saved to server' : ''} state={form.formError ? 'error' : ''}>
             <span class="toolbar-notice">{notice}</span>
+            {group && surveyOpen && <a class="btn" data-variant="small" href={`/${group.slug}/survey`} id="take-survey">Take the survey</a>}
             {adminEnabled && <a href="/" id="change-group">{group ? 'Not your group?' : 'Join a group'}</a>}
             {adminEnabled && <a href="/sign-in" id="self-sign-in">Interviewer sign-in</a>}
             {/* Interview answers belong to the interviewer's sheet; only an own map can be cleared. */}

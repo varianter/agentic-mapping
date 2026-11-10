@@ -45,7 +45,7 @@ function PersonCard({ person }: { person: Person }) {
 function People({ id, title, people, none }: { id: string; title: string; people: Person[]; none: string }) {
   return (
     <section class="results-section" id={id} aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`}>{title} <span class="hint">{String(people.length)}</span></h2>
+      <h2 id={`${id}-heading`}>{title}</h2>
       {people.length ? people.map((person) => <PersonCard person={person} />) : <p class="empty-note">{none}</p>}
     </section>
   );
@@ -103,7 +103,7 @@ export function InsightsPage({ insights }: { insights: Insights }) {
 
         {group && (
           <section class="results-section" id="survey" aria-labelledby="survey-heading">
-            <h2 id="survey-heading">Survey free text <span class="hint">{String(insights.waves.length)}</span></h2>
+            <h2 id="survey-heading">Survey free text</h2>
             {insights.waves.length === 0 && <p class="empty-note">No survey waves.</p>}
             {insights.waves.map((wave, i) => (
               <article class="insights-person" aria-labelledby={`wave-${i + 1}-heading`}>

@@ -96,9 +96,9 @@ export const waveMeta = (wave: WaveText) => `${wave.status === 'open' ? 'Open' :
 
 // What the file holds and how to read it, built from the field tables so it never drifts from the sheet.
 export function preamble(insights: Insights) {
-  const surveys = insights.group ? ' and the free-text answers to the group’s anonymous survey' : '';
+  const surveys = insights.group ? ' The file ends with the free-text answers to the group’s anonymous survey.' : '';
   return {
-    intro: `Qualitative answers from agentic mapping in ${groupLabel(insights.group)}: what people had to learn to work well with AI agents, why it matters and how they found out. Interviews are short sessions an interviewer captured; self-submitted maps are the same sheet filled in by people on their own${surveys}.`,
+    intro: `Qualitative answers from agentic mapping in ${groupLabel(insights.group)}: what people had to learn to work well with AI agents, why it matters and how they found out. Interviews are short sessions an interviewer captured; self-submitted maps are the same sheet filled in by people on their own.${surveys}`,
     layout: 'Each person’s answers are in the sheet’s order: what really good looks like to them, the tools they use, a 3 × 3 grid per dimension (level · question) and their reflections. Only answers someone gave are included.',
     privacy: 'People are numbered by when their sheet was made, and these numbers hold for this file only. Names, interviewers and private notes are left out; free text may still mention people or companies.',
     tables: [

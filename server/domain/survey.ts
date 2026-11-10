@@ -288,7 +288,7 @@ export const SURVEY_V1: Survey = {
         { kind: 'text', name: 'wish', prompt: 'One thing that would help you get more out of AI' },
         {
           kind: 'text', name: 'workplace', prompt: 'What should your workplace set up or enable so you can do more with AI? What do you miss today?',
-          hint: 'Tools and licences, access, guidelines, time to learn, training, people to learn from…',
+          hint: 'Tools and licences, access, guidelines, established best practices, time to learn, training, people to learn from…',
         },
       ],
     },

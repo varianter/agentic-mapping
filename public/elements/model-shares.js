@@ -1,6 +1,7 @@
 // <model-shares from="models">: a percentage split per model family, each adding up to 100 over its tiers.
 // Shows only the families ticked in the `from` checkboxes of the same form, each with a running total. The inputs
-// stay the form fields, so <autosave-form> saves them as typed; the server ignores families that aren't ticked.
+// stay the form fields, so <autosave-form> saves them as typed; hidden families are disabled, and the server
+// ignores families that aren't ticked anyway.
 // Without JS every family shows and the server checks each total when moving on.
 class ModelShares extends HTMLElement {
   #form;
@@ -25,6 +26,8 @@ class ModelShares extends HTMLElement {
     const groups = [...this.querySelectorAll('.share-group')];
     for (const group of groups) {
       group.hidden = !ticked.has(group.dataset.option);
+      // A hidden family neither blocks Next with a stale invalid number nor posts it.
+      group.disabled = group.hidden;
       const total = [...group.querySelectorAll('input')].reduce((sum, input) => sum + (Number(input.value) || 0), 0);
       const status = group.querySelector('.share-total');
       status.querySelector('output').value = String(total);

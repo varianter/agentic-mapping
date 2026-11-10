@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { compileInsights } from '../server/domain/insights';
+import { compileInsights, insightsFileName, insightsMarkdown } from '../server/domain/insights';
 import type { Sheet } from '../server/domain/sheets';
 import type { SurveyResponse, Wave } from '../server/domain/waves';
 
@@ -63,4 +63,24 @@ test('survey free text comes from submitted responses only, per wave, hidden und
   expect(wish).toEqual({ prompt: 'One thing that would help you get more out of AI', answers: ['Synthetic wish 1', 'Synthetic wish 2', 'Synthetic wish 3', 'Synthetic wish 4', 'Synthetic wish 5'] });
   expect(workplace.answers).toEqual(Array(5).fill('Synthetic licences'));
   expect(JSON.stringify(insights)).not.toContain('Synthetic draft');
+});
+
+test('the Markdown file explains its structure, then lists people and survey text under headings', () => {
+  const round = wave('2026 Q4', 1);
+  const insights = compileInsights({
+    group,
+    now: Date.UTC(2026, 10, 10),
+    sheets: [sheet('interview', { discipline: ['UX'], ind_learn_start: 'Synthetic first line\n# not a heading', tools: 'Claude Code' }, 1)],
+    waves: [{ wave: round, responses: responses(round.id, 5) }],
+  });
+  const markdown = insightsMarkdown(insights);
+  expect(insightsFileName(insights)).toBe('company-a-insights-2026-11-10.md');
+  expect(markdown).toStartWith('# Agentic mapping: Company A\n\nExported 2026-11-10 · 1 interview · 0 self-submitted maps · 1 survey wave\n\n## About this file\n');
+  expect(markdown).toContain('- Team: how your team works together');
+  expect(markdown).toContain('- Next level: what you’re reaching for now');
+  expect(markdown).toContain('### Interview 1\n\n#### About\n\n- **Discipline:** UX\n\n#### Tools and techniques they use\n\n- Claude Code\n\n#### Individual\n\n- **Getting started · What to learn:** Synthetic first line\n  \\# not a heading\n');
+  expect(markdown).toContain('## Self-submitted maps\n\nNo self-submitted maps with answers.\n');
+  expect(markdown).toContain('### 2026 Q4\n\nOpen wave, questionnaire v1, 5 submitted responses.\n\n#### One thing that would help you get more out of AI\n\n- Synthetic wish 1\n');
+  // Sheets without a group have no survey.
+  expect(insightsMarkdown(compileInsights({ group: null, sheets: [], waves: [] }))).not.toContain('Survey');
 });

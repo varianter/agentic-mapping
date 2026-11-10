@@ -80,3 +80,70 @@ export function compileInsights({ group, sheets, waves, now = Date.now() }: {
     waves: waves.toSorted((a, b) => a.wave.createdAt - b.wave.createdAt).map(({ wave, responses }) => waveText(wave, responses)),
   };
 }
+
+const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+const day = (time: number) => new Date(time).toISOString().slice(0, 10);
+export const groupLabel = (group: Group | null) => group?.name ?? 'No group';
+export const insightsFileName = (insights: Insights) => `${insights.group?.slug ?? 'no-group'}-insights-${day(insights.exportedAt)}.md`;
+export const tooFewText = `Hidden: fewer than ${MIN_RESPONSES} submitted responses, so nobody can be singled out.`;
+export const waveMeta = (wave: WaveText) => `${wave.status === 'open' ? 'Open' : 'Closed'} wave, questionnaire v${wave.version}, ${plural(wave.n, 'submitted response')}`;
+
+// What the file holds and how to read it, built from the field tables so it never drifts from the sheet.
+export function preamble(insights: Insights) {
+  const surveys = insights.group ? ' and the free-text answers to the group’s anonymous survey' : '';
+  return {
+    intro: `Qualitative answers from agentic mapping in ${groupLabel(insights.group)}: what people had to learn to work well with AI agents, why it matters and how they found out. Interviews are short sessions an interviewer captured; self-submitted maps are the same sheet filled in by people on their own${surveys}.`,
+    layout: 'Each person’s answers are in the sheet’s order: what really good looks like to them, the tools they use, a 3 × 3 grid per dimension (level · question) and their reflections. Only answers someone gave are included.',
+    privacy: 'People are numbered by when their sheet was made, and these numbers hold for this file only. Names, interviewers and private notes are left out; free text may still mention people or companies.',
+    tables: [
+      { title: 'Dimensions', items: DIMENSIONS.map((item) => `${item.name}: ${item.hint.toLowerCase()}`) },
+      { title: 'Levels', items: LEVELS.map((item) => `${item.name}: ${item.hint.toLowerCase()}`) },
+      { title: 'Questions', items: QUESTIONS.map((item) => (item.hint ? `${item.name}: ${item.hint.toLowerCase()}` : item.name)) },
+      { title: 'Reflections', items: REFLECTIONS.map((item) => item.label) },
+    ],
+  };
+}
+
+export const summaryLine = (insights: Insights) => [
+  `Exported ${day(insights.exportedAt)}`,
+  plural(insights.interviews.length, 'interview'),
+  plural(insights.maps.length, 'self-submitted map'),
+  ...(insights.group ? [plural(insights.waves.length, 'survey wave')] : []),
+].join(' · ');
+
+// Typed text may start a line with `#`: escape it so it stays text, not a heading.
+const safe = (value: string) => value.replace(/^(\s*)(#{1,6})(?=\s|$)/gm, '$1\\$2');
+const indent = (value: string) => safe(value).replaceAll('\n', '\n  ');
+
+function answerLines(answer: Answer) {
+  if ('items' in answer) return [...(answer.label ? [`**${answer.label}:**`, ''] : []), ...answer.items.map((item) => `- ${safe(item)}`)];
+  return [answer.label ? `- **${answer.label}:** ${indent(answer.text)}` : safe(answer.text)];
+}
+
+function personLines(person: Person) {
+  return [`### ${person.title}`, '', ...person.parts.flatMap((item) => [`#### ${item.title}`, '', ...item.answers.flatMap(answerLines), ''])];
+}
+
+// One Markdown file for an LLM: headings mark people and parts, labels say what each answer is about.
+export function insightsMarkdown(insights: Insights) {
+  const about = preamble(insights);
+  const section = (title: string, people: Person[], none: string) => [`## ${title}`, '', ...(people.length ? people.flatMap(personLines) : [none, ''])];
+  const lines = [
+    `# Agentic mapping: ${groupLabel(insights.group)}`, '',
+    summaryLine(insights), '',
+    '## About this file', '',
+    about.intro, '',
+    about.layout, '',
+    about.privacy, '',
+    ...about.tables.flatMap((table) => [`**${table.title}**`, '', ...table.items.map((item) => `- ${item}`), '']),
+    ...section('Interviews', insights.interviews, 'No interviews with answers.'),
+    ...section('Self-submitted maps', insights.maps, 'No self-submitted maps with answers.'),
+    ...(insights.group ? ['## Survey free text', '', ...(insights.waves.length ? insights.waves.flatMap((wave) => [
+      `### ${wave.name}`, '', `${waveMeta(wave)}.`, '',
+      ...(wave.hidden ? [tooFewText, ''] : wave.questions.flatMap((question) => [
+        `#### ${question.prompt}`, '', ...(question.answers.length ? question.answers.map((answer) => `- ${indent(answer)}`) : ['No answers.']), '',
+      ])),
+    ]) : ['No survey waves.', ''])] : []),
+  ];
+  return `${lines.join('\n').trimEnd()}\n`;
+}

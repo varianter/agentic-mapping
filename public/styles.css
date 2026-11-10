@@ -786,11 +786,43 @@
     & td[data-share="2"] { background: color-mix(in srgb, var(--yellow) 50%, var(--white)); }
     & td[data-share="3"] { background: color-mix(in srgb, var(--yellow) 75%, var(--white)); }
     & td[data-share="4"] { background: var(--yellow); }
-    & td:last-child { background: transparent; color: var(--grey-600); }
+    & td:last-child:not([data-share]) { background: transparent; color: var(--grey-600); }
   }
   .results-subhead { margin: 4px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-600); }
   .results-texts { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; }
+  /* ---------- Insights: a group's qualitative answers, as the Markdown download holds them ---------- */
+
+  .insights-page {
+    /* In-page links land below the top edge, not flush against it. */
+    & [id] { scroll-margin-block-start: 24px; }
+    & h3 { margin: 0; font-size: 20px; }
+    & h4 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-600); }
+  }
+  .insights-download { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; & .hint { margin: 0; flex: 1 1 18rem; } }
+  .insights-toc ul { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; padding: 0; list-style: none; font-size: 16px; }
+  .insights-about {
+    & p { margin: 0; max-inline-size: 65ch; }
+    & ul { margin: 4px 0 0; padding-inline-start: 20px; }
+  }
+  .insights-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 16px; & h3 { font-size: 16px; } }
+  .insights-glance .survey-summary dd { font-size: 32px; font-variant-numeric: tabular-nums; }
+  .insights-coverage {
+    & caption { caption-side: top; padding-block-end: 8px; text-align: start; font-size: 16px; & .hint { font-size: 14px; } }
+    & td { font-size: 16px; font-weight: 600; }
+  }
+  .insights-person { display: grid; gap: 16px; padding: 20px 24px; border: 1px solid var(--grey-300); border-radius: var(--radius-lg); & > .hint { margin: -12px 0 0; } }
+  .insights-part { display: grid; gap: 8px; }
+  /* Typed line breaks are part of the answer. */
+  .insights-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+  .insights-items { margin: 0; padding-inline-start: 20px; }
+  .insights-answers {
+    display: grid; gap: 12px; margin: 0;
+    & dt { font-weight: 600; }
+    & dd { margin: 2px 0 0; }
+  }
+
   @media (max-width: 560px) {
+    .insights-person { padding: 16px; }
     .results-bars li { grid-template-columns: minmax(0, 1fr) 5rem; & progress { grid-column: 1 / -1; grid-row: 2; } }
   }
 

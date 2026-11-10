@@ -14,6 +14,7 @@ import { guideRoutes } from './guide/guide.routes';
 import { groupMapRoutes, meRoutes } from './me/me.routes';
 import { groupRoutes } from './groups/groups.routes';
 import { connectRoutes } from './connect/connect.routes';
+import { insightsRoutes } from './insights/insights.routes';
 import { interviewRoutes } from './interviews/interviews.routes';
 import { submissionRoutes } from './submissions/submissions.routes';
 import { signInRoutes } from './signIn/signIn.routes';
@@ -101,6 +102,7 @@ export function createApp(config: AppConfig) {
   app.route('/:group/submissions', submissionRoutes);
   app.route('/:group/waves', waveRoutes);
   app.route('/:group/survey', surveyRoutes);
+  app.route('/', insightsRoutes);
   app.route('/', groupMapRoutes);
 
   app.notFound((c) => {

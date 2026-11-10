@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { compileInsights, insightsFileName, insightsMarkdown } from '../server/domain/insights';
 import type { Sheet } from '../server/domain/sheets';
 import type { SurveyResponse, Wave } from '../server/domain/waves';
+import { groupWithWave, setup } from './helpers';
 
 const group = { slug: 'company-a', name: 'Company A', createdAt: 0 };
 let ids = 0;
@@ -83,4 +84,50 @@ test('the Markdown file explains its structure, then lists people and survey tex
   expect(markdown).toContain('### 2026 Q4\n\nOpen wave, questionnaire v1, 5 submitted responses.\n\n#### One thing that would help you get more out of AI\n\n- Synthetic wish 1\n');
   // Sheets without a group have no survey.
   expect(insightsMarkdown(compileInsights({ group: null, sheets: [], waves: [] }))).not.toContain('Survey');
+});
+
+test('interviewers read a group’s insights and download them as Markdown; nobody else can', async () => {
+  const { owner, send, browser, store } = setup();
+  await groupWithWave(owner);
+  // A participant's own map in the group, and an interview the interviewer fills in.
+  await browser()('/company-a', { method: 'POST', form: { revision: '0', surprised: 'Synthetic <b>surprise</b>' } });
+  const id = (await owner('/company-a/interviews', { method: 'POST' })).headers.get('Location')!.split('/').pop()!;
+  await owner(`/company-a/interviews/${id}`, { method: 'POST', form: { revision: '1', name: 'Synthetic Person', talk_to: 'Synthetic private note', org_learn_good: 'Synthetic org answer' } });
+  const elsewhere = { ...sheet('interview', { ind_learn_start: 'Synthetic answer elsewhere' }, 1), group: undefined };
+  await store.set(`sheet:${elsewhere.id}`, elsewhere);
+
+  expect((await send('/company-a/insights')).headers.get('Location')).toBe('/sign-in');
+  expect((await send('/company-a/insights.md')).headers.get('Location')).toBe('/sign-in');
+  expect((await setup({ admin: false }).send('/insights')).status).toBe(404);
+  expect((await owner('/company-x/insights')).status).toBe(404);
+
+  const html = await (await owner('/company-a/insights')).text();
+  expect(html).toContain('<h1>Insights: Company A</h1>');
+  expect(html).toContain('href="/company-a/insights.md"');
+  expect(html).toContain('<nav class="insights-toc" aria-label="On this page">');
+  expect(html).toContain('Interview 1');
+  expect(html).toContain('Self-submitted map 1');
+  expect(html).toContain('Synthetic &lt;b&gt;surprise&lt;/b&gt;');
+  expect(html).toContain(`Hidden: fewer than 5 submitted responses`);
+  expect(html).not.toContain('Synthetic answer elsewhere');
+
+  const file = await owner('/company-a/insights.md');
+  expect(file.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
+  expect(file.headers.get('Content-Disposition')).toMatch(/^attachment; filename\*=UTF-8''company-a-insights-\d{4}-\d{2}-\d{2}\.md$/);
+  const markdown = await file.text();
+  expect(markdown).toContain('- **Getting good · What to learn:** Synthetic org answer');
+  expect(markdown).toContain('- **What surprised you:** Synthetic <b>surprise</b>');
+  for (const secret of ['Synthetic Person', 'Synthetic private note', id]) {
+    expect(markdown).not.toContain(secret);
+    expect(html).not.toContain(secret);
+  }
+
+  // Sheets without a group have their own insights, and no survey.
+  const none = await (await owner('/insights.md')).text();
+  expect(none).toContain('# Agentic mapping: No group');
+  expect(none).toContain('Synthetic answer elsewhere');
+  expect(none).not.toContain('Survey');
+  expect(await (await owner('/insights')).text()).not.toContain('id="survey"');
+  // `insights` can't become a group id: its URL is this page.
+  expect((await owner('/groups', { method: 'POST', form: { name: 'Insights' } })).status).toBe(422);
 });

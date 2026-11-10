@@ -6,7 +6,7 @@ import type { Store } from '../store';
 export type Group = { slug: string; name: string; createdAt: number };
 
 // Root paths the app already uses, or may: a group there would hide a page.
-export const RESERVED = new Set(['admin', 'api', 'assets', 'clear', 'connect', 'groups', 'guide', 'img', 'interviews', 'map', 'me', 'participant', 'sign-in', 'sign-out', 'static', 'submissions']);
+export const RESERVED = new Set(['admin', 'api', 'assets', 'clear', 'connect', 'groups', 'guide', 'img', 'insights', 'interviews', 'map', 'me', 'participant', 'sign-in', 'sign-out', 'static', 'submissions']);
 
 const NAME_MAX = 80;
 

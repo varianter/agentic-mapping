@@ -1,9 +1,10 @@
+import type { Store } from '../store';
 import { answersOf, DIMENSIONS, gridField, hasAnswers, LEVELS, listItems, QUESTIONS, REFLECTIONS, withLegacyGrid, type Fields } from './fields';
 import type { Group } from './groups';
-import { sourceOf, type Sheet } from './sheets';
+import { listSheets, sourceOf, type Sheet } from './sheets';
 import { surveyFor } from './survey';
 import { MIN_RESPONSES } from './surveyResults';
-import type { SurveyResponse, Wave } from './waves';
+import { listResponses, listWaves, type SurveyResponse, type Wave } from './waves';
 
 // A group's qualitative answers in one place, for reading on screen and for an LLM outside the app: interviews and
 // self-submitted maps per person, then the survey's free text per wave. People are numbered per export, never named:
@@ -79,6 +80,11 @@ export function compileInsights({ group, sheets, waves, now = Date.now() }: {
     maps: people(sheets.filter((sheet) => sourceOf(sheet) === 'self'), 'Self-submitted map'),
     waves: waves.toSorted((a, b) => a.wave.createdAt - b.wave.createdAt).map(({ wave, responses }) => waveText(wave, responses)),
   };
+}
+
+export async function loadInsights(store: Store, group: Group | null) {
+  const [sheets, waves] = await Promise.all([listSheets(store, { group: group?.slug ?? null }), group ? listWaves(store, group.slug) : []]);
+  return compileInsights({ group, sheets, waves: await Promise.all(waves.map(async (wave) => ({ wave, responses: await listResponses(store, wave.id) }))) });
 }
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;

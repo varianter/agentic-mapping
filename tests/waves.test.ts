@@ -32,6 +32,8 @@ test('interviewers open one wave at a time in a group, close and reopen it; nobo
   expect((await owner(`/company-a/waves/${id}/reopen`, { method: 'POST', form: {} })).status).toBe(409);
   expect((await owner('/company-a/waves/00000000-0000-0000-0000-000000000000/close', { method: 'POST', form: {} })).status).toBe(404);
   expect((await store.keys('wave:company-a:')).length).toBe(2);
-  // The Groups page links each group's survey.
+  // The Groups page and the interviewer's sidebar link each group's survey; sheets without a group have none.
   expect(await (await owner('/groups')).text()).toContain('href="/company-a/waves"');
+  expect(await (await owner('/company-a/interviews')).text()).toContain('href="/company-a/waves"');
+  expect(await (await owner('/interviews')).text()).not.toContain('id="survey-link"');
 });

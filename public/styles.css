@@ -596,6 +596,123 @@
   .pill[data-variant="closed"] { background: var(--grey-200); }
   .group-rename { display: flex; flex-wrap: wrap; gap: 8px; & .form-error { flex-basis: 100%; } }
   .groups-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 14px; & form { display: contents; } }
+
+  /* ---------- Survey: one step per page, anchored options as cards and chips ---------- */
+
+  .survey {
+    inline-size: 100%;
+    max-inline-size: 48rem;
+    margin: 0 auto;
+    padding: 44px 16px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    & .actions { justify-content: flex-start; }
+  }
+  .survey-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px 24px;
+    & h1 { margin: 0; font-size: 40px; line-height: 1.1; letter-spacing: -0.01em; font-weight: 600; }
+    & .survey-progress, & .survey-step-count { grid-column: 1 / -1; }
+  }
+  .survey-lead { margin: 0; font-size: 20px; line-height: 1.45; color: var(--grey-600); }
+  .survey-step-count { margin: -8px 0 0; font-size: 14px; font-weight: 600; color: var(--grey-600); }
+  .survey-progress {
+    display: flex; gap: 6px; margin: 0; padding: 0; list-style: none;
+    & li { flex: 1; block-size: 6px; border-radius: var(--radius-pill); background: var(--grey-200); }
+    & li[data-done] { background: var(--ink); }
+    & li[aria-current="step"] { background: var(--yellow); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  }
+
+  .survey-facts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none;
+    & li { display: flex; flex-direction: column; gap: 4px; padding: 20px 22px; border-radius: var(--radius-lg); background: var(--white); }
+    & strong { font-size: 20px; }
+    & span { color: var(--grey-600); }
+  }
+  .survey-start { margin-block-start: 8px; }
+
+  .survey-step { display: flex; flex-direction: column; gap: 16px; }
+  .survey-question {
+    margin: 0;
+    padding: 20px 24px;
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-inline-size: 0;
+    & > .hint { margin: -6px 0 0; }
+    &[data-invalid] { box-shadow: inset 0 0 0 2px var(--danger); }
+  }
+  /* A legend can't be a flex item, so float it to keep it in the column's flow. */
+  .survey-prompt { float: left; inline-size: 100%; margin: 0; padding: 0; font-size: 22px; font-weight: 600; line-height: 1.25; & + * { clear: both; } }
+  .survey-required { font-size: 14px; font-weight: 400; color: var(--grey-600); }
+
+  .survey-options {
+    display: grid; gap: 8px;
+    &[data-kind="multi"] { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+  }
+  .survey-option {
+    position: relative;
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 16px;
+    border: 2px solid var(--grey-300);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    & input { flex: none; inline-size: 20px; block-size: 20px; margin: 1px 0 0; accent-color: var(--ink); }
+    & > span { display: flex; flex-direction: column; gap: 2px; }
+    &:hover { border-color: var(--ink); }
+    &:has(input:checked) { border-color: var(--ink); background: color-mix(in srgb, var(--yellow) 35%, var(--white)); }
+    &:has(input:focus-visible) { outline: 3px solid var(--link); outline-offset: 2px; }
+  }
+  .survey-other { margin-block-start: 4px; & input[type="text"] { inline-size: 20ch; } }
+
+  .survey-select {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    & select { min-block-size: 44px; padding: 8px 14px; border: 1px solid var(--grey-400); border-radius: var(--radius-md); background: var(--white); color: var(--ink); font: 400 16px/1.3 var(--font-sans); }
+  }
+
+  .survey-row {
+    margin: 0; padding: 12px 0 0; border: 0; border-block-start: 1px solid var(--grey-200);
+    display: flex; flex-direction: column; gap: 8px; min-inline-size: 0;
+    & legend { float: left; inline-size: 100%; padding: 0; font-weight: 600; & + * { clear: both; } }
+    & .chips { margin: 0; }
+  }
+  .survey-legend {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 8px; margin: 0;
+    & div { padding: 8px 12px; border-radius: var(--radius-md); background: var(--paper); }
+    & dt { font-weight: 600; font-size: 14px; }
+    & dd { margin: 0; font-size: 14px; color: var(--grey-600); }
+  }
+  .survey-text { padding: 12px 16px; & textarea { min-block-size: 4lh; } }
+
+  /* Next comes first in the form (Enter moves on); Back is shown on the left. */
+  .survey-nav { display: flex; flex-direction: row-reverse; justify-content: space-between; gap: 12px; margin-block-start: 8px; }
+
+  .ladder {
+    display: flex; flex-direction: column-reverse; gap: 6px; margin: 0; padding: 0; list-style: none;
+    & li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 10px 14px; border: 2px solid var(--grey-200); border-radius: var(--radius-md); }
+    & li .hint { grid-column: 1; }
+    & li .pill { grid-row: 1 / span 2; grid-column: 2; }
+    & li[aria-current="true"] { border-color: var(--ink); background: color-mix(in srgb, var(--yellow) 35%, var(--white)); }
+    & li[data-next] { border-style: dashed; border-color: var(--ink); }
+  }
+  .survey-summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 12px; margin: 0;
+    & div { padding: 20px 22px; border-radius: var(--radius-lg); background: var(--ink); color: var(--white); }
+    & dt { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-200); }
+    & dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; }
+  }
+
+  /* The survey has no sidebar, so the window decides. */
+  @media (max-width: 560px) {
+    .survey-head { grid-template-columns: minmax(0, 1fr); & .sheet-logo { grid-row: 1; inline-size: 96px; } & h1 { font-size: 32px; } }
+    .survey-question { padding: 16px; }
+  }
 }
 
 /* ---------- Print / PDF ---------- */

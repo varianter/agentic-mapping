@@ -26,7 +26,7 @@ const page = async (c: Context<AppEnv>) => ({ rows: await rows(c), origin: c.get
 
 const create = formAction({
   schema: waveSchema,
-  loader: async (c) => ({ group: groupOf(c) }),
+  loader: async (c: Context<AppEnv>) => ({ group: groupOf(c) }),
   page,
   onSubmit: async (c, { name }, { group }) => {
     const created = await createWave(c.get('store'), group.slug, name);

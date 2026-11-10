@@ -17,6 +17,7 @@ import { connectRoutes } from './connect/connect.routes';
 import { interviewRoutes } from './interviews/interviews.routes';
 import { submissionRoutes } from './submissions/submissions.routes';
 import { signInRoutes } from './signIn/signIn.routes';
+import { surveyRoutes } from './survey/survey.routes';
 import { waveRoutes } from './waves/waves.routes';
 
 export { sessionToken };
@@ -99,6 +100,7 @@ export function createApp(config: AppConfig) {
   app.route('/:group/interviews', interviewRoutes);
   app.route('/:group/submissions', submissionRoutes);
   app.route('/:group/waves', waveRoutes);
+  app.route('/:group/survey', surveyRoutes);
   app.route('/', groupMapRoutes);
 
   app.notFound((c) => {

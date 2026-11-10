@@ -653,6 +653,12 @@
   .survey-required { font-size: 14px; font-weight: 400; color: var(--grey-600); }
 
   .survey-options {
+  .survey-error { display: block; margin-block-start: 4px; font-size: 16px; color: var(--danger); }
+  .survey .form-error {
+    & p { margin: 0; }
+    & ul { margin: 8px 0 0; padding-inline-start: 20px; font-weight: 400; }
+    & a { color: inherit; }
+  }
     display: grid; gap: 8px;
     &[data-kind="multi"] { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
   }

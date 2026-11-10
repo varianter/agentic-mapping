@@ -87,7 +87,7 @@ function Options({ question, values, subject }: { question: Question; values: Su
               return (
                 <label class="share-tier">
                   <span>{item.label}</span>
-                  <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="5" inputmode="numeric" placeholder="0" /><span aria-hidden="true">%</span></span>
+                  <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="5" inputmode="numeric" placeholder="0" /><span>%</span></span>
                 </label>
               );
             })}
@@ -174,7 +174,8 @@ function Options({ question, values, subject }: { question: Question; values: Su
 }
 
 // One step: a real form that saves on Next and Back (and as you type, with <autosave-form>).
-// Next comes first in the form, so pressing Enter moves on; CSS puts Back on the left.
+// Next comes first in the form, so pressing Enter moves on, and first on screen, so focus follows what you see.
+// After a refused Next, the title says so, the summary links each question in error and each question says why.
 export function StepPage({ group, wave: _wave, survey, answers, revision, index, form }: SurveyProps & { index: number; form: FormState }) {
   const step = survey.steps[index];
   const values: SurveyAnswers = form.formError ? { ...answers, ...form.values } : answers;
@@ -182,8 +183,10 @@ export function StepPage({ group, wave: _wave, survey, answers, revision, index,
   const path = surveyPath(group);
   const action = `${path}/${index + 1}`;
   const last = index === survey.steps.length - 1;
+  const invalid = step.questions.filter((question) => form.fieldErrors[question.name]);
+  const title = `${form.formError ? 'Error: ' : ''}${phrase(step.title, subject)} · Step ${index + 1} of ${survey.steps.length}`;
   return (
-    <Layout title={phrase(step.title, subject)} scripts={['elements/autosave-form.js', 'elements/model-shares.js', 'elements/tool-list.js']}>
+    <Layout title={title} scripts={['elements/autosave-form.js', 'elements/model-shares.js', 'elements/tool-list.js']}>
       <div class="app">
         <main class="main">
           <Toolbar status={form.formError ? 'Not saved' : form.saved ? 'Saved to server' : ''} state={form.formError ? 'error' : ''}>
@@ -202,16 +205,23 @@ export function StepPage({ group, wave: _wave, survey, answers, revision, index,
             <autosave-form status="save-status">
               <form class="survey-step" method="post" action={action} autocomplete="off">
                 <input type="hidden" name="revision" value={typeof form.values.revision === 'string' ? form.values.revision : String(revision)} />
-                {form.formError && <p class="form-error" role="alert">{form.formError}</p>}
+                {form.formError && (
+                  <div class="form-error" role="alert">
+                    <p>{form.formError}</p>
+                    {invalid.length > 0 && <ul>{invalid.map((question) => <li><a href={`#question-${question.name}`}>{phrase(question.prompt, subject)}</a></li>)}</ul>}
+                  </div>
+                )}
                 {step.questions.map((question) => {
-                  const invalid = Boolean(form.fieldErrors[question.name]);
+                  const error = form.fieldErrors[question.name]?.[0];
                   const prompt = phrase(question.prompt, subject);
                   const Tag = question.kind === 'text' ? 'section' : 'fieldset';
+                  // In the legend (or label), so a screen reader says it with the question.
+                  const why = error && <span class="survey-error">{` Error: ${error}`}</span>;
                   return (
-                    <Tag class="survey-question" id={`question-${question.name}`} data-invalid={invalid ? '' : undefined} {...(question.kind === 'text' ? { 'aria-labelledby': `q-${question.name}-label` } : {})}>
+                    <Tag class="survey-question" id={`question-${question.name}`} data-invalid={error ? '' : undefined} {...(question.kind === 'text' ? { 'aria-labelledby': `q-${question.name}-label` } : {})}>
                       {question.kind === 'text'
-                        ? <h2 class="survey-prompt"><label id={`q-${question.name}-label`} for={`q-${question.name}`}>{prompt}</label></h2>
-                        : <legend class="survey-prompt" id={`q-${question.name}-label`}>{prompt}{question.required && <span class="survey-required"> (required)</span>}</legend>}
+                        ? <h2 class="survey-prompt"><label id={`q-${question.name}-label`} for={`q-${question.name}`}>{prompt}{why}</label></h2>
+                        : <legend class="survey-prompt" id={`q-${question.name}-label`}>{prompt}{question.required && <span class="survey-required"> (required)</span>}{why}</legend>}
                       {question.hint && <p class="hint">{phrase(question.hint, subject)}</p>}
                       <Options question={question} values={values} subject={subject} />
                     </Tag>

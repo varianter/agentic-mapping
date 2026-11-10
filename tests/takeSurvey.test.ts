@@ -40,6 +40,11 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   const missingHtml = await missing.text();
   expect(missingHtml).toContain('marked required');
   expect(missingHtml).toMatch(/value="ux" checked/);
+  // The error is in the title, linked from the summary and said with the question it belongs to.
+  expect(missingHtml).toContain('<title>Error: About you · Step 1 of 6');
+  expect(missingHtml).toContain('href="#question-context"');
+  expect(missingHtml).toMatch(/<legend[^>]*id="q-context-label">[^]*?Error: Answer this to go on\.[^]*?<\/legend>/);
+  expect(missingHtml).not.toMatch(/<legend[^>]*id="q-role-label">[^<]*<span class="survey-required"> \(required\)<\/span><span class="survey-error">/);
   expect(await store.keys('response:')).toEqual([]);
   const submitted = await answerAll(me);
   expect(submitted.headers.get('Location')).toBe('/company-a/survey/done');

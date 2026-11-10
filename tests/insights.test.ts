@@ -44,6 +44,24 @@ test('people are numbered by creation, never named, and only their non-blank ans
   for (const secret of ['Synthetic Person', 'Synthetic Interviewer', 'Synthetic private note', 'Self name', 'Self note', '00000000-']) expect(all).not.toContain(secret);
 });
 
+test('at a glance counts people per grid cell and the tools they list most', () => {
+  const round = wave('2026 Q4', 1);
+  const { stats } = compileInsights({
+    group,
+    waves: [{ wave: round, responses: [...responses(round.id, 2), ...responses(round.id, 1, {}, false)] }],
+    sheets: [
+      sheet('interview', { ind_learn_start: 'a', ind_why_start: 'b', team_found_next: 'c', tools: 'Claude Code\nclaude code\nFigma' }, 1),
+      sheet('self', { ind_found_start: 'd', tools: 'claude code\nCursor\nFigma\nZed\nAider\nWarp' }, 2),
+      sheet('self', { name: 'No answers', tools: '' }, 3),
+    ],
+  });
+  expect(stats.people).toBe(2);
+  expect(stats.responses).toBe(2);
+  expect(stats.coverage.map((row) => [row.dimension, row.levels.map((cell) => cell.people)])).toEqual([['Individual', [2, 0, 0]], ['Team', [0, 0, 1]], ['Organization', [0, 0, 0]]]);
+  // Each person counts once per tool; ties are alphabetical; only the top five.
+  expect(stats.tools).toEqual([{ name: 'Claude Code', people: 2 }, { name: 'Figma', people: 2 }, { name: 'Aider', people: 1 }, { name: 'Cursor', people: 1 }, { name: 'Warp', people: 1 }]);
+});
+
 test('survey free text comes from submitted responses only, per wave, hidden under five', () => {
   const small = wave('2026 Q3', 1);
   const large = wave('2026 Q4', 2);
@@ -76,14 +94,18 @@ test('the Markdown file explains its structure, then lists people and survey tex
   });
   const markdown = insightsMarkdown(insights);
   expect(insightsFileName(insights)).toBe('company-a-insights-2026-11-10.md');
-  expect(markdown).toStartWith('# Agentic mapping: Company A\n\nExported 2026-11-10 · 1 interview · 0 self-submitted maps · 1 survey wave\n\n## About this file\n');
+  expect(markdown).toStartWith('# Agentic mapping: Company A\n\nExported 2026-11-10 · 1 interview · 0 self-submitted maps · 1 survey wave\n\n## At a glance\n\n1 person with answers, 5 submitted survey responses.\n');
+  expect(markdown).toContain('| Dimension | Getting started | Getting good | Next level |\n| --- | --- | --- | --- |\n| Individual | 1 | 0 | 0 |\n| Team | 0 | 0 | 0 |\n');
+  expect(markdown).toContain('(top 5).\n\n- Claude Code: 1\n\n## About this file\n');
   expect(markdown).toContain('- Team: how your team works together');
   expect(markdown).toContain('- Next level: what you’re reaching for now');
   expect(markdown).toContain('### Interview 1\n\n#### About\n\n- **Discipline:** UX\n\n#### Tools and techniques they use\n\n- Claude Code\n\n#### Individual\n\n- **Getting started · What to learn:** Synthetic first line\n  \\# not a heading\n');
   expect(markdown).toContain('## Self-submitted maps\n\nNo self-submitted maps with answers.\n');
   expect(markdown).toContain('### 2026 Q4\n\nOpen wave, questionnaire v1, 5 submitted responses.\n\n#### One thing that would help you get more out of AI\n\n- Synthetic wish 1\n');
   // Sheets without a group have no survey.
-  expect(insightsMarkdown(compileInsights({ group: null, sheets: [], waves: [] }))).not.toContain('Survey');
+  const empty = insightsMarkdown(compileInsights({ group: null, sheets: [], waves: [] }));
+  expect(empty).not.toContain('Survey');
+  expect(empty).not.toContain('At a glance');
 });
 
 test('interviewers read a group’s insights and download them as Markdown; nobody else can', async () => {

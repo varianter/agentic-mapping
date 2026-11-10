@@ -13,7 +13,9 @@ export type Answer = { label?: string; text: string } | { label?: string; items:
 export type Part = { title: string; answers: Answer[] };
 export type Person = { title: string; parts: Part[] };
 export type WaveText = { name: string; version: number; status: Wave['status']; n: number; hidden: boolean; questions: { prompt: string; answers: string[] }[] };
-export type Insights = { group: Group | null; exportedAt: number; interviews: Person[]; maps: Person[]; waves: WaveText[] };
+// At a glance: how many people, which grid cells they answered (per dimension and level), the tools most listed.
+export type Stats = { people: number; responses: number; coverage: { dimension: string; levels: { level: string; people: number }[] }[]; tools: { name: string; people: number }[] };
+export type Insights = { group: Group | null; exportedAt: number; stats: Stats; interviews: Person[]; maps: Person[]; waves: WaveText[] };
 
 export const GOOD_LABEL = 'What really good looks like, to you';
 export const TOOLS_LABEL = 'Tools and techniques they use';
@@ -49,8 +51,8 @@ function person(title: string, sheet: Sheet): Person {
   };
 }
 
+const answered = (sheet: Sheet) => hasAnswers(answersOf(withLegacyGrid(sheet.fields)));
 const people = (sheets: Sheet[], noun: string) => sheets
-  .filter((sheet) => hasAnswers(answersOf(withLegacyGrid(sheet.fields))))
   .toSorted((a, b) => a.createdAt - b.createdAt)
   .map((sheet, i) => person(`${noun} ${i + 1}`, sheet));
 
@@ -69,16 +71,51 @@ function waveText(wave: Wave, responses: SurveyResponse[]): WaveText {
   };
 }
 
+export const TOP_TOOLS = 5;
+
+// Each person counts once per cell and once per tool (ignoring case, spelled as most people spell it).
+function stats(sheets: Sheet[], waves: WaveText[]): Stats {
+  const all = sheets.map((sheet) => withLegacyGrid(sheet.fields));
+  const tools = new Map<string, { spellings: Map<string, number>; people: number }>();
+  for (const fields of all) {
+    const mine = new Map<string, string>();
+    for (const name of listItems(text(fields, 'tools'))) if (!mine.has(name.toLowerCase())) mine.set(name.toLowerCase(), name);
+    for (const [key, name] of mine) {
+      const entry = tools.get(key) ?? tools.set(key, { spellings: new Map(), people: 0 }).get(key)!;
+      entry.people += 1;
+      entry.spellings.set(name, (entry.spellings.get(name) ?? 0) + 1);
+    }
+  }
+  return {
+    people: all.length,
+    responses: waves.reduce((sum, wave) => sum + wave.n, 0),
+    coverage: DIMENSIONS.map((dimension) => ({
+      dimension: dimension.name,
+      levels: LEVELS.map((level) => ({
+        level: level.name,
+        people: all.filter((fields) => QUESTIONS.some((question) => text(fields, gridField(dimension.key, question.key, level.key)))).length,
+      })),
+    })),
+    tools: [...tools.values()]
+      .map(({ spellings, people }) => ({ name: [...spellings].toSorted((a, b) => b[1] - a[1])[0][0], people }))
+      .toSorted((a, b) => b.people - a.people || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+      .slice(0, TOP_TOOLS),
+  };
+}
+
 // `sheets` are the group's; `waves` its survey rounds with their responses (none without a group).
 export function compileInsights({ group, sheets, waves, now = Date.now() }: {
   group: Group | null; sheets: Sheet[]; waves: { wave: Wave; responses: SurveyResponse[] }[]; now?: number;
 }): Insights {
+  const kept = sheets.filter(answered);
+  const texts = waves.toSorted((a, b) => a.wave.createdAt - b.wave.createdAt).map(({ wave, responses }) => waveText(wave, responses));
   return {
     group,
     exportedAt: now,
-    interviews: people(sheets.filter((sheet) => sourceOf(sheet) === 'interview'), 'Interview'),
-    maps: people(sheets.filter((sheet) => sourceOf(sheet) === 'self'), 'Self-submitted map'),
-    waves: waves.toSorted((a, b) => a.wave.createdAt - b.wave.createdAt).map(({ wave, responses }) => waveText(wave, responses)),
+    stats: stats(kept, texts),
+    interviews: people(kept.filter((sheet) => sourceOf(sheet) === 'interview'), 'Interview'),
+    maps: people(kept.filter((sheet) => sourceOf(sheet) === 'self'), 'Self-submitted map'),
+    waves: texts,
   };
 }
 
@@ -130,6 +167,24 @@ function personLines(person: Person) {
   return [`### ${person.title}`, '', ...person.parts.flatMap((item) => [`#### ${item.title}`, '', ...item.answers.flatMap(answerLines), ''])];
 }
 
+export const coverageCaption = (stats: Stats) => `People who answered at least one question in each part of the grid, of ${plural(stats.people, 'person', 'people')}.`;
+export const toolsCaption = `Tools listed most, by how many people listed them (top ${TOP_TOOLS}).`;
+
+function glanceLines({ group, stats }: Insights) {
+  if (!stats.people && !stats.responses) return [];
+  const header = ['Dimension', ...LEVELS.map((level) => level.name)];
+  return [
+    '## At a glance', '',
+    `${plural(stats.people, 'person', 'people')} with answers${group ? `, ${plural(stats.responses, 'submitted survey response')}` : ''}.`, '',
+    ...(stats.people ? [
+      coverageCaption(stats), '',
+      `| ${header.join(' | ')} |`, `| ${header.map(() => '---').join(' | ')} |`,
+      ...stats.coverage.map((row) => `| ${row.dimension} | ${row.levels.map((cell) => cell.people).join(' | ')} |`), '',
+    ] : []),
+    ...(stats.tools.length ? [toolsCaption, '', ...stats.tools.map((tool) => `- ${safe(tool.name)}: ${tool.people}`), ''] : []),
+  ];
+}
+
 // One Markdown file for an LLM: headings mark people and parts, labels say what each answer is about.
 export function insightsMarkdown(insights: Insights) {
   const about = preamble(insights);
@@ -137,6 +192,7 @@ export function insightsMarkdown(insights: Insights) {
   const lines = [
     `# Agentic mapping: ${groupLabel(insights.group)}`, '',
     summaryLine(insights), '',
+    ...glanceLines(insights),
     '## About this file', '',
     about.intro, '',
     about.layout, '',

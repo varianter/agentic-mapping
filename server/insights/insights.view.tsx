@@ -1,5 +1,5 @@
 import { groupPrefix } from '../domain/groups';
-import { groupLabel, preamble, summaryLine, tooFewText, waveMeta, type Answer, type Insights, type Person } from '../domain/insights';
+import { coverageCaption, groupLabel, preamble, summaryLine, toolsCaption, tooFewText, waveMeta, type Answer, type Insights, type Person } from '../domain/insights';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
@@ -51,16 +51,67 @@ function People({ id, title, people, none }: { id: string; title: string; people
   );
 }
 
+const percent = (count: number, of: number) => (of ? Math.round((count / of) * 100) : 0);
+
+// Counts as tiles, the grid as a real table shaded by share (the numbers stay in the cells, so the shade only
+// adds), and the top tools as bars. No script: every value is printed.
+function Glance({ insights }: { insights: Insights }) {
+  const { group, stats } = insights;
+  return (
+    <section class="results-section insights-glance" id="glance" aria-labelledby="glance-heading">
+      <h2 id="glance-heading">At a glance</h2>
+      <dl class="survey-summary">
+        <div><dt>Interviews</dt><dd>{String(insights.interviews.length)}</dd></div>
+        <div><dt>Self-submitted maps</dt><dd>{String(insights.maps.length)}</dd></div>
+        {group && <div><dt>Survey responses</dt><dd>{String(stats.responses)}</dd></div>}
+      </dl>
+      {stats.people > 0 && (
+        <div class="results-table insights-coverage">
+          <table>
+            <caption>{coverageCaption(stats)} <span class="hint">Darker cells: more people.</span></caption>
+            <thead><tr><th scope="col">Dimension</th>{stats.coverage[0].levels.map((cell) => <th scope="col">{cell.level}</th>)}</tr></thead>
+            <tbody>
+              {stats.coverage.map((row) => (
+                <tr>
+                  <th scope="row">{row.dimension}</th>
+                  {row.levels.map((cell) => <td data-share={Math.min(4, Math.ceil(percent(cell.people, stats.people) / 25))}>{String(cell.people)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {stats.tools.length > 0 && (
+        <>
+          <p class="hint" id="glance-tools">{toolsCaption}</p>
+          <ul class="results-bars" aria-labelledby="glance-tools">
+            {stats.tools.map((tool) => (
+              <li>
+                <span class="results-label">{tool.name}</span>
+                <progress max={stats.people} value={tool.people} aria-label={`${tool.name}: ${tool.people} of ${stats.people} people`}>{`${percent(tool.people, stats.people)}%`}</progress>
+                <span class="results-count">{`${tool.people} of ${stats.people}`}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 // Headings carry the structure (h2 source, h3 person or wave, h4 part); only the page's sections are landmarks.
 // A group's qualitative answers for interviewers, exactly as the Markdown download holds them.
 export function InsightsPage({ insights }: { insights: Insights }) {
   const { group } = insights;
   const prefix = groupPrefix(group?.slug);
   const about = preamble(insights);
+  const glance = insights.stats.people > 0 || insights.stats.responses > 0;
   const sections = [
-    { id: 'interviews', title: 'Interviews', count: insights.interviews.length },
-    { id: 'maps', title: 'Self-submitted maps', count: insights.maps.length },
-    ...(group ? [{ id: 'survey', title: 'Survey free text', count: insights.waves.length }] : []),
+    ...(glance ? [{ id: 'glance', title: 'At a glance' }] : []),
+    { id: 'about', title: 'About this file' },
+    { id: 'interviews', title: `Interviews (${insights.interviews.length})` },
+    { id: 'maps', title: `Self-submitted maps (${insights.maps.length})` },
+    ...(group ? [{ id: 'survey', title: `Survey free text (${insights.waves.length})` }] : []),
   ];
   return (
     <Layout title={`Insights · ${groupLabel(group)}`}>
@@ -78,10 +129,11 @@ export function InsightsPage({ insights }: { insights: Insights }) {
 
         <nav class="insights-toc" aria-label="On this page">
           <ul>
-            <li><a href="#about">About this file</a></li>
-            {sections.map((section) => <li><a href={`#${section.id}`}>{`${section.title} (${section.count})`}</a></li>)}
+            {sections.map((section) => <li><a href={`#${section.id}`}>{section.title}</a></li>)}
           </ul>
         </nav>
+
+        {glance && <Glance insights={insights} />}
 
         <section class="results-section insights-about" id="about" aria-labelledby="about-heading">
           <h2 id="about-heading">About this file</h2>

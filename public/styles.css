@@ -786,7 +786,7 @@
     & td[data-share="2"] { background: color-mix(in srgb, var(--yellow) 50%, var(--white)); }
     & td[data-share="3"] { background: color-mix(in srgb, var(--yellow) 75%, var(--white)); }
     & td[data-share="4"] { background: var(--yellow); }
-    & td:last-child { background: transparent; color: var(--grey-600); }
+    & td:last-child:not([data-share]) { background: transparent; color: var(--grey-600); }
   }
   .results-subhead { margin: 4px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-600); }
   .results-texts { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; }
@@ -805,6 +805,11 @@
     & ul { margin: 4px 0 0; padding-inline-start: 20px; }
   }
   .insights-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 16px; & h3 { font-size: 16px; } }
+  .insights-glance .survey-summary dd { font-size: 32px; font-variant-numeric: tabular-nums; }
+  .insights-coverage {
+    & caption { caption-side: top; padding-block-end: 8px; text-align: start; font-size: 16px; & .hint { font-size: 14px; } }
+    & td { font-size: 16px; font-weight: 600; }
+  }
   .insights-person { display: grid; gap: 16px; padding: 20px 24px; border: 1px solid var(--grey-300); border-radius: var(--radius-lg); & > .hint { margin: -12px 0 0; } }
   .insights-part { display: grid; gap: 8px; }
   /* Typed line breaks are part of the answer. */

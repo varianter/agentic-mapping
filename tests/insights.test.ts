@@ -112,7 +112,7 @@ test('interviewers read a group’s insights and download them as Markdown; nobo
   const { owner, send, browser, store } = setup();
   await groupWithWave(owner);
   // A participant's own map in the group, and an interview the interviewer fills in.
-  await browser()('/company-a', { method: 'POST', form: { revision: '0', surprised: 'Synthetic <b>surprise</b>' } });
+  await browser()('/company-a', { method: 'POST', form: { revision: '0', surprised: 'Synthetic <b>surprise</b>', tools: 'Claude Code' } });
   const id = (await owner('/company-a/interviews', { method: 'POST' })).headers.get('Location')!.split('/').pop()!;
   await owner(`/company-a/interviews/${id}`, { method: 'POST', form: { revision: '1', name: 'Synthetic Person', talk_to: 'Synthetic private note', org_learn_good: 'Synthetic org answer' } });
   const elsewhere = { ...sheet('interview', { ind_learn_start: 'Synthetic answer elsewhere' }, 1), group: undefined };
@@ -132,6 +132,14 @@ test('interviewers read a group’s insights and download them as Markdown; nobo
   expect(html).toContain('Synthetic &lt;b&gt;surprise&lt;/b&gt;');
   expect(html).toContain(`Hidden: fewer than 5 submitted responses`);
   expect(html).not.toContain('Synthetic answer elsewhere');
+  // At a glance: counts, the grid as a table with row and column headers, and the tools as labelled bars.
+  expect(html).toContain('<a href="#glance">At a glance</a>');
+  expect(html).toContain('<dt>Interviews</dt><dd>1</dd>');
+  expect(html).toContain('<dt>Survey responses</dt><dd>0</dd>');
+  expect(html).toContain('<caption>People who answered at least one question in each part of the grid, of 2 people.');
+  expect(html).toContain('<th scope="row">Organization</th><td data-share="0">0</td><td data-share="2">1</td><td data-share="0">0</td>');
+  expect(html).toContain('aria-label="Claude Code: 1 of 2 people"');
+  expect(await (await setup().owner('/insights')).text()).not.toContain('id="glance"');
 
   const file = await owner('/company-a/insights.md');
   expect(file.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');

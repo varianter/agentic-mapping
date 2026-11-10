@@ -1,3 +1,4 @@
+import { expect } from 'bun:test';
 import { createApp, sessionToken } from '../server/app';
 import { memoryStore } from '../server/store';
 
@@ -55,4 +56,12 @@ export function sheetForm(html: string) {
   }
   const revision = Number(/name="revision" value="(\d+)"/.exec(html)?.[1]);
   return { revision, fields, names: Object.keys(fields) };
+}
+
+// A group with an open survey wave, made through the Groups and Waves pages as an interviewer does.
+export async function groupWithWave(owner: Send, name = 'Company A', wave = '2026 Q4') {
+  expect((await owner('/groups', { method: 'POST', form: { name } })).status).toBe(303);
+  const slug = name.toLowerCase().replace(/\s+/g, '-');
+  expect((await owner(`/${slug}/waves`, { method: 'POST', form: { name: wave } })).headers.get('Location')).toBe(`/${slug}/waves`);
+  return slug;
 }

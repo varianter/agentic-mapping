@@ -591,7 +591,9 @@
     & .group-row-head .hint { margin: 2px 0 0; }
     & input { flex: 1; min-inline-size: 0; font: inherit; font-size: 14px; padding: 6px 12px; border: 1px solid var(--grey-400); border-radius: var(--radius-pill); color: var(--ink); background: var(--white); }
   }
-  .group-row-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .group-row-links { display: flex; flex-wrap: wrap; gap: 8px; & form { display: contents; } }
+  .group-row-head .pill { margin-inline-start: 8px; vertical-align: middle; font-size: 12px; padding: 3px 10px; }
+  .pill[data-variant="closed"] { background: var(--grey-200); }
   .group-rename { display: flex; flex-wrap: wrap; gap: 8px; & .form-error { flex-basis: 100%; } }
   .groups-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: 14px; & form { display: contents; } }
 }

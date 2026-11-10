@@ -34,10 +34,10 @@
     --grey-300: #A8A8A8;
     --grey-400: #8C8C8C; /* 3:1 on white: input borders */
     --grey-500: #767676; /* 4.5:1 on white: placeholder text */
-    --grey-600: #555555;
-    --link: #0F66BF;
-    --link-hover: #0B4D8F;
-    --danger: #B00023;
+    --grey-600: #4D4D4D; /* 7:1 on paper and on a ticked card: secondary text */
+    --link: #0B4D8F; /* 7:1 on paper: links and the focus ring */
+    --link-hover: #083A6B;
+    --danger: #A0001F; /* 7:1 on paper and on --danger-soft */
     --danger-soft: #FFF2F0;
 
     --radius-md: 16px;

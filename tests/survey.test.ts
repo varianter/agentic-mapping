@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { surveyStepSchema } from '../server/domain/schemas';
-import { applyStep, missingRequired, phrase, rowsFor, SURVEY_V1, surveyFields, subjectOf, unevenShares, type Question } from '../server/domain/survey';
+import { applyStep, keepSubject, missingRequired, phrase, rowsFor, SURVEY_V1, surveyFields, subjectOf, unevenShares, type Question } from '../server/domain/survey';
 
 const step = (key: string) => SURVEY_V1.steps.find((item) => item.key === key)!;
 const matrix = (stepKey: string, name: string) => step(stepKey).questions.find((question) => question.name === name) as Extract<Question, { kind: 'matrix' }>;
@@ -66,4 +66,10 @@ test('each ticked provider’s split takes whole percentages and must add up to 
   expect(unevenShares(tools, { ...merged, share_haiku: '10' })).toEqual([]);
   // A provider left empty is skipped, even when another is filled in.
   expect(unevenShares(tools, { models: ['claude', 'gpt'], share_opus: '100' })).toEqual([]);
+});
+
+test('changing who the context step is about clears its answers; customer and between are the same subject', () => {
+  const stored = { context: 'customer', role: 'ux', expectation: 'expects', industry: 'energy', industry_other: 'x', maturity_policy: 'emerging' };
+  expect(keepSubject(SURVEY_V1, stored, { ...stored, context: 'own' })).toEqual({ context: 'own', role: 'ux' });
+  expect(keepSubject(SURVEY_V1, stored, { ...stored, context: 'between' })).toEqual({ ...stored, context: 'between' });
 });

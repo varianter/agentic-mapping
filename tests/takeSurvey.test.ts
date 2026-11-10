@@ -72,7 +72,7 @@ test('a browser answers step by step, submits, sees its own summary and can chan
 });
 
 test('steps follow earlier answers: tasks by role, the context step by who you work for', async () => {
-  const { owner, browser } = setup();
+  const { owner, browser, store } = setup();
   await groupWithWave(owner);
   const designer = browser();
   await step(designer, 1, { revision: '0', role: 'ui', context: 'own' }, 'next');
@@ -87,6 +87,13 @@ test('steps follow earlier answers: tasks by role, the context step by who you w
     const ids = [...(await (await designer(`/company-a/survey/${n}`)).text()).matchAll(/ id="([^"]+)"/g)].map(([, id]) => id);
     expect(new Set(ids).size).toBe(ids.length);
   }
+  // Switching who you work for clears the answers about the one before.
+  await step(designer, 5, { revision: String(await revisionOf(designer, 5)), expectation: 'encourages', maturity_policy: 'emerging', industry: 'energy', size: '50-200' }, 'next');
+  await step(designer, 1, { revision: String(await revisionOf(designer, 1)), role: 'ui', context: 'customer' }, 'next');
+  const [key] = await store.keys('response:');
+  const answers = (await store.get(key)).answers;
+  expect(answers).toMatchObject({ role: 'ui', context: 'customer' });
+  for (const name of ['expectation', 'maturity_policy', 'industry', 'size']) expect(answers[name]).toBeUndefined();
   const consultant = browser();
   await step(consultant, 1, { revision: '0', role: 'developer', context: 'between' }, 'next');
   expect(await (await consultant('/company-a/survey/5')).text()).toContain('How does your customer expect you to use AI?');

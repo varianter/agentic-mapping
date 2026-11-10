@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Group } from '../domain/groups';
 import { surveyStepSchema } from '../domain/schemas';
-import { applyStep, missingRequired, phrase, subjectOf, surveyFor, unevenShares, type Survey } from '../domain/survey';
+import { applyStep, keepSubject, missingRequired, phrase, subjectOf, surveyFor, unevenShares, type Survey } from '../domain/survey';
 import { findResponse, openWave, saveResponse } from '../domain/waves';
 import { requireAdminEnabled } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
@@ -44,7 +44,7 @@ const stepAction = (survey: Survey, index: number) => formAction({
     const step = survey.steps[index];
     const path = `/${group.slug}/survey`;
     const go = (['next', 'back', 'submit'].includes(c.req.query('go') ?? '') ? c.req.query('go') : undefined) as Go;
-    const merged = applyStep(answers, step, posted);
+    const merged = keepSubject(survey, answers, applyStep(answers, step, posted));
     const submit = go === 'submit' && index === survey.steps.length - 1;
     // Moving on needs this step's required answers; submitting needs every step's.
     if (go === 'next' || submit) {

@@ -354,6 +354,14 @@ export function applyStep(answers: SurveyAnswers, step: Step, posted: SurveyAnsw
   return result;
 }
 
+// The context step's answers are about step 1's subject. When that changes, they were about someone else: clear
+// them rather than let them count for the new subject.
+export function keepSubject(survey: Survey, before: SurveyAnswers, after: SurveyAnswers): SurveyAnswers {
+  if (subjectOf(before) === subjectOf(after)) return after;
+  const about = new Set(survey.steps.filter((step) => step.key === 'context').flatMap((step) => step.questions.flatMap(questionFields)));
+  return Object.fromEntries(Object.entries(after).filter(([name]) => !about.has(name)));
+}
+
 // The families ticked in a split's `from` question, and one family's total over its tiers.
 export const tickedGroups = (question: Extract<Question, { kind: 'shares' }>, answers: SurveyAnswers) => {
   const ticked = [answers[question.from] ?? []].flat();

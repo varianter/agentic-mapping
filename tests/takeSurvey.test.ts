@@ -165,6 +165,10 @@ test('the model split shows every family without JS and holds you on the step un
   const [key] = await store.keys('response:');
   expect((await store.get(key)).answers).toMatchObject({ share_opus: '30', share_sonnet: '50', share_haiku: '20', share_gpt: '100' });
   expect(await (await me('/company-a/survey/3')).text()).toMatch(/data-option="claude" data-ticked=""/);
+  // Unticking every saved tool, then a refused Next, shows them unticked.
+  const untick = await step(me, 3, { revision: String(await revisionOf(me, 3)), share_gpt: '101' }, 'next');
+  expect(untick.status).toBe(422);
+  expect(await untick.text()).not.toMatch(/name="models" value="(claude|gpt)" checked/);
   // An uneven split autosaved on step 3 holds back Submit on step 6.
   await me('/company-a/survey/3', { method: 'POST', form: { wave: await waveOf(me), revision: String(await revisionOf(me, 3)), models: ['claude'], share_opus: '40' }, headers: json });
   const submit = await step(me, 6, { revision: String(await revisionOf(me, 6)) }, 'submit');

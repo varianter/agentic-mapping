@@ -178,7 +178,9 @@ function Options({ question, values, subject }: { question: Question; values: Su
 // After a refused Next, the title says so, the summary links each question in error and each question says why.
 export function StepPage({ group, wave, survey, answers, revision, index, form }: SurveyProps & { index: number; form: FormState }) {
   const step = survey.steps[index];
-  const values: SurveyAnswers = form.formError ? { ...answers, ...form.values } : answers;
+  // Unticked checkboxes post nothing, so after an error this step's multi-choice answers start empty, not saved.
+  const cleared = Object.fromEntries(step.questions.filter((question) => question.kind === 'multi').map((question) => [question.name, []]));
+  const values: SurveyAnswers = form.formError ? { ...answers, ...cleared, ...form.values } : answers;
   const subject = subjectOf(values);
   const path = surveyPath(group);
   const action = `${path}/${index + 1}`;

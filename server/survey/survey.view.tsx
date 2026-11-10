@@ -81,6 +81,7 @@ function Options({ question, values, subject }: { question: Question; values: Su
         {question.groups.map((group) => (
           <fieldset class="share-group" data-option={group.option} data-ticked={ticked.includes(group.option) ? '' : undefined}>
             <legend>{group.label}</legend>
+            <div class="share-tiers">
             {group.tiers.map((item) => {
               const name = tierField(question, item);
               return (
@@ -90,6 +91,7 @@ function Options({ question, values, subject }: { question: Question; values: Su
                 </label>
               );
             })}
+            </div>
           </fieldset>
         ))}
         <p class="share-total" data-total={shareTotal(question, values)}>

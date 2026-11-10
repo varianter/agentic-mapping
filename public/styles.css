@@ -694,9 +694,10 @@
   model-shares { display: flex; flex-direction: column; gap: 12px; }
   .share-group {
     margin: 0; padding: 12px 0 0; border: 0; border-block-start: 1px solid var(--grey-200);
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: 8px 16px; min-inline-size: 0;
-    & legend { float: left; inline-size: 100%; padding: 0 0 4px; font-weight: 600; & + * { clear: both; } }
+    min-inline-size: 0;
+    & legend { float: left; inline-size: 100%; padding: 0 0 8px; font-weight: 600; & + * { clear: both; } }
   }
+  .share-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: 8px 16px; }
   .share-tier {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 6px 6px 6px 14px; border: 2px solid var(--grey-300); border-radius: var(--radius-md);

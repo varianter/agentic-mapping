@@ -131,3 +131,13 @@ test('interviewers read a group’s insights and download them as Markdown; nobo
   // `insights` can't become a group id: its URL is this page.
   expect((await owner('/groups', { method: 'POST', form: { name: 'Insights' } })).status).toBe(422);
 });
+
+test('the Groups page and the interviewer’s sidebar link each group’s insights', async () => {
+  const { owner } = setup();
+  await owner('/groups', { method: 'POST', form: { name: 'Company A' } });
+  const groups = await (await owner('/groups')).text();
+  expect(groups).toContain('href="/company-a/insights"');
+  expect(groups).toContain('href="/insights"');
+  expect(await (await owner('/company-a/interviews')).text()).toContain('<a href="/company-a/insights" id="insights-link">');
+  expect(await (await owner('/submissions')).text()).toContain('<a href="/insights" id="insights-link">');
+});

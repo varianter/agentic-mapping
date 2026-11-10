@@ -60,6 +60,7 @@ export function Sidebar({ kind, sheets, currentId, group }: { kind: SidebarKind;
         <a href={`${prefix}/${labels.other.kind}`} id="view-switch">{labels.other.label}</a>
         {/* Surveys run in groups only. */}
         {group && <a href={`${prefix}/waves`} id="survey-link">Survey</a>}
+        <a href={`${prefix}/insights`} id="insights-link">Insights</a>
         <a href="/guide">Interviewer guide</a>
         <form method="post" action={`${prefix}/interviews/import`} enctype="multipart/form-data">
           <label for="upload-file">Upload JSON</label>

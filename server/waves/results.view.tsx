@@ -80,8 +80,12 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
               {result.rows.map((row) => (
                 <tr>
                   <th scope="row">{row.label}</th>
-                  {row.tallies.map((item) => <td data-share={Math.min(4, Math.ceil(percent(item.count, row.answered) / 25))}>{row.answered ? `${percent(item.count, row.answered)}%` : '–'}</td>)}
-                  <td>{row.answered}</td>
+                  {row.hidden
+                    ? <td colspan={row.tallies.length + 1}>{`Fewer than ${MIN_RESPONSES} answers: hidden.`}</td>
+                    : <>
+                      {row.tallies.map((item) => <td data-share={Math.min(4, Math.ceil(percent(item.count, row.answered) / 25))}>{row.answered ? `${percent(item.count, row.answered)}%` : '–'}</td>)}
+                      <td>{row.answered}</td>
+                    </>}
                 </tr>
               ))}
             </tbody>

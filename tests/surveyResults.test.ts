@@ -26,6 +26,10 @@ test('results count submitted answers per option, split context answers by subje
   const customers = summary.sections.find((section) => section.title === 'About customers')!;
   const own = summary.sections.find((section) => section.title === 'About their own organization')!;
   expect([customers.n, customers.hidden, own.n, own.hidden]).toEqual([4, true, 2, true]);
+  // A row only some roles answer is hidden on its own when fewer than five did.
+  const tasks = question(summarize(SURVEY_V1, [...many(1, { role: 'developer', task_code: 'default' }), ...many(4, { role: 'ui', task_visual: 'regular' })]), 'How often', 'task');
+  expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')).toMatchObject({ hidden: true, answered: 0 });
+  expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')!.tallies.every((item) => !item.count)).toBe(true);
   // A role filter under five answers hides everything.
   expect(summarize(SURVEY_V1, responses, { role: 'ux' })).toMatchObject({ n: 2, hidden: true });
 });

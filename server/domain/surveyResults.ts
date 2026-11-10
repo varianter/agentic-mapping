@@ -8,7 +8,8 @@ export const MIN_RESPONSES = 5;
 export type Tally = Option & { count: number };
 export type QuestionResult =
   | { kind: 'choice'; question: Question; multi: boolean; answered: number; tallies: Tally[]; others: string[] }
-  | { kind: 'matrix'; question: Question; rows: { label: string; answered: number; tallies: Tally[] }[] }
+  // A row some roles skip can have fewer answers than its section: it's hidden on its own, counts and all.
+  | { kind: 'matrix'; question: Question; rows: { label: string; answered: number; hidden: boolean; tallies: Tally[] }[] }
   | { kind: 'text'; question: Question; answers: string[] }
   | { kind: 'shares'; question: Question; answered: number; providers: Provider[]; sizes: Share[] };
 // The average share over the splits that add up to 100; `users` is how many of them gave it more than 0%.
@@ -62,7 +63,8 @@ function result(question: Question, responses: SurveyResponse[], subject: Subjec
       kind: 'matrix', question,
       rows: question.rows.map((row) => {
         const picked = responses.map((response) => values(response.answers, rowField(question, row))).filter((list) => list.length);
-        return { label: phrase(row.label, subject), answered: picked.length, tallies: tally(question.options, picked) };
+        const hidden = picked.length > 0 && picked.length < MIN_RESPONSES;
+        return { label: phrase(row.label, subject), answered: hidden ? 0 : picked.length, hidden, tallies: tally(question.options, hidden ? [] : picked) };
       }),
     };
   }

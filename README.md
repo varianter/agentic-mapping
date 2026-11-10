@@ -14,6 +14,8 @@ Three modes, one name each:
 
 **Survey**: a short, anonymous survey on AI at work, in waves. Interviewers open a wave at `/<group>/waves` and share `/<group>/survey`; people answer six short steps, one response per wave per browser, editable until the wave closes. Results per wave (by role, hidden under 5 answers) and a CSV. See [Survey mode](docs/survey-mode.md).
 
+**Insights**: `/<group>/insights` shows a group's interviews, self-submitted maps and survey free text in one place, without names, and `/<group>/insights.md` downloads it as one Markdown file to write reports with an LLM. See [Insights](docs/insights.md).
+
 `/connect` is the one page that needs JavaScript: it posts the fragment credential in a form body, so it never travels in a URL. Opening a link in a browser that already has its own map asks (a server-rendered form) whether to merge both, keep the interview's answers or replace them with your own; the own map is then deleted.
 
 Without `ADMIN_KEY` the app is self-only: `/` goes to `/map`, and `/sign-in`, `/connect`, `/groups`, `/interviews`, `/submissions` and group URLs return 404. My map is still saved in the store (local JSON file, or Upstash).

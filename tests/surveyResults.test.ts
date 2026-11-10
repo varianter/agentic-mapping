@@ -42,7 +42,7 @@ test('interviewers read a wave’s results; drafts are counted apart and never s
   for (const answers of many(5, { role: 'developer', context: 'customer', autonomy: 'parallel', wish: 'Synthetic wish' })) {
     await store.set(`response:${waveId}:${answers.id}`, { ...answers, waveId });
   }
-  await browser()('/company-a/survey/1', { method: 'POST', form: { revision: '0', role: 'ux' } });
+  await browser()('/company-a/survey/1', { method: 'POST', form: { revision: '0', wave: waveId, role: 'ux' } });
   expect((await send(`/company-a/waves/${waveId}`)).headers.get('Location')).toBe('/sign-in');
   const page = await (await owner(`/company-a/waves/${waveId}`)).text();
   expect(page).toContain('5 answers');

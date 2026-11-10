@@ -17,13 +17,13 @@ test('every answer name is unique, and every choice has distinct values', () => 
 
 test('a step accepts only its own questions and their options', () => {
   const schema = surveyStepSchema(step('tools'));
-  expect(schema.safeParse({ revision: '0', models: ['claude', 'gpt'], models_other: 'Synthetic', autonomy: 'handoff' }).data)
-    .toEqual({ revision: 0, answers: { models: ['claude', 'gpt'], models_other: 'Synthetic', autonomy: 'handoff' } });
-  expect(schema.safeParse({ revision: '0', models: 'claude' }).data?.answers).toEqual({ models: ['claude'] });
-  for (const posted of [{ revision: '0', autonomy: 'magic' }, { revision: '0', models: ['claude', 'nope'] }, { revision: '0', role: 'developer' }, { autonomy: 'chat' }]) {
+  expect(schema.safeParse({ revision: '0', wave: 'w', models: ['claude', 'gpt'], models_other: 'Synthetic', autonomy: 'handoff' }).data)
+    .toEqual({ revision: 0, wave: 'w', answers: { models: ['claude', 'gpt'], models_other: 'Synthetic', autonomy: 'handoff' } });
+  expect(schema.safeParse({ revision: '0', wave: 'w', models: 'claude' }).data?.answers).toEqual({ models: ['claude'] });
+  for (const posted of [{ revision: '0', wave: 'w', autonomy: 'magic' }, { revision: '0', wave: 'w', models: ['claude', 'nope'] }, { revision: '0', wave: 'w', role: 'developer' }, { wave: 'w', autonomy: 'chat' }, { revision: '0', autonomy: 'chat' }]) {
     expect(schema.safeParse(posted).success).toBe(false);
   }
-  expect(surveyStepSchema(step('often')).safeParse({ revision: '1', task_code: 'default' }).success).toBe(true);
+  expect(surveyStepSchema(step('often')).safeParse({ revision: '1', wave: 'w', task_code: 'default' }).success).toBe(true);
 });
 
 test('saving a step clears unticked checkboxes and keeps everything else', () => {
@@ -49,15 +49,15 @@ test('listing other tools ticks Other, emptying the list unticks it, and the lis
   const tools = step('tools');
   expect(applyStep({}, tools, { tools: ['cursor'], tools_other: 'Aider\nZed' })).toMatchObject({ tools: ['cursor', 'other'], tools_other: 'Aider\nZed' });
   expect(applyStep({ tools: ['other'], tools_other: 'Aider' }, tools, { tools: ['cursor', 'other'], tools_other: '\n' }).tools).toEqual(['cursor']);
-  expect(surveyStepSchema(tools).safeParse({ revision: '1', tools_other: 'x'.repeat(1500) }).success).toBe(true);
-  expect(surveyStepSchema(tools).safeParse({ revision: '1', models_other: 'x'.repeat(300) }).success).toBe(false);
+  expect(surveyStepSchema(tools).safeParse({ revision: '1', wave: 'w', tools_other: 'x'.repeat(1500) }).success).toBe(true);
+  expect(surveyStepSchema(tools).safeParse({ revision: '1', wave: 'w', models_other: 'x'.repeat(300) }).success).toBe(false);
 });
 
 test('each ticked provider’s split takes whole percentages and must add up to 100 once started', () => {
   const tools = step('tools');
   const schema = surveyStepSchema(tools);
-  expect(schema.safeParse({ revision: '1', models: ['claude'], share_opus: '30', share_sonnet: '70', share_gpt: '' }).success).toBe(true);
-  for (const share of ['101', '-5', '12.5', 'x']) expect(schema.safeParse({ revision: '1', share_opus: share }).success).toBe(false);
+  expect(schema.safeParse({ revision: '1', wave: 'w', models: ['claude'], share_opus: '30', share_sonnet: '70', share_gpt: '' }).success).toBe(true);
+  for (const share of ['101', '-5', '12.5', 'x']) expect(schema.safeParse({ revision: '1', wave: 'w', share_opus: share }).success).toBe(false);
   // Unticking a family drops its tiers.
   const merged = applyStep({ share_gemini: '50' }, tools, { models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '60', share_gpt: '100', 'share_gemini-pro': '10' });
   expect(merged).toMatchObject({ share_opus: '30', share_sonnet: '60', share_gpt: '100' });

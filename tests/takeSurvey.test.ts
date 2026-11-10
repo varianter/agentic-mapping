@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test';
 import { groupWithWave, json, setup, type Send } from './helpers';
 
-const step = (me: Send, n: number, form: Record<string, string | string[]>, go?: string) => me(`/company-a/survey/${n}${go ? `?go=${go}` : ''}`, { method: 'POST', form });
+// The wave a page was rendered for, as its form posts it back.
+const waveOf = async (me: Send) => /name="wave" value="([^"]+)"/.exec(await (await me('/company-a/survey/1')).text())![1];
+const step = async (me: Send, n: number, form: Record<string, string | string[]>, go?: string) => me(`/company-a/survey/${n}${go ? `?go=${go}` : ''}`, { method: 'POST', form: { wave: await waveOf(me), ...form } });
 const revisionOf = async (me: Send, n: number) => Number(/name="revision" value="(\d+)"/.exec(await (await me(`/company-a/survey/${n}`)).text())![1]);
 
 // One full answer, step by step, as a browser without JS sends it.
@@ -94,10 +96,11 @@ test('autosave posts a step for JSON; stale revisions conflict; unknown answers 
   const { owner, browser, store } = setup();
   await groupWithWave(owner);
   const me = browser();
-  const first = await me('/company-a/survey/1', { method: 'POST', form: { revision: '0', role: 'ux' }, headers: json });
+  const wave = await waveOf(me);
+  const first = await me('/company-a/survey/1', { method: 'POST', form: { revision: '0', wave, role: 'ux' }, headers: json });
   expect(await first.json()).toEqual({ revision: 1 });
-  expect((await me('/company-a/survey/1', { method: 'POST', form: { revision: '0', role: 'ui' }, headers: json })).status).toBe(409);
-  for (const form of [{ revision: '1', role: 'astronaut' }, { revision: '1', autonomy: 'chat' }, { revision: '1', role: ['ux', 'ui'] }]) {
+  expect((await me('/company-a/survey/1', { method: 'POST', form: { revision: '0', wave, role: 'ui' }, headers: json })).status).toBe(409);
+  for (const form of [{ revision: '1', wave, role: 'astronaut' }, { revision: '1', wave, autonomy: 'chat' }, { revision: '1', wave, role: ['ux', 'ui'] }, { revision: '1', role: 'ux' }]) {
     expect((await me('/company-a/survey/1', { method: 'POST', form, headers: json })).status).toBe(422);
   }
   expect((await me('/company-a/survey/9')).status).toBe(404);
@@ -108,10 +111,15 @@ test('autosave posts a step for JSON; stale revisions conflict; unknown answers 
   const early = await step(me, 6, { revision: '3', wish: '' }, 'submit');
   expect(early.status).toBe(422);
   expect(await early.text()).toContain('Step 1');
-  const [wave] = await store.keys('wave:company-a:');
-  await owner(`/company-a/waves/${wave.split(':').pop()}/close`, { method: 'POST', form: {} });
-  expect((await me('/company-a/survey/1', { method: 'POST', form: { revision: '3', role: 'ui' }, headers: json })).status).toBe(409);
+  await owner(`/company-a/waves/${wave}/close`, { method: 'POST', form: {} });
+  expect((await me('/company-a/survey/1', { method: 'POST', form: { revision: '3', wave, role: 'ui' }, headers: json })).status).toBe(409);
   expect(await (await me('/company-a/survey')).text()).toContain('No survey is open right now');
+  // A form left open from the closed wave never saves into the next one, even with a matching revision.
+  await owner('/company-a/waves', { method: 'POST', form: { name: '2027 Q1' } });
+  const stale = await browser()('/company-a/survey/1', { method: 'POST', form: { revision: '0', wave, role: 'ui' }, headers: json });
+  expect(stale.status).toBe(409);
+  expect(await stale.json()).toMatchObject({ error: 'This survey has closed. Your last saved answers are kept.' });
+  expect((await store.keys('response:')).length).toBe(1);
 });
 
 test('My map offers the group’s survey while a wave is open', async () => {

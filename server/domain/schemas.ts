@@ -35,8 +35,10 @@ const short = z.string().max(200).optional();
 // A whole percentage, or empty for none.
 const percent = z.string().regex(/^(100|[1-9]?\d)?$/, 'Use a whole number from 0 to 100.').optional();
 
+// `wave` is the wave the page was rendered for, so a form left open across waves never saves into the next one.
 export const surveyStepSchema = (step: Step) => z.strictObject({
   revision,
+  wave: z.string().max(100),
   ...Object.fromEntries(step.questions.flatMap((question): [string, z.ZodType][] => {
     if (question.kind === 'text') return [[question.name, z.string().max(5000).optional()]];
     if (question.kind === 'shares') return question.groups.flatMap((group) => group.tiers.map((item): [string, z.ZodType] => [tierField(question, item), percent]));
@@ -45,7 +47,7 @@ export const surveyStepSchema = (step: Step) => z.strictObject({
     const other = question.kind === 'multi' && question.other === 'list' ? z.string().max(2000).optional() : short;
     return [[question.name, question.kind === 'multi' ? choices(values) : choice(values)], ...(question.other ? [[otherField(question), other] as [string, z.ZodType]] : [])];
   })),
-}).transform(({ revision, ...answers }) => ({ revision, answers: defined(answers as Record<string, string | string[] | undefined>) }));
+}).transform(({ revision, wave, ...answers }) => ({ revision, wave, answers: defined(answers as Record<string, string | string[] | undefined>) }));
 
 // Waves: a name; the questionnaire version is always the latest.
 export const waveSchema = z.strictObject({ name: z.string().max(200) });

@@ -38,7 +38,9 @@ const actions = new Map<string, ReturnType<typeof stepAction>>();
 const stepAction = (survey: Survey, index: number) => formAction({
   schema: surveyStepSchema(survey.steps[index]),
   loader: async (c: Context<AppEnv>) => load(c),
-  onSubmit: async (c, { revision, answers: posted }, { group, wave, survey, found, answers }: Loaded) => {
+  onSubmit: async (c, { revision, wave: rendered, answers: posted }, { group, wave, survey, found, answers }: Loaded) => {
+    const closed = { formError: 'This survey has closed. Your last saved answers are kept.', status: 409 as const };
+    if (rendered !== wave.id) return closed;
     const step = survey.steps[index];
     const path = `/${group.slug}/survey`;
     const go = (['next', 'back', 'submit'].includes(c.req.query('go') ?? '') ? c.req.query('go') : undefined) as Go;
@@ -56,7 +58,7 @@ const stepAction = (survey: Survey, index: number) => formAction({
     const saved = await saveResponse(c.get('store'), wave, found, revision, merged, { submit });
     if (!saved.ok) {
       return saved.reason === 'closed'
-        ? { formError: 'This survey has closed. Your last saved answers are kept.', status: 409 }
+        ? closed
         : { formError: 'Your answers changed in another tab. Reload this page, then go on.', status: 409 };
     }
     setRespondentToken(c, saved.token);

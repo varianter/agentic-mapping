@@ -176,7 +176,7 @@ function Options({ question, values, subject }: { question: Question; values: Su
 // One step: a real form that saves on Next and Back (and as you type, with <autosave-form>).
 // Next comes first in the form, so pressing Enter moves on, and first on screen, so focus follows what you see.
 // After a refused Next, the title says so, the summary links each question in error and each question says why.
-export function StepPage({ group, wave: _wave, survey, answers, revision, index, form }: SurveyProps & { index: number; form: FormState }) {
+export function StepPage({ group, wave, survey, answers, revision, index, form }: SurveyProps & { index: number; form: FormState }) {
   const step = survey.steps[index];
   const values: SurveyAnswers = form.formError ? { ...answers, ...form.values } : answers;
   const subject = subjectOf(values);
@@ -205,6 +205,7 @@ export function StepPage({ group, wave: _wave, survey, answers, revision, index,
             <autosave-form status="save-status">
               <form class="survey-step" method="post" action={action} autocomplete="off">
                 <input type="hidden" name="revision" value={typeof form.values.revision === 'string' ? form.values.revision : String(revision)} />
+                <input type="hidden" name="wave" value={wave.id} />
                 {form.formError && (
                   <div class="form-error" role="alert">
                     <p>{form.formError}</p>

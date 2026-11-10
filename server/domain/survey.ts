@@ -13,7 +13,7 @@ export type Question =
   | Base & { kind: 'single'; options: Option[]; display?: 'cards' | 'chips' | 'select'; other?: boolean }
   | Base & { kind: 'multi'; options: Option[]; display?: 'cards' | 'chips'; other?: boolean }
   | Base & { kind: 'matrix'; rows: Row[]; options: Option[]; legend?: boolean }
-  // A percentage split, adding up to 100, over the tiers of the families ticked in the `from` question.
+  // A percentage split per family ticked in the `from` question, each adding up to 100 over its tiers.
   | Base & { kind: 'shares'; from: string; groups: TierGroup[] }
   | Base & { kind: 'text' };
 export type Step = { key: string; title: string; intro: string; questions: Question[] };
@@ -159,16 +159,13 @@ export const SURVEY_V1: Survey = {
           ],
         },
         {
-          kind: 'shares', name: 'share', from: 'models', prompt: 'Roughly how is your use split between them?',
-          hint: 'A percentage of all your AI use, adding up to 100. Tiers, not versions.',
+          kind: 'shares', name: 'share', from: 'models', prompt: 'For each provider, roughly how is your use split between its models?',
+          hint: 'A percentage per provider, each adding up to 100. Tiers, not versions.',
           groups: [
             { option: 'claude', label: 'Anthropic Claude', tiers: [tier('fable', 'Fable', 'largest'), tier('opus', 'Opus', 'large'), tier('sonnet', 'Sonnet', 'mid'), tier('haiku', 'Haiku', 'small'), tier('claude-unknown', 'Not sure which')] },
             { option: 'gpt', label: 'OpenAI GPT', tiers: [tier('gpt-pro', 'GPT Pro', 'largest'), tier('gpt', 'GPT', 'large'), tier('gpt-mini', 'GPT mini', 'mid'), tier('gpt-nano', 'GPT nano', 'small'), tier('gpt-unknown', 'Not sure which')] },
             { option: 'gemini', label: 'Google Gemini', tiers: [tier('gemini-deep-think', 'Gemini Deep Think', 'largest'), tier('gemini-pro', 'Gemini Pro', 'large'), tier('gemini-flash', 'Gemini Flash', 'mid'), tier('gemini-flash-lite', 'Gemini Flash-Lite', 'small'), tier('gemini-unknown', 'Not sure which')] },
             { option: 'mistral', label: 'Mistral', tiers: [tier('mistral-large', 'Mistral Large', 'large'), tier('mistral-medium', 'Mistral Medium', 'mid'), tier('mistral-small', 'Mistral Small', 'small'), tier('mistral-unknown', 'Not sure which')] },
-            { option: 'copilot', label: 'Microsoft Copilot', tiers: [tier('copilot', 'Copilot')] },
-            { option: 'open', label: 'Open-weight models', tiers: [tier('open', 'Open-weight models')] },
-            { option: 'other', label: 'Other', tiers: [tier('other', 'Other models')] },
           ],
         },
         {
@@ -344,19 +341,20 @@ export function applyStep(answers: SurveyAnswers, step: Step, posted: SurveyAnsw
   return result;
 }
 
-// The families ticked in a split's `from` question, and the split's total over them.
+// The families ticked in a split's `from` question, and one family's total over its tiers.
 export const tickedGroups = (question: Extract<Question, { kind: 'shares' }>, answers: SurveyAnswers) => {
   const ticked = [answers[question.from] ?? []].flat();
   return question.groups.filter((group) => ticked.includes(group.option));
 };
-export const shareTotal = (question: Extract<Question, { kind: 'shares' }>, answers: SurveyAnswers) => tickedGroups(question, answers)
-  .flatMap((group) => group.tiers).reduce((sum, item) => sum + (Number(answers[tierField(question, item)]) || 0), 0);
+export const groupTotal = (question: Extract<Question, { kind: 'shares' }>, group: TierGroup, answers: SurveyAnswers) => group.tiers
+  .reduce((sum, item) => sum + (Number(answers[tierField(question, item)]) || 0), 0);
 
 // Questions a step needs answered before moving on; everything else can be skipped.
 export const missingRequired = (step: Step, answers: SurveyAnswers) => step.questions
   .filter((question) => question.required && !(typeof answers[question.name] === 'string' && answers[question.name]))
   .map((question) => question.name);
 
-// Splits that were started but don't add up to 100. An empty split is a skipped question.
-export const unevenShares = (step: Step, answers: SurveyAnswers) => step.questions
-  .flatMap((question) => (question.kind === 'shares' && ![0, 100].includes(shareTotal(question, answers)) ? [{ name: question.name, total: shareTotal(question, answers) }] : []));
+// A family's split that was started but doesn't add up to 100. An empty split is a skipped question.
+export const unevenShares = (step: Step, answers: SurveyAnswers) => step.questions.flatMap((question) => (question.kind === 'shares'
+  ? tickedGroups(question, answers).map((group) => ({ name: question.name, group: group.label, total: groupTotal(question, group, answers) })).filter(({ total }) => total !== 0 && total !== 100)
+  : []));

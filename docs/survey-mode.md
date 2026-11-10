@@ -18,7 +18,7 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 
 1. **About you**: role, years in product development, who you mainly work for (customer / own organization / between projects).
 2. **How often**: AI use in the last two weeks; per task (filtered by role): never / tried / regularly / it's how I do it.
-3. **Models and tools**: model families, then the split of use across their tiers (Fable, Opus, Sonnet…; a percentage adding up to 100, compared by size class across vendors), who picks the model, tools, main tool, the **autonomy ladder** (0–6), who pays (all that apply).
+3. **Models and tools**: model families, then, per provider, how use splits across its tiers (Fable, Opus, Sonnet…; percentages adding up to 100 per provider, compared by size class across providers), who picks the model, tools, main tool, the **autonomy ladder** (0–6), who pays (all that apply).
 4. **How it's going**: six agree/disagree statements, time saved per week, the biggest blocker.
 5. **Your customer / your organization**: expectation ladder, maturity in six areas (not there / emerging / established / leading / don't know), industry, product-development size.
 6. **Last word**: one thing that would help (optional free text), then Submit.

@@ -1,6 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { Group } from '../domain/groups';
-import { AUTONOMY, labelOf, otherField, phrase, rowField, rowsFor, shareTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
+import { AUTONOMY, labelOf, otherField, phrase, rowField, rowsFor, groupTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import type { FormState } from '../framework/formAction';
@@ -72,8 +72,8 @@ function Options({ question, values, subject }: { question: Question; values: Su
   if (question.kind === 'text') {
     return <div class="field survey-text"><textarea id={`q-${question.name}`} name={question.name} aria-labelledby={`q-${question.name}-label`}>{text(values[question.name])}</textarea></div>;
   }
-  // One percentage per tier, grouped by family. <model-shares> shows only the families ticked above and a
-  // running total; without JS every family shows and the server checks the total on Next.
+  // One percentage per tier, each family adding up to 100. <model-shares> shows only the families ticked above,
+  // each with a running total; without JS every family shows and the server checks the totals on Next.
   if (question.kind === 'shares') {
     const ticked = [values[question.from] ?? []].flat();
     return (
@@ -92,11 +92,9 @@ function Options({ question, values, subject }: { question: Question; values: Su
               );
             })}
             </div>
+            <p class="share-total">Total: <output>{groupTotal(question, group, values)}</output>% of 100%</p>
           </fieldset>
         ))}
-        <p class="share-total" data-total={shareTotal(question, values)}>
-          Total: <output>{shareTotal(question, values)}</output>% of 100%
-        </p>
       </model-shares>
     );
   }

@@ -1,17 +1,13 @@
-// <model-shares from="models">: a percentage split over model tiers. Shows only the families ticked in the
-// `from` checkboxes of the same form, and keeps a running total against 100. The inputs stay the form fields,
-// so <autosave-form> saves them as typed; the server ignores families that aren't ticked.
-// Without JS every family shows and the server checks the total when moving on.
+// <model-shares from="models">: a percentage split per model family, each adding up to 100 over its tiers.
+// Shows only the families ticked in the `from` checkboxes of the same form, each with a running total. The inputs
+// stay the form fields, so <autosave-form> saves them as typed; the server ignores families that aren't ticked.
+// Without JS every family shows and the server checks each total when moving on.
 class ModelShares extends HTMLElement {
   #form;
-  #output;
-  #total;
 
   connectedCallback() {
     this.#form = this.closest('form');
-    this.#total = this.querySelector('.share-total');
-    this.#output = this.#total?.querySelector('output');
-    if (!this.#form || !this.#output || this.dataset.ready !== undefined) return;
+    if (!this.#form || this.dataset.ready !== undefined) return;
     this.#form.addEventListener('input', (event) => {
       if (event.target.name === this.getAttribute('from') || this.contains(event.target)) this.#render();
     });
@@ -27,13 +23,15 @@ class ModelShares extends HTMLElement {
   #render() {
     const ticked = this.#ticked;
     const groups = [...this.querySelectorAll('.share-group')];
-    for (const group of groups) group.hidden = !ticked.has(group.dataset.option);
-    const visible = groups.filter((group) => !group.hidden);
-    // Nothing to split until a family is ticked.
-    this.closest('.survey-question')?.toggleAttribute('hidden', visible.length === 0);
-    const total = visible.flatMap((group) => [...group.querySelectorAll('input')]).reduce((sum, input) => sum + (Number(input.value) || 0), 0);
-    this.#output.value = String(total);
-    this.#total.dataset.state = total === 100 ? 'done' : total > 100 ? 'over' : total ? 'under' : '';
+    for (const group of groups) {
+      group.hidden = !ticked.has(group.dataset.option);
+      const total = [...group.querySelectorAll('input')].reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+      const status = group.querySelector('.share-total');
+      status.querySelector('output').value = String(total);
+      status.dataset.state = total === 100 ? 'done' : total > 100 ? 'over' : total ? 'under' : '';
+    }
+    // Nothing to split until a family with tiers is ticked.
+    this.closest('.survey-question')?.toggleAttribute('hidden', groups.every((group) => group.hidden));
   }
 }
 

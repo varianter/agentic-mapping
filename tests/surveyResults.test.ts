@@ -74,15 +74,19 @@ test('the CSV has one row per submitted response, one column per answer, and is 
   expect(lines[1]).toContain(`"'=HYPERLINK(""x""), with ""quotes"""`);
 });
 
-test('model splits average over people whose split adds up, by tier and by size across vendors', () => {
+test('model splits average per provider over splits that add up, and by size across providers', () => {
   const responses = [
     ...many(3, { models: ['claude'], share_fable: '10', share_opus: '20', share_sonnet: '70' }),
-    ...many(2, { models: ['claude', 'gpt'], share_sonnet: '50', share_gpt: '50' }),
+    ...many(1, { models: ['claude', 'gpt'], share_sonnet: '100', 'share_gpt-mini': '100' }),
     response({ models: ['claude'], share_opus: '40' }),
   ];
   const shares = question(summarize(SURVEY_V1, responses), 'Models and tools', 'share');
   if (shares.kind !== 'shares') throw new Error('Expected a split.');
   expect(shares.answered).toBe(5);
-  expect(shares.tiers.map((item) => [item.label, item.average, item.users])).toEqual([['Fable', 6, 3], ['Opus', 12, 3], ['Sonnet', 62, 5], ['GPT', 20, 2]]);
-  expect(shares.sizes.map((item) => [item.label, item.average])).toEqual([['Largest', 6], ['Large', 32], ['Mid-size', 62], ['Small and fast', 0], ['Unclassified', 0]]);
+  const providers = Object.fromEntries(shares.providers.map((provider) => [provider.label, [provider.answered, provider.tiers.filter((item) => item.users).map((item) => [item.label, item.average, item.users])]]));
+  expect(providers).toEqual({
+    'Anthropic Claude': [4, [['Fable', 8, 3], ['Opus', 15, 3], ['Sonnet', 78, 4]]],
+    'OpenAI GPT': [1, [['GPT mini', 100, 1]]],
+  });
+  expect(shares.sizes.map((item) => [item.label, item.average])).toEqual([['Largest', 6], ['Large', 12], ['Mid-size', 82], ['Small and fast', 0], ['Not sure which', 0]]);
 });

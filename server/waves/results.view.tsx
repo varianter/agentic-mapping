@@ -30,7 +30,7 @@ function Shares({ shares, label }: { shares: Share[]; label: string }) {
     <ul class="results-bars" aria-label={label}>
       {shares.map((item) => (
         <li>
-          <span class="results-label">{item.group && item.group !== item.label ? `${item.label} · ${item.group.replace(/^(Anthropic|OpenAI|Google) /, '')}` : item.label}</span>
+          <span class="results-label">{item.label}</span>
           <progress max="100" value={item.average} aria-label={`${item.label}: ${item.average}% of use on average`}>{`${item.average}%`}</progress>
           <span class="results-count">{`${item.average}% · ${item.users}`}</span>
         </li>
@@ -53,13 +53,17 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
     return (
       <section class="survey-question results-question">
         <h3 class="survey-prompt">{prompt}</h3>
-        <p class="hint">{`${result.answered} gave a split adding up to 100%. Average share of their AI use · people using it.`}</p>
+        <p class="hint">Average share of each provider’s use · how many use it. Only splits that add up to 100% count.</p>
         {result.answered ? (
           <>
-            <h4 class="results-subhead">By size of model, across vendors</h4>
+            <h4 class="results-subhead">{`By size of model, across providers · ${result.answered} splits`}</h4>
             <Shares shares={result.sizes} label="By size of model" />
-            <h4 class="results-subhead">By tier</h4>
-            <Shares shares={result.tiers} label="By tier" />
+            {result.providers.map((provider) => (
+              <>
+                <h4 class="results-subhead">{`${provider.label} · ${provider.answered} ${provider.answered === 1 ? 'split' : 'splits'}`}</h4>
+                <Shares shares={provider.tiers} label={provider.label} />
+              </>
+            ))}
           </>
         ) : <p class="hint">No splits yet.</p>}
       </section>

@@ -1,4 +1,4 @@
-import { otherField, phrase, rowField, shareTotal, SIZES, surveyFields, tierField, type Option, type Question, type Step, type Subject, type Survey, type SurveyAnswers } from './survey';
+import { groupTotal, otherField, phrase, rowField, SIZES, surveyFields, tierField, type Option, type Question, type Tier, type Step, type Subject, type Survey, type SurveyAnswers } from './survey';
 import type { SurveyResponse } from './waves';
 
 // Fewer answers than this are never shown, so a filter can't single out one person.
@@ -9,9 +9,10 @@ export type QuestionResult =
   | { kind: 'choice'; question: Question; multi: boolean; answered: number; tallies: Tally[]; others: string[] }
   | { kind: 'matrix'; question: Question; rows: { label: string; answered: number; tallies: Tally[] }[] }
   | { kind: 'text'; question: Question; answers: string[] }
-  | { kind: 'shares'; question: Question; answered: number; tiers: Share[]; sizes: Share[] };
-// The average share of use over everyone whose split adds up to 100; `users` gave it more than 0%.
-export type Share = { label: string; group?: string; users: number; average: number };
+  | { kind: 'shares'; question: Question; answered: number; providers: Provider[]; sizes: Share[] };
+// The average share over the splits that add up to 100; `users` is how many of them gave it more than 0%.
+export type Provider = { label: string; answered: number; tiers: Share[] };
+export type Share = { label: string; users: number; average: number };
 // The context step is split by who it's about, so customers and own organizations never mix.
 export type Section = { title: string; subject: Subject; n: number; hidden: boolean; questions: QuestionResult[] };
 
@@ -22,19 +23,22 @@ const texts = (responses: SurveyResponse[], name: string) => responses.map((resp
 function result(question: Question, responses: SurveyResponse[], subject: Subject): QuestionResult {
   if (question.kind === 'text') return { kind: 'text', question, answers: texts(responses, question.name) };
   if (question.kind === 'shares') {
-    const split = responses.filter((response) => shareTotal(question, response.answers) === 100);
-    const shareOf = (response: SurveyResponse, name: string) => Number(response.answers[name]) || 0;
-    const share = (label: string, names: string[], group?: string): Share => ({
-      label, ...(group ? { group } : {}),
-      users: split.filter((response) => names.some((name) => shareOf(response, name) > 0)).length,
-      average: split.length ? Math.round(split.reduce((sum, response) => sum + names.reduce((total, name) => total + shareOf(response, name), 0), 0) / split.length) : 0,
-    });
-    const tiers = question.groups.flatMap((group) => group.tiers.map((item) => ({ ...item, group: group.label, name: tierField(question, item) })));
+    // One split per person and family, counted only when that family is ticked and its split adds up to 100.
+    const splits = question.groups.flatMap((group) => responses
+      .filter((response) => [response.answers[question.from] ?? []].flat().includes(group.option) && groupTotal(question, group, response.answers) === 100)
+      .map((response) => ({ group, answers: response.answers })));
+    const share = (label: string, among: typeof splits, size: (tier: Tier) => boolean): Share => {
+      const shareOf = (split: (typeof splits)[number]) => split.group.tiers.filter(size).reduce((sum, item) => sum + (Number(split.answers[tierField(question, item)]) || 0), 0);
+      return { label, users: among.filter((split) => shareOf(split) > 0).length, average: among.length ? Math.round(among.reduce((sum, split) => sum + shareOf(split), 0) / among.length) : 0 };
+    };
     return {
-      kind: 'shares', question, answered: split.length,
-      tiers: tiers.map((item) => share(item.label, [item.name], item.group)).filter((item) => item.users),
-      // Across vendors: how much of the use goes to each size of model. Tiers without a size are "Unclassified".
-      sizes: [...SIZES.map((size) => share(size.label, tiers.filter((item) => item.size === size.value).map((item) => item.name))), share('Unclassified', tiers.filter((item) => !item.size).map((item) => item.name))],
+      kind: 'shares', question, answered: splits.length,
+      providers: question.groups.map((group) => {
+        const among = splits.filter((split) => split.group === group);
+        return { label: group.label, answered: among.length, tiers: group.tiers.map((item) => share(item.label, among, (other) => other === item)) };
+      }).filter((provider) => provider.answered),
+      // Across providers: how each split leans by size of model. "Not sure which" has no size.
+      sizes: [...SIZES.map((size) => share(size.label, splits, (item) => item.size === size.value)), share('Not sure which', splits, (item) => !item.size)],
     };
   }
   if (question.kind === 'matrix') {

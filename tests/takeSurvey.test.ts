@@ -52,7 +52,7 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   expect(JSON.stringify(await Promise.all((await store.keys('')).map((k) => store.get(k))))).not.toContain(token);
   const summary = await (await me('/company-a/survey/done')).text();
   expect(summary).toContain('I hand off a whole task and review the result');
-  expect(summary).toContain('Next: i run several agents at once');
+  expect(summary).toContain('Next rung: “I run several agents at once”');
   expect(summary).toContain('3–8 hours');
   // Changing an answer keeps one response, still submitted.
   await step(me, 3, { revision: String(await revisionOf(me, 3)), autonomy: 'parallel' }, 'next');
@@ -75,6 +75,11 @@ test('steps follow earlier answers: tasks by role, the context step by who you w
   const context = await (await designer('/company-a/survey/5')).text();
   expect(context).toContain('Your organization');
   expect(context).toContain('How does your organization expect you to use AI?');
+  // Every id on a step is unique.
+  for (const n of [1, 2, 3, 4, 5, 6]) {
+    const ids = [...(await (await designer(`/company-a/survey/${n}`)).text()).matchAll(/ id="([^"]+)"/g)].map(([, id]) => id);
+    expect(new Set(ids).size).toBe(ids.length);
+  }
   const consultant = browser();
   await step(consultant, 1, { revision: '0', role: 'developer', context: 'between' }, 'next');
   expect(await (await consultant('/company-a/survey/5')).text()).toContain('How does your customer expect you to use AI?');

@@ -171,7 +171,7 @@ export function StepPage({ group, wave: _wave, survey, answers, revision, index,
                   const prompt = phrase(question.prompt, subject);
                   const Tag = question.kind === 'text' ? 'section' : 'fieldset';
                   return (
-                    <Tag class="survey-question" id={`q-${question.name}`} data-invalid={invalid ? '' : undefined} {...(question.kind === 'text' ? { 'aria-labelledby': `q-${question.name}-label` } : {})}>
+                    <Tag class="survey-question" id={`question-${question.name}`} data-invalid={invalid ? '' : undefined} {...(question.kind === 'text' ? { 'aria-labelledby': `q-${question.name}-label` } : {})}>
                       {question.kind === 'text'
                         ? <h2 class="survey-prompt"><label id={`q-${question.name}-label`} for={`q-${question.name}`}>{prompt}</label></h2>
                         : <legend class="survey-prompt" id={`q-${question.name}-label`}>{prompt}{question.required && <span class="survey-required"> (required)</span>}</legend>}
@@ -224,7 +224,7 @@ export function DonePage({ group, wave, survey, answers }: SurveyProps) {
                 </li>
               ))}
             </ol>
-            <p class="hint">{next ? `Next: ${next.label.charAt(0).toLowerCase()}${next.label.slice(1)}. ${next.hint}` : 'You’re on the top rung. Help others get there.'}</p>
+            <p class="hint">{next ? `Next rung: “${next.label}”. ${next.hint}` : 'You’re on the top rung. Help others get there.'}</p>
           </section>
         )}
         <dl class="survey-summary">

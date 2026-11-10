@@ -4,11 +4,17 @@
 
 export type Option = { value: string; label: string; hint?: string };
 export type Row = { key: string; label: string; roles?: string[] };
+// A model tier, by name and never by version, with a size class that compares across vendors.
+export type Size = 'largest' | 'large' | 'mid' | 'small';
+export type Tier = { key: string; label: string; size?: Size };
+export type TierGroup = { option: string; label: string; tiers: Tier[] };
 type Base = { name: string; prompt: string; hint?: string; required?: boolean };
 export type Question =
   | Base & { kind: 'single'; options: Option[]; display?: 'cards' | 'chips' | 'select'; other?: boolean }
   | Base & { kind: 'multi'; options: Option[]; other?: boolean }
   | Base & { kind: 'matrix'; rows: Row[]; options: Option[]; legend?: boolean }
+  // A percentage split, adding up to 100, over the tiers of the families ticked in the `from` question.
+  | Base & { kind: 'shares'; from: string; groups: TierGroup[] }
   | Base & { kind: 'text' };
 export type Step = { key: string; title: string; intro: string; questions: Question[] };
 export type Survey = { version: number; minutes: number; steps: Step[] };
@@ -54,6 +60,15 @@ const TOOLS = [
   option('custom', 'Internal or custom agents'),
   option('other', 'Other'),
 ];
+
+export const SIZES: { value: Size; label: string }[] = [
+  { value: 'largest', label: 'Largest' },
+  { value: 'large', label: 'Large' },
+  { value: 'mid', label: 'Mid-size' },
+  { value: 'small', label: 'Small and fast' },
+];
+
+const tier = (key: string, label: string, size?: Size): Tier => ({ key, label, ...(size ? { size } : {}) });
 
 const AGREE = [
   option('1', 'Strongly disagree'),
@@ -141,6 +156,19 @@ export const SURVEY_V1: Survey = {
             option('open', 'Open-weight models', 'Llama, Qwen, DeepSeek…'),
             option('unknown', 'I don’t know which model'),
             option('other', 'Other'),
+          ],
+        },
+        {
+          kind: 'shares', name: 'share', from: 'models', prompt: 'Roughly how is your use split between them?',
+          hint: 'A percentage of all your AI use, adding up to 100. Tiers, not versions.',
+          groups: [
+            { option: 'claude', label: 'Anthropic Claude', tiers: [tier('fable', 'Fable', 'largest'), tier('opus', 'Opus', 'large'), tier('sonnet', 'Sonnet', 'mid'), tier('haiku', 'Haiku', 'small'), tier('claude-unknown', 'Not sure which')] },
+            { option: 'gpt', label: 'OpenAI GPT', tiers: [tier('gpt-pro', 'GPT Pro', 'largest'), tier('gpt', 'GPT', 'large'), tier('gpt-mini', 'GPT mini', 'mid'), tier('gpt-nano', 'GPT nano', 'small'), tier('gpt-unknown', 'Not sure which')] },
+            { option: 'gemini', label: 'Google Gemini', tiers: [tier('gemini-deep-think', 'Gemini Deep Think', 'largest'), tier('gemini-pro', 'Gemini Pro', 'large'), tier('gemini-flash', 'Gemini Flash', 'mid'), tier('gemini-flash-lite', 'Gemini Flash-Lite', 'small'), tier('gemini-unknown', 'Not sure which')] },
+            { option: 'mistral', label: 'Mistral', tiers: [tier('mistral-large', 'Mistral Large', 'large'), tier('mistral-medium', 'Mistral Medium', 'mid'), tier('mistral-small', 'Mistral Small', 'small'), tier('mistral-unknown', 'Not sure which')] },
+            { option: 'copilot', label: 'Microsoft Copilot', tiers: [tier('copilot', 'Copilot')] },
+            { option: 'open', label: 'Open-weight models', tiers: [tier('open', 'Open-weight models')] },
+            { option: 'other', label: 'Other', tiers: [tier('other', 'Other models')] },
           ],
         },
         {
@@ -284,13 +312,17 @@ export const rowsFor = (question: Extract<Question, { kind: 'matrix' }>, answers
   return question.rows.filter((row) => !row.roles || !role || role === 'other' || row.roles.includes(role));
 };
 
+export const tierField = (question: Question, item: Tier) => `${question.name}_${item.key}`;
+
 // Every answer name a question can hold, in order.
 export const questionFields = (question: Question) => (question.kind === 'matrix'
   ? question.rows.map((row) => rowField(question, row))
-  : [question.name, ...('other' in question && question.other ? [otherField(question)] : [])]);
+  : question.kind === 'shares'
+    ? question.groups.flatMap((group) => group.tiers.map((item) => tierField(question, item)))
+    : [question.name, ...('other' in question && question.other ? [otherField(question)] : [])]);
 export const surveyFields = (survey: Survey) => survey.steps.flatMap((step) => step.questions.flatMap(questionFields));
 
-export const labelOf = (question: Question, value: string) => (question.kind === 'text' ? value : question.options.find((item) => item.value === value)?.label ?? value);
+export const labelOf = (question: Question, value: string) => (question.kind === 'text' || question.kind === 'shares' ? value : question.options.find((item) => item.value === value)?.label ?? value);
 
 // What a step's form posted, merged into the stored answers. Checkboxes send nothing when none are ticked, so a
 // multi-choice question in the step is cleared then; other questions keep their answer until a new one comes.
@@ -303,10 +335,28 @@ export function applyStep(answers: SurveyAnswers, step: Step, posted: SurveyAnsw
       if (posted[name] !== undefined) result[name] = posted[name];
     }
   }
+  // A split only covers the families still ticked.
+  for (const question of step.questions) {
+    if (question.kind !== 'shares') continue;
+    const ticked = new Set([result[question.from] ?? []].flat());
+    for (const group of question.groups) if (!ticked.has(group.option)) for (const item of group.tiers) delete result[tierField(question, item)];
+  }
   return result;
 }
+
+// The families ticked in a split's `from` question, and the split's total over them.
+export const tickedGroups = (question: Extract<Question, { kind: 'shares' }>, answers: SurveyAnswers) => {
+  const ticked = [answers[question.from] ?? []].flat();
+  return question.groups.filter((group) => ticked.includes(group.option));
+};
+export const shareTotal = (question: Extract<Question, { kind: 'shares' }>, answers: SurveyAnswers) => tickedGroups(question, answers)
+  .flatMap((group) => group.tiers).reduce((sum, item) => sum + (Number(answers[tierField(question, item)]) || 0), 0);
 
 // Questions a step needs answered before moving on; everything else can be skipped.
 export const missingRequired = (step: Step, answers: SurveyAnswers) => step.questions
   .filter((question) => question.required && !(typeof answers[question.name] === 'string' && answers[question.name]))
   .map((question) => question.name);
+
+// Splits that were started but don't add up to 100. An empty split is a skipped question.
+export const unevenShares = (step: Step, answers: SurveyAnswers) => step.questions
+  .flatMap((question) => (question.kind === 'shares' && ![0, 100].includes(shareTotal(question, answers)) ? [{ name: question.name, total: shareTotal(question, answers) }] : []));

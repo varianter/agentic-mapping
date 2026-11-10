@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Group } from '../domain/groups';
 import { surveyStepSchema } from '../domain/schemas';
-import { applyStep, missingRequired, phrase, subjectOf, surveyFor, type Survey } from '../domain/survey';
+import { applyStep, missingRequired, phrase, subjectOf, surveyFor, unevenShares, type Survey } from '../domain/survey';
 import { findResponse, openWave, saveResponse } from '../domain/waves';
 import { requireAdminEnabled } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
@@ -48,6 +48,8 @@ const stepAction = (survey: Survey, index: number) => formAction({
     if (go === 'next' || submit) {
       const missing = missingRequired(step, merged);
       if (missing.length) return { formError: 'Answer the questions marked required to go on.', fieldErrors: Object.fromEntries(missing.map((name) => [name, ['Required.']])), status: 422 };
+      const [uneven] = unevenShares(step, merged);
+      if (uneven) return { formError: `Your split adds up to ${uneven.total}%. Make it 100%, or leave it empty.`, fieldErrors: { [uneven.name]: ['Must add up to 100.'] }, status: 422 };
       const earlier = survey.steps.findIndex((other) => missingRequired(other, merged).length);
       if (submit && earlier >= 0) return { formError: `Step ${earlier + 1}, “${phrase(survey.steps[earlier].title, subjectOf(merged))}”, has a required answer missing. Go back and answer it first.`, status: 422 };
     }

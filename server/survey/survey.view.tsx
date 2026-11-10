@@ -1,6 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { Group } from '../domain/groups';
-import { AUTONOMY, labelOf, otherField, phrase, rowField, rowsFor, subjectOf, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
+import { AUTONOMY, labelOf, otherField, phrase, rowField, rowsFor, shareTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import type { FormState } from '../framework/formAction';
@@ -71,6 +71,32 @@ const text = (value: SurveyAnswers[string] | undefined) => (typeof value === 'st
 function Options({ question, values, subject }: { question: Question; values: SurveyAnswers; subject: Subject }) {
   if (question.kind === 'text') {
     return <div class="field survey-text"><textarea id={`q-${question.name}`} name={question.name} aria-labelledby={`q-${question.name}-label`}>{text(values[question.name])}</textarea></div>;
+  }
+  // One percentage per tier, grouped by family. <model-shares> shows only the families ticked above and a
+  // running total; without JS every family shows and the server checks the total on Next.
+  if (question.kind === 'shares') {
+    const ticked = [values[question.from] ?? []].flat();
+    return (
+      <model-shares from={question.from}>
+        {question.groups.map((group) => (
+          <fieldset class="share-group" data-option={group.option} data-ticked={ticked.includes(group.option) ? '' : undefined}>
+            <legend>{group.label}</legend>
+            {group.tiers.map((item) => {
+              const name = tierField(question, item);
+              return (
+                <label class="share-tier">
+                  <span>{item.label}</span>
+                  <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="5" inputmode="numeric" placeholder="0" /><span aria-hidden="true">%</span></span>
+                </label>
+              );
+            })}
+          </fieldset>
+        ))}
+        <p class="share-total" data-total={shareTotal(question, values)}>
+          Total: <output>{shareTotal(question, values)}</output>% of 100%
+        </p>
+      </model-shares>
+    );
   }
   if (question.kind === 'matrix') {
     return (
@@ -146,7 +172,7 @@ export function StepPage({ group, wave: _wave, survey, answers, revision, index,
   const action = `${path}/${index + 1}`;
   const last = index === survey.steps.length - 1;
   return (
-    <Layout title={phrase(step.title, subject)} scripts={['elements/autosave-form.js']}>
+    <Layout title={phrase(step.title, subject)} scripts={['elements/autosave-form.js', 'elements/model-shares.js']}>
       <div class="app">
         <main class="main">
           <Toolbar status={form.formError ? 'Not saved' : form.saved ? 'Saved to server' : ''} state={form.formError ? 'error' : ''}>

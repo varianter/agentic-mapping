@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { surveyStepSchema } from '../server/domain/schemas';
-import { applyStep, missingRequired, phrase, rowsFor, SURVEY_V1, surveyFields, subjectOf, type Question } from '../server/domain/survey';
+import { applyStep, missingRequired, phrase, rowsFor, SURVEY_V1, surveyFields, subjectOf, unevenShares, type Question } from '../server/domain/survey';
 
 const step = (key: string) => SURVEY_V1.steps.find((item) => item.key === key)!;
 const matrix = (stepKey: string, name: string) => step(stepKey).questions.find((question) => question.name === name) as Extract<Question, { kind: 'matrix' }>;
@@ -9,7 +9,7 @@ test('every answer name is unique, and every choice has distinct values', () => 
   const fields = surveyFields(SURVEY_V1);
   expect(new Set(fields).size).toBe(fields.length);
   for (const question of SURVEY_V1.steps.flatMap((item) => item.questions)) {
-    if (question.kind === 'text') continue;
+    if (question.kind === 'text' || question.kind === 'shares') continue;
     const values = question.options.map((item) => item.value);
     expect(new Set(values).size).toBe(values.length);
   }
@@ -43,4 +43,18 @@ test('task rows follow the role, and context questions follow who you work for',
   expect(keys({ role: 'other' })).toHaveLength(tasks.rows.length);
   expect(phrase('{Subject}: how does {subject} expect you to work?', subjectOf({ context: 'between' }))).toBe('Your customer: how does your customer expect you to work?');
   expect(phrase('{Subject}', subjectOf({ context: 'own' }))).toBe('Your organization');
+});
+
+test('a model split covers only ticked families, takes whole percentages and must add up to 100 once started', () => {
+  const tools = step('tools');
+  const schema = surveyStepSchema(tools);
+  expect(schema.safeParse({ revision: '1', models: ['claude'], share_opus: '30', share_sonnet: '70', share_gpt: '' }).success).toBe(true);
+  for (const share of ['101', '-5', '12.5', 'x']) expect(schema.safeParse({ revision: '1', share_opus: share }).success).toBe(false);
+  // Unticking a family drops its tiers.
+  const merged = applyStep({ share_gpt: '50' }, tools, { models: ['claude'], share_opus: '30', share_sonnet: '60', share_gpt: '10' });
+  expect(merged).toMatchObject({ share_opus: '30', share_sonnet: '60' });
+  expect(merged.share_gpt).toBeUndefined();
+  expect(unevenShares(tools, merged)).toEqual([{ name: 'share', total: 90 }]);
+  expect(unevenShares(tools, { ...merged, share_haiku: '10' })).toEqual([]);
+  expect(unevenShares(tools, { models: ['claude'] })).toEqual([]);
 });

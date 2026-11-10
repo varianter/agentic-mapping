@@ -1,5 +1,5 @@
 import type { Group } from '../domain/groups';
-import { MIN_RESPONSES, type QuestionResult, type Section, type Tally } from '../domain/surveyResults';
+import { MIN_RESPONSES, type QuestionResult, type Section, type Share, type Tally } from '../domain/surveyResults';
 import { phrase, ROLES, type Subject } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
@@ -25,6 +25,20 @@ function Bars({ tallies, of }: { tallies: Tally[]; of: number }) {
   );
 }
 
+function Shares({ shares, label }: { shares: Share[]; label: string }) {
+  return (
+    <ul class="results-bars" aria-label={label}>
+      {shares.map((item) => (
+        <li>
+          <span class="results-label">{item.group && item.group !== item.label ? `${item.label} · ${item.group.replace(/^(Anthropic|OpenAI|Google) /, '')}` : item.label}</span>
+          <progress max="100" value={item.average} aria-label={`${item.label}: ${item.average}% of use on average`}>{`${item.average}%`}</progress>
+          <span class="results-count">{`${item.average}% · ${item.users}`}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Result({ result, subject }: { result: QuestionResult; subject: Subject }) {
   const prompt = phrase(result.question.prompt, subject);
   if (result.kind === 'text') {
@@ -32,6 +46,22 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
       <section class="survey-question results-question">
         <h3 class="survey-prompt">{prompt}</h3>
         {result.answers.length ? <ul class="results-texts">{result.answers.map((answer) => <li>{answer}</li>)}</ul> : <p class="hint">No answers.</p>}
+      </section>
+    );
+  }
+  if (result.kind === 'shares') {
+    return (
+      <section class="survey-question results-question">
+        <h3 class="survey-prompt">{prompt}</h3>
+        <p class="hint">{`${result.answered} gave a split adding up to 100%. Average share of their AI use · people using it.`}</p>
+        {result.answered ? (
+          <>
+            <h4 class="results-subhead">By size of model, across vendors</h4>
+            <Shares shares={result.sizes} label="By size of model" />
+            <h4 class="results-subhead">By tier</h4>
+            <Shares shares={result.tiers} label="By tier" />
+          </>
+        ) : <p class="hint">No splits yet.</p>}
       </section>
     );
   }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { INTERVIEWER_TEXT_FIELDS, RESPONDENT_FIELDS } from './fields';
-import { otherField, rowField, type Step } from './survey';
+import { otherField, rowField, tierField, type Step } from './survey';
 
 // Form bodies, built from the field tables. Strict: an unknown field is a tampered form, never stored.
 const text = z.string().max(100_000).optional();
@@ -32,11 +32,14 @@ const choice = (values: string[]) => z.enum(values as [string, ...string[]]).opt
 const choices = (values: string[]) => z.union([z.string(), z.array(z.string())]).optional()
   .transform((value) => (value === undefined ? undefined : [value].flat())).pipe(z.array(z.enum(values as [string, ...string[]])).max(values.length).optional());
 const short = z.string().max(200).optional();
+// A whole percentage, or empty for none.
+const percent = z.string().regex(/^(100|[1-9]?\d)?$/, 'Use a whole number from 0 to 100.').optional();
 
 export const surveyStepSchema = (step: Step) => z.strictObject({
   revision,
   ...Object.fromEntries(step.questions.flatMap((question): [string, z.ZodType][] => {
     if (question.kind === 'text') return [[question.name, z.string().max(5000).optional()]];
+    if (question.kind === 'shares') return question.groups.flatMap((group) => group.tiers.map((item): [string, z.ZodType] => [tierField(question, item), percent]));
     const values = question.options.map((item) => item.value);
     if (question.kind === 'matrix') return question.rows.map((row) => [rowField(question, row), choice(values)]);
     return [[question.name, question.kind === 'multi' ? choices(values) : choice(values)], ...(question.other ? [[otherField(question), short] as [string, z.ZodType]] : [])];

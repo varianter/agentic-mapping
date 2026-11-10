@@ -118,3 +118,23 @@ test('My map offers the group’s survey while a wave is open', async () => {
   await owner(`/company-a/waves/${wave.split(':').pop()}/close`, { method: 'POST', form: {} });
   expect(await (await browser()('/company-a')).text()).not.toContain('id="take-survey"');
 });
+
+test('the model split shows every family without JS and holds you on the step until it adds up', async () => {
+  const { owner, browser, store } = setup();
+  await groupWithWave(owner);
+  const me = browser();
+  await step(me, 1, { revision: '0', role: 'developer', context: 'customer' }, 'next');
+  const page = await (await me('/company-a/survey/3')).text();
+  expect(page).toContain('<model-shares from="models">');
+  for (const name of ['share_fable', 'share_opus', 'share_sonnet', 'share_haiku', 'share_gpt-pro', 'share_gemini-flash']) expect(page).toContain(`name="${name}"`);
+  const uneven = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50' }, 'next');
+  expect(uneven.status).toBe(422);
+  const html = await uneven.text();
+  expect(html).toContain('Your split adds up to 80%');
+  expect(html).toContain('name="share_opus" value="30"');
+  const even = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', 'share_gpt': '20' }, 'next');
+  expect(even.headers.get('Location')).toBe('/company-a/survey/4');
+  const [key] = await store.keys('response:');
+  expect((await store.get(key)).answers).toMatchObject({ share_opus: '30', share_sonnet: '50', share_gpt: '20' });
+  expect(await (await me('/company-a/survey/3')).text()).toMatch(/data-option="claude" data-ticked=""/);
+});

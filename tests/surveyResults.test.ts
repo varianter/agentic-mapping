@@ -92,7 +92,7 @@ test('other tools are counted per item, once per person, ignoring case', () => {
 test('model splits average per provider over splits that add up, and by size across providers', () => {
   const responses = [
     ...many(3, { models: ['claude'], share_fable: '10', share_opus: '20', share_sonnet: '70' }),
-    ...many(1, { models: ['claude', 'gpt'], share_sonnet: '100', 'share_gpt-mini': '100' }),
+    ...many(1, { models: ['claude', 'gpt'], share_sonnet: '100', 'share_gpt-terra': '100' }),
     response({ models: ['claude'], share_opus: '40' }),
   ];
   const shares = question(summarize(SURVEY_V1, responses), 'Models and tools', 'share');
@@ -101,7 +101,7 @@ test('model splits average per provider over splits that add up, and by size acr
   const providers = Object.fromEntries(shares.providers.map((provider) => [provider.label, [provider.answered, provider.tiers.filter((item) => item.users).map((item) => [item.label, item.average, item.users])]]));
   expect(providers).toEqual({
     'Anthropic Claude': [4, [['Fable', 8, 3], ['Opus', 15, 3], ['Sonnet', 78, 4]]],
-    'OpenAI GPT': [1, [['GPT mini', 100, 1]]],
+    'OpenAI GPT': [1, [['GPT Terra', 100, 1]]],
   });
   expect(shares.sizes.map((item) => [item.label, item.average])).toEqual([['Largest', 6], ['Large', 12], ['Mid-size', 82], ['Small and fast', 0], ['Not sure which', 0]]);
 });

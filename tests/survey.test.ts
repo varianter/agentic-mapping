@@ -56,12 +56,12 @@ test('listing other tools ticks Other, emptying the list unticks it, and the lis
 test('each ticked provider’s split takes whole percentages and must add up to 100 once started', () => {
   const tools = step('tools');
   const schema = surveyStepSchema(tools);
-  expect(schema.safeParse({ revision: '1', wave: 'w', models: ['claude'], share_opus: '30', share_sonnet: '70', share_gpt: '' }).success).toBe(true);
+  expect(schema.safeParse({ revision: '1', wave: 'w', models: ['claude'], share_opus: '30', share_sonnet: '70', 'share_gpt-sol': '' }).success).toBe(true);
   for (const share of ['101', '-5', '12.5', 'x']) expect(schema.safeParse({ revision: '1', wave: 'w', share_opus: share }).success).toBe(false);
   // Unticking a family drops its tiers.
-  const merged = applyStep({ share_gemini: '50' }, tools, { models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '60', share_gpt: '100', 'share_gemini-pro': '10' });
-  expect(merged).toMatchObject({ share_opus: '30', share_sonnet: '60', share_gpt: '100' });
-  expect(merged['share_gemini-pro']).toBeUndefined();
+  const merged = applyStep({ share_gemini: '50' }, tools, { models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '60', 'share_gpt-sol': '100', 'share_gemini-carbon': '10' });
+  expect(merged).toMatchObject({ share_opus: '30', share_sonnet: '60', 'share_gpt-sol': '100' });
+  expect(merged['share_gemini-carbon']).toBeUndefined();
   expect(unevenShares(tools, merged)).toEqual([{ name: 'share', group: 'Anthropic Claude', total: 90 }]);
   expect(unevenShares(tools, { ...merged, share_haiku: '10' })).toEqual([]);
   // A provider left empty is skipped, even when another is filled in.

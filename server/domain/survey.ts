@@ -166,8 +166,8 @@ export const SURVEY_V1: Survey = {
           hint: 'A percentage per provider, each adding up to 100. Tiers, not versions.',
           groups: [
             { option: 'claude', label: 'Anthropic Claude', tiers: [tier('fable', 'Fable', 'largest'), tier('opus', 'Opus', 'large'), tier('sonnet', 'Sonnet', 'mid'), tier('haiku', 'Haiku', 'small'), tier('claude-unknown', 'Not sure which')] },
-            { option: 'gpt', label: 'OpenAI GPT', tiers: [tier('gpt-pro', 'GPT Pro', 'largest'), tier('gpt', 'GPT', 'large'), tier('gpt-mini', 'GPT mini', 'mid'), tier('gpt-nano', 'GPT nano', 'small'), tier('gpt-unknown', 'Not sure which')] },
-            { option: 'gemini', label: 'Google Gemini', tiers: [tier('gemini-deep-think', 'Gemini Deep Think', 'largest'), tier('gemini-pro', 'Gemini Pro', 'large'), tier('gemini-flash', 'Gemini Flash', 'mid'), tier('gemini-flash-lite', 'Gemini Flash-Lite', 'small'), tier('gemini-unknown', 'Not sure which')] },
+            { option: 'gpt', label: 'OpenAI GPT', tiers: [tier('gpt-astra', 'GPT Astra', 'largest'), tier('gpt-sol', 'GPT Sol', 'large'), tier('gpt-terra', 'GPT Terra', 'mid'), tier('gpt-luna', 'GPT Luna', 'small'), tier('gpt-unknown', 'Not sure which')] },
+            { option: 'gemini', label: 'Google Gemini', tiers: [tier('gemini-carbon', 'Gemini Carbon', 'large'), tier('gemini-argon', 'Gemini Argon', 'mid'), tier('gemini-hydrogen', 'Gemini Hydrogen', 'small'), tier('gemini-unknown', 'Not sure which')] },
             { option: 'mistral', label: 'Mistral', tiers: [tier('mistral-large', 'Mistral Large', 'large'), tier('mistral-medium', 'Mistral Medium', 'mid'), tier('mistral-small', 'Mistral Small', 'small'), tier('mistral-unknown', 'Not sure which')] },
           ],
         },

@@ -175,24 +175,24 @@ test('the model split shows every family without JS and holds you on the step un
   expect(page).toMatch(/<tool-list><textarea id="q-tools_other" name="tools_other"/);
   expect(page).not.toContain('name="tools" value="other"');
   expect(page).toContain('name="models" value="other"');
-  for (const name of ['share_fable', 'share_opus', 'share_sonnet', 'share_haiku', 'share_gpt-pro', 'share_gemini-flash']) expect(page).toContain(`name="${name}"`);
+  for (const name of ['share_fable', 'share_opus', 'share_sonnet', 'share_haiku', 'share_gpt-astra', 'share_gemini-hydrogen']) expect(page).toContain(`name="${name}"`);
   // Any whole percentage, like 33 and 67, is a valid input.
   expect(page).toContain('max="100" step="1"');
-  const uneven = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_gpt: '20' }, 'next');
+  const uneven = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', 'share_gpt-sol': '20' }, 'next');
   expect(uneven.status).toBe(422);
   const html = await uneven.text();
   expect(html).toContain('Your Anthropic Claude split adds up to 80%');
   expect(html).toContain('name="share_opus" value="30"');
-  const even = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_haiku: '20', share_gpt: '20' }, 'next');
+  const even = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_haiku: '20', 'share_gpt-sol': '20' }, 'next');
   expect(even.status).toBe(422);
   expect(await even.text()).toContain('Your OpenAI GPT split adds up to 20%');
-  const done = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_haiku: '20', share_gpt: '100' }, 'next');
+  const done = await step(me, 3, { revision: '1', models: ['claude', 'gpt'], share_opus: '30', share_sonnet: '50', share_haiku: '20', 'share_gpt-sol': '100' }, 'next');
   expect(done.headers.get('Location')).toBe('/company-a/survey/4');
   const [key] = await store.keys('response:');
-  expect((await store.get(key)).answers).toMatchObject({ share_opus: '30', share_sonnet: '50', share_haiku: '20', share_gpt: '100' });
+  expect((await store.get(key)).answers).toMatchObject({ share_opus: '30', share_sonnet: '50', share_haiku: '20', 'share_gpt-sol': '100' });
   expect(await (await me('/company-a/survey/3')).text()).toMatch(/data-option="claude" data-ticked=""/);
   // Unticking every saved tool, then a refused Next, shows them unticked.
-  const untick = await step(me, 3, { revision: String(await revisionOf(me, 3)), share_gpt: '101' }, 'next');
+  const untick = await step(me, 3, { revision: String(await revisionOf(me, 3)), 'share_gpt-sol': '101' }, 'next');
   expect(untick.status).toBe(422);
   expect(await untick.text()).not.toMatch(/name="models" value="(claude|gpt)" checked/);
   // An uneven split autosaved on step 3 holds back Submit on step 6.

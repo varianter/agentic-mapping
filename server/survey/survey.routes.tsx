@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { Group } from '../domain/groups';
 import { surveyStepSchema } from '../domain/schemas';
 import { applyStep, keepSubject, missingRequired, phrase, subjectOf, surveyFor, unevenShares, type Survey } from '../domain/survey';
-import { findResponse, openWave, saveResponse } from '../domain/waves';
+import { findResponse, markOpened, openWave, saveResponse } from '../domain/waves';
 import { requireAdminEnabled } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formAction } from '../framework/formAction';
@@ -25,7 +25,13 @@ async function load(c: Context<AppEnv>) {
     }
     return c.render(<NoSurveyPage group={group} />);
   }
-  const found = await findResponse(store, respondentToken(c), wave);
+  // The first page this browser opens in the wave counts it as opened; signed-in interviewers only preview.
+  let token = respondentToken(c);
+  if (c.req.method === 'GET' && !c.get('admin')) {
+    const opened = await markOpened(store, wave, token);
+    if (opened !== token) setRespondentToken(c, (token = opened));
+  }
+  const found = await findResponse(store, token, wave);
   const response = found.response;
   return { group, wave, survey: surveyFor(wave.version), found, answers: response?.answers ?? {}, revision: response?.revision ?? 0, submitted: Boolean(response?.submittedAt) };
 }

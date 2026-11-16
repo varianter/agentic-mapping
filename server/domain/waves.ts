@@ -69,6 +69,21 @@ export async function listResponses(store: Store, waveId: string): Promise<Surve
 
 export const submittedResponses = async (store: Store, waveId: string) => (await listResponses(store, waveId)).filter((response) => response.submittedAt);
 
+// Each browser that opens the wave's survey, once: `survey-open:<waveId>:<hash of token>` = { openedAt }. It holds
+// nothing else, so it only counts how many people opened the survey, next to how many started and submitted.
+const openKey = (waveId: string, token: string) => `survey-open:${waveId}:${hashCredential(token)}`;
+
+// Records the first time this browser opens the wave; later visits change nothing. Returns the browser's token,
+// a new one if it had none.
+export async function markOpened(store: Store, wave: Wave, token: unknown, now = Date.now()): Promise<string> {
+  const known = isToken(token) ? token : newToken();
+  const key = openKey(wave.id, known);
+  if (!(await store.get(key))) await store.set(key, { openedAt: now });
+  return known;
+}
+
+export const countOpened = async (store: Store, waveId: string) => (await store.keys(`survey-open:${waveId}:`)).length;
+
 export type ResponseBinding = { token: string | undefined; response: SurveyResponse | null };
 
 // This browser's answer to the wave, if it has one.

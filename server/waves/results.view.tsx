@@ -5,7 +5,7 @@ import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
-export type ResultsProps = { group: Group; wave: Wave; role: string; n: number; drafts: number; hidden: boolean; sections: Section[] };
+export type ResultsProps = { group: Group; wave: Wave; role: string; n: number; opened: number; drafts: number; hidden: boolean; sections: Section[] };
 
 const percent = (count: number, of: number) => (of ? Math.round((count / of) * 100) : 0);
 const tooFew = `Fewer than ${MIN_RESPONSES} answers: hidden, so nobody can be singled out.`;
@@ -105,7 +105,7 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
 }
 
 // A wave's results for interviewers: submitted answers only, filterable by role, small groups hidden.
-export function ResultsPage({ group, wave, role, n, drafts, hidden, sections }: ResultsProps) {
+export function ResultsPage({ group, wave, role, n, opened, drafts, hidden, sections }: ResultsProps) {
   const base = `/${group.slug}/waves/${wave.id}`;
   return (
     <Layout title={`Results · ${wave.name}`}>
@@ -113,7 +113,7 @@ export function ResultsPage({ group, wave, role, n, drafts, hidden, sections }: 
         <header class="groups-head">
           <img src={asset('img/variant-logo-dark.svg')} alt="Variant" width="101" height="24" />
           <h1>{wave.name} <span class="pill" data-variant={wave.status}>{wave.status === 'open' ? 'Open' : 'Closed'}</span></h1>
-          <p id="results-count">{`${group.name}: ${n} ${n === 1 ? 'answer' : 'answers'}${role ? ` from ${ROLES.find((item) => item.value === role)?.label ?? role}` : ''}${drafts ? ` · ${drafts} in progress, not counted` : ''}.`}</p>
+          <p id="results-count">{`${group.name}: ${n} ${n === 1 ? 'answer' : 'answers'}${role ? ` from ${ROLES.find((item) => item.value === role)?.label ?? role}` : ''}${drafts ? ` · ${drafts} in progress, not counted` : ''}${role ? '' : ` · ${opened} opened the survey`}.`}</p>
         </header>
 
         <nav class="group-row-links" aria-label="Wave">

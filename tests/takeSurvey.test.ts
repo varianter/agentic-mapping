@@ -27,6 +27,32 @@ test('without an open wave the survey says so, and posts are refused', async () 
   expect((await setup({ admin: false }).send('/company-a/survey')).status).toBe(404);
 });
 
+test('each browser that opens the survey is counted once per wave, without its token; interviewer previews are not', async () => {
+  const { owner, browser, store } = setup();
+  await groupWithWave(owner);
+  const first = browser();
+  const opened = await first('/company-a/survey');
+  const token = /^am_respondent=([a-f0-9]{64});/.exec(opened.headers.get('Set-Cookie') ?? '')![1];
+  await first('/company-a/survey/1');
+  await first('/company-a/survey');
+  await browser()('/company-a/survey/2');
+  await owner('/company-a/survey');
+  const keys = await store.keys('survey-open:');
+  expect(keys).toHaveLength(2);
+  expect(await store.get(keys[0])).toEqual({ openedAt: expect.any(Number) });
+  expect(keys.join()).not.toContain(token);
+  // The browser keeps its token, so its answers bind to the same cookie.
+  expect((await first('/company-a/survey/1')).headers.get('Set-Cookie')).toBeNull();
+  const waveId = keys[0].split(':')[1];
+  expect(await (await owner('/company-a/waves')).text()).toContain('2 people opened it');
+  expect(await (await owner(`/company-a/waves/${waveId}`)).text()).toContain('2 opened the survey');
+  // A new wave starts counting again.
+  await owner(`/company-a/waves/${waveId}/close`, { method: 'POST', form: {} });
+  await owner('/company-a/waves', { method: 'POST', form: { name: '2027 Q1' } });
+  await first('/company-a/survey');
+  expect(await store.keys('survey-open:')).toHaveLength(3);
+});
+
 test('a browser answers step by step, submits, sees its own summary and can change its answers', async () => {
   const { owner, browser, store } = setup();
   await groupWithWave(owner);
@@ -34,7 +60,7 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   const intro = await (await me('/company-a/survey')).text();
   expect(intro).toContain('About 7 minutes');
   expect(intro).toContain('href="/company-a/survey/1"');
-  // Opening pages stores nothing.
+  // Opening pages stores no answer.
   expect(await store.keys('response:')).toEqual([]);
   // Required answers hold you on the step, keeping what was typed.
   const missing = await step(me, 1, { revision: '0', role: 'ux' }, 'next');

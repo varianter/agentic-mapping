@@ -28,6 +28,7 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 - `wave:<group>:<id>` = `{ id, group, name, version, status, createdAt, closedAt? }`
 - `response:<waveId>:<id>` = `{ id, waveId, version, answers, createdAt, updatedAt, submittedAt?, revision }`
 - `survey-respondent:<hash of browser token>:<waveId>` = `{ responseId }`
+- `survey-open:<waveId>:<hash of browser token>` = `{ openedAt }`: written the first time a browser opens any survey page in the wave (signed-in interviewers' previews don't count). Admins see the count on the waves list and results page, next to drafts and submitted answers.
 
 ## Routes
 

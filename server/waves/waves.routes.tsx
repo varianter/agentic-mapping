@@ -4,7 +4,7 @@ import type { Group } from '../domain/groups';
 import { waveSchema } from '../domain/schemas';
 import { surveyFor } from '../domain/survey';
 import { summarize, toCsv } from '../domain/surveyResults';
-import { createWave, defaultWaveName, getWave, listResponses, listWaves, setWaveStatus, type Wave, type WaveStatus } from '../domain/waves';
+import { countOpened, createWave, defaultWaveName, getWave, listResponses, listWaves, setWaveStatus, type Wave, type WaveStatus } from '../domain/waves';
 import { requireAdmin } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formAction } from '../framework/formAction';
@@ -21,7 +21,7 @@ async function rows(c: Context<AppEnv>): Promise<WaveRow[]> {
   return Promise.all(waves.map(async (wave) => {
     const responses = await listResponses(store, wave.id);
     const submitted = responses.filter((response) => response.submittedAt).length;
-    return { wave, submitted, drafts: responses.length - submitted };
+    return { wave, opened: await countOpened(store, wave.id), submitted, drafts: responses.length - submitted };
   }));
 }
 
@@ -61,7 +61,7 @@ async function results(c: Context<AppEnv>) {
   const responses = await listResponses(store, wave.id);
   const role = c.req.query('role') ?? '';
   const summary = summarize(surveyFor(wave.version), responses, { role: role || undefined });
-  return c.render(<ResultsPage group={group} wave={wave} role={role} drafts={responses.filter((response) => !response.submittedAt).length} {...summary} />);
+  return c.render(<ResultsPage group={group} wave={wave} role={role} opened={await countOpened(store, wave.id)} drafts={responses.filter((response) => !response.submittedAt).length} {...summary} />);
 }
 
 async function csv(c: Context<AppEnv>) {

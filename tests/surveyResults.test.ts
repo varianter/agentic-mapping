@@ -48,6 +48,9 @@ test('results filter by offices, together with roles', () => {
   expect(summarize(SURVEY_V2, responses, { offices: ['oslo'], roles: ['developer'] })).toMatchObject({ n: 3 });
   const office = question(summarize(SURVEY_V2, responses), 'About you', 'office');
   expect(office.kind === 'choice' && office.tallies.map((item) => item.count)).toEqual([4, 2, 0, 0, 0, 0, 0, 1]);
+  // Those who answered before the office question are counted apart; v1 never asked.
+  expect(summarize(SURVEY_V2, [...responses, ...many(2, { role: 'ux' })])).toMatchObject({ n: 9, noOffice: 2 });
+  expect(summarize(SURVEY_V1, many(2, { role: 'ux' }))).toMatchObject({ noOffice: 0 });
 });
 
 test('interviewers read a wave’s results; drafts are counted apart and never shown', async () => {
@@ -74,6 +77,7 @@ test('interviewers read a wave’s results; drafts are counted apart and never s
   expect(both).toContain('Synthetic wish');
   // Waves from v2 filter by office too.
   expect(page).toContain('name="office" value="group"');
+  expect(page).toContain('5 answers · 5 without an office');
   const oslo = await (await owner(`/company-a/waves/${waveId}?office=oslo&role=developer`)).text();
   expect(oslo).toContain('0 answers from Oslo · Developer');
   expect(oslo).toMatch(/value="oslo" checked/);

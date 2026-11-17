@@ -5,7 +5,7 @@ import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
-export type ResultsProps = { group: Group; wave: Wave; roles: string[]; offices: string[]; n: number; opened: number; drafts: number; sections: Section[] };
+export type ResultsProps = { group: Group; wave: Wave; roles: string[]; offices: string[]; n: number; noOffice: number; opened: number; drafts: number; sections: Section[] };
 
 const percent = (count: number, of: number) => (of ? Math.round((count / of) * 100) : 0);
 
@@ -114,7 +114,7 @@ function Filter({ legend, name, options, picked }: { legend: string; name: strin
 }
 
 // A wave's results for interviewers: submitted answers only, filterable by offices (from v2) and roles.
-export function ResultsPage({ group, wave, roles, offices, n, opened, drafts, sections }: ResultsProps) {
+export function ResultsPage({ group, wave, roles, offices, n, noOffice, opened, drafts, sections }: ResultsProps) {
   const base = `/${group.slug}/waves/${wave.id}`;
   const asksOffice = surveyFor(wave.version).steps.some((step) => step.questions.some((question) => question.name === 'office'));
   const from = [labels(OFFICES, offices), labels(ROLES, roles)].filter(Boolean).join(' · ');
@@ -124,7 +124,7 @@ export function ResultsPage({ group, wave, roles, offices, n, opened, drafts, se
         <header class="groups-head">
           <img src={asset('img/variant-logo-dark.svg')} alt="Variant" width="101" height="24" />
           <h1>{wave.name} <span class="pill" data-variant={wave.status}>{wave.status === 'open' ? 'Open' : 'Closed'}</span></h1>
-          <p id="results-count">{`${group.name}: ${n} ${n === 1 ? 'answer' : 'answers'}${from ? ` from ${from}` : ''}${drafts ? ` · ${drafts} in progress, not counted` : ''}${from ? '' : ` · ${opened} opened the survey`}.`}</p>
+          <p id="results-count">{`${group.name}: ${n} ${n === 1 ? 'answer' : 'answers'}${from ? ` from ${from}` : ''}${noOffice ? ` · ${noOffice} without an office` : ''}${drafts ? ` · ${drafts} in progress, not counted` : ''}${from ? '' : ` · ${opened} opened the survey`}.`}</p>
         </header>
 
         <nav class="group-row-links" aria-label="Wave">

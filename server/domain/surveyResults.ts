@@ -73,6 +73,7 @@ const section = (step: Step, responses: SurveyResponse[], subject: Subject, titl
 });
 
 // Submitted responses only, optionally some offices' and roles'. Context questions are worded for who they're about.
+// `noOffice` counts those who submitted before the survey asked for an office and haven't added it since.
 export function summarize(survey: Survey, responses: SurveyResponse[], { roles = [], offices = [] }: { roles?: string[]; offices?: string[] } = {}) {
   const among = (picked: string[], value: unknown) => !picked.length || picked.includes(String(value));
   const included = responses.filter((response) => response.submittedAt && among(roles, response.answers.role) && among(offices, response.answers.office));
@@ -80,7 +81,9 @@ export function summarize(survey: Survey, responses: SurveyResponse[], { roles =
   const sections = survey.steps.flatMap((step) => (step.key === 'context'
     ? [section(step, about('customer'), 'customer', 'About customers'), section(step, about('own'), 'own', 'About their own organization')]
     : [section(step, included, 'customer')]));
-  return { n: included.length, sections };
+  const asksOffice = survey.steps.some((step) => step.questions.some((question) => question.name === 'office'));
+  const noOffice = asksOffice ? included.filter((response) => !values(response.answers, 'office').length).length : 0;
+  return { n: included.length, noOffice, sections };
 }
 
 // One row per submitted response, one column per answer, in questionnaire order. Lists are joined with "; ".

@@ -72,9 +72,9 @@ const section = (step: Step, responses: SurveyResponse[], subject: Subject, titl
   title, subject, n: responses.length, questions: step.questions.map((question) => result(question, responses, subject)),
 });
 
-// Submitted responses only, optionally one role's. Context questions are worded for who they're about.
-export function summarize(survey: Survey, responses: SurveyResponse[], { role }: { role?: string } = {}) {
-  const included = responses.filter((response) => response.submittedAt && (!role || response.answers.role === role));
+// Submitted responses only, optionally some roles'. Context questions are worded for who they're about.
+export function summarize(survey: Survey, responses: SurveyResponse[], { roles = [] }: { roles?: string[] } = {}) {
+  const included = responses.filter((response) => response.submittedAt && (!roles.length || roles.includes(String(response.answers.role))));
   const about = (subject: Subject) => included.filter((response) => (response.answers.context === 'own' ? 'own' : 'customer') === subject);
   const sections = survey.steps.flatMap((step) => (step.key === 'context'
     ? [section(step, about('customer'), 'customer', 'About customers'), section(step, about('own'), 'own', 'About their own organization')]

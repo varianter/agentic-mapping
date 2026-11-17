@@ -5,7 +5,7 @@ import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
-export type ResultsProps = { group: Group; wave: Wave; role: string; n: number; opened: number; drafts: number; sections: Section[] };
+export type ResultsProps = { group: Group; wave: Wave; roles: string[]; n: number; opened: number; drafts: number; sections: Section[] };
 
 const percent = (count: number, of: number) => (of ? Math.round((count / of) * 100) : 0);
 
@@ -99,25 +99,27 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
   );
 }
 
-// A wave's results for interviewers: submitted answers only, filterable by role.
-export function ResultsPage({ group, wave, role, n, opened, drafts, sections }: ResultsProps) {
+// A wave's results for interviewers: submitted answers only, filterable by roles.
+export function ResultsPage({ group, wave, roles, n, opened, drafts, sections }: ResultsProps) {
   const base = `/${group.slug}/waves/${wave.id}`;
+  const from = roles.map((value) => ROLES.find((item) => item.value === value)?.label ?? value).join(', ');
   return (
     <Layout title={`Results · ${wave.name}`}>
       <main class="groups-page results-page">
         <header class="groups-head">
           <img src={asset('img/variant-logo-dark.svg')} alt="Variant" width="101" height="24" />
           <h1>{wave.name} <span class="pill" data-variant={wave.status}>{wave.status === 'open' ? 'Open' : 'Closed'}</span></h1>
-          <p id="results-count">{`${group.name}: ${n} ${n === 1 ? 'answer' : 'answers'}${role ? ` from ${ROLES.find((item) => item.value === role)?.label ?? role}` : ''}${drafts ? ` · ${drafts} in progress, not counted` : ''}${role ? '' : ` · ${opened} opened the survey`}.`}</p>
+          <p id="results-count">{`${group.name}: ${n} ${n === 1 ? 'answer' : 'answers'}${from ? ` from ${from}` : ''}${drafts ? ` · ${drafts} in progress, not counted` : ''}${from ? '' : ` · ${opened} opened the survey`}.`}</p>
         </header>
 
         <nav class="group-row-links" aria-label="Wave">
           <form method="get" action={base} class="results-filter">
-            <label class="lbl" for="results-role">Role</label>
-            <select id="results-role" name="role">
-              <option value="" selected={!role}>Everyone</option>
-              {ROLES.map((item) => <option value={item.value} selected={role === item.value}>{item.label}</option>)}
-            </select>
+            <fieldset>
+              <legend class="lbl">Role <span class="hint">(none for everyone)</span></legend>
+              <div class="chips">
+                {ROLES.map((item) => <label class="chip"><input type="checkbox" name="role" value={item.value} checked={roles.includes(item.value)} /><span>{item.label}</span></label>)}
+              </div>
+            </fieldset>
             <button type="submit" class="btn" data-variant="small">Filter</button>
           </form>
           <a class="btn" data-variant="small" href={`${base}.csv`} download>Download CSV</a>

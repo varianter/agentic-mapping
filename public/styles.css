@@ -754,8 +754,8 @@
   .groups-head h1 .pill { vertical-align: middle; font-size: 14px; }
   .results-page { max-inline-size: 56rem; }
   .results-filter {
-    display: flex !important; align-items: center; gap: 8px;
-    & select { min-block-size: 32px; padding: 4px 12px; border: 1px solid var(--grey-400); border-radius: var(--radius-pill); background: var(--white); color: var(--ink); font: 400 14px/1.2 var(--font-sans); }
+    display: flex !important; flex-wrap: wrap; align-items: end; gap: 8px;
+    & fieldset { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
   }
   .results-section {
     display: flex; flex-direction: column; gap: 12px;

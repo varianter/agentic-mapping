@@ -31,7 +31,9 @@ test('results count submitted answers per option, split context answers by subje
   expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')).toMatchObject({ answered: 1 });
   expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')!.tallies.find((item) => item.value === 'default')!.count).toBe(1);
   // A role filter with few answers still shows them.
-  expect(summarize(SURVEY_V1, responses, { role: 'ux' })).toMatchObject({ n: 2 });
+  expect(summarize(SURVEY_V1, responses, { roles: ['ux'] })).toMatchObject({ n: 2 });
+  // Several roles add up.
+  expect(summarize(SURVEY_V1, responses, { roles: ['ux', 'developer'] })).toMatchObject({ n: 6 });
 });
 
 test('interviewers read a wave’s results; drafts are counted apart and never shown', async () => {
@@ -52,6 +54,10 @@ test('interviewers read a wave’s results; drafts are counted apart and never s
   const filtered = await (await owner(`/company-a/waves/${waveId}?role=ux`)).text();
   expect(filtered).not.toContain('Fewer than');
   expect(filtered).not.toContain('Synthetic wish');
+  const both = await (await owner(`/company-a/waves/${waveId}?role=ux&role=developer`)).text();
+  expect(both).toContain('5 answers from UX, Developer');
+  expect(both).toMatch(/value="developer" checked/);
+  expect(both).toContain('Synthetic wish');
   expect((await owner('/company-a/waves/00000000-0000-0000-0000-000000000000')).status).toBe(404);
 });
 

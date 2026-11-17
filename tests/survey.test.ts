@@ -1,18 +1,29 @@
 import { expect, test } from 'bun:test';
 import { surveyStepSchema } from '../server/domain/schemas';
-import { applyStep, keepSubject, missingRequired, phrase, readAnswers, rowsFor, SURVEY_V1, surveyFields, subjectOf, unevenShares, type Question } from '../server/domain/survey';
+import { applyStep, keepSubject, missingRequired, OFFICES, phrase, readAnswers, rowsFor, SURVEY_V1, SURVEY_V2, SURVEYS, surveyFields, subjectOf, unevenShares, type Question } from '../server/domain/survey';
 
 const step = (key: string) => SURVEY_V1.steps.find((item) => item.key === key)!;
 const matrix = (stepKey: string, name: string) => step(stepKey).questions.find((question) => question.name === name) as Extract<Question, { kind: 'matrix' }>;
 
 test('every answer name is unique, and every choice has distinct values', () => {
-  const fields = surveyFields(SURVEY_V1);
-  expect(new Set(fields).size).toBe(fields.length);
-  for (const question of SURVEY_V1.steps.flatMap((item) => item.questions)) {
-    if (question.kind === 'text' || question.kind === 'shares') continue;
-    const values = question.options.map((item) => item.value);
-    expect(new Set(values).size).toBe(values.length);
+  for (const survey of Object.values(SURVEYS)) {
+    const fields = surveyFields(survey);
+    expect(new Set(fields).size).toBe(fields.length);
+    for (const question of survey.steps.flatMap((item) => item.questions)) {
+      if (question.kind === 'text' || question.kind === 'shares') continue;
+      const values = question.options.map((item) => item.value);
+      expect(new Set(values).size).toBe(values.length);
+    }
   }
+});
+
+test('v2 asks for your Variant office first, and requires it; v1 stays as it was', () => {
+  const [first] = SURVEY_V2.steps[0].questions;
+  expect(first).toMatchObject({ name: 'office', required: true });
+  expect(OFFICES.map((item) => item.label)).toEqual(['Oslo', 'Bergen', 'Trondheim', 'Stavanger', 'Stockholm', 'Göteborg', 'Linköping', 'Group']);
+  expect(missingRequired(SURVEY_V2.steps[0], { role: 'ux', context: 'own' })).toEqual(['office']);
+  expect(surveyFields(SURVEY_V1)).not.toContain('office');
+  expect(surveyFields(SURVEY_V2)).toEqual(['office', ...surveyFields(SURVEY_V1)]);
 });
 
 test('a step accepts only its own questions and their options', () => {

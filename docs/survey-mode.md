@@ -6,13 +6,17 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 
 - **Groups** are participant namespaces, as for maps. The survey lives at `/<group>/survey`; nothing assumes consultants.
 - **Waves.** An admin opens a wave in a group (default name `2026 Q4`); one open wave per group, so the survey link never changes. Close and reopen; no delete. Each wave is pinned to a questionnaire version.
-- **Questions in code**, versioned (`SURVEY_V1` in `server/domain/survey.ts`). Wording changes go through a PR as a new version.
+- **Questions in code**, versioned (`SURVEY_V1`, `SURVEY_V2` in `server/domain/survey.ts`; new waves use the latest). Wording changes go through a PR as a new version.
 - **Anonymous.** No names, no customer names. One response per wave per browser (the `am_respondent` cookie, hashed), editable until the wave closes. Cohorts are compared, not people.
 - **Steps.** Six short pages, each a real URL that saves on Next/Back (plain form posts; `<autosave-form>` saves as you go). Submit marks the response complete; only submitted responses count.
 - **Pedagogic form.** Behaviourally anchored options tied to a recent time window, not bare 1–5 scales. Every option is a sentence describing a concrete state. After Submit, a mirror shows the respondent's rung on the autonomy ladder and what the next rung looks like.
 - **Customer or own organization.** Step 1 asks who you mainly work for. The context step then asks about "your customer" or "your organization", stored with the response so results never mix the two. Only industry and product-development size, never names.
-- **Results** per wave for admins: distributions per question, filter by one or more roles; free text listed. CSV export of submitted responses.
+- **Results** per wave for admins: distributions per question, filter by one or more offices (v2 waves) and roles; free text listed. CSV export of submitted responses.
 - English only. Comparing waves is a later step.
+
+## Questionnaire (v2)
+
+As v1, with one required question first in **About you**: which Variant office you belong to (Oslo, Bergen, Trondheim, Stavanger, Stockholm, Göteborg, Linköping, or Group for the Variant Group). It makes offices comparable, such as industries per office. v1 waves keep v1. An open v1 wave can move to v2 by setting its `version` to 2 in the store (v2 only adds a question); anyone who already submitted sees the new question asked for on their summary page, and answering it keeps them submitted.
 
 ## Questionnaire (v1)
 

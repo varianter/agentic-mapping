@@ -40,6 +40,18 @@ export const ROLES = [
   option('other', 'Other'),
 ];
 
+// Where you belong in Variant, for comparing offices; "Group" is for those in the Variant Group, not a local office.
+export const OFFICES = [
+  option('oslo', 'Oslo'),
+  option('bergen', 'Bergen'),
+  option('trondheim', 'Trondheim'),
+  option('stavanger', 'Stavanger'),
+  option('stockholm', 'Stockholm'),
+  option('goteborg', 'Göteborg'),
+  option('linkoping', 'Linköping'),
+  option('group', 'Group', 'The Variant Group, not a local office.'),
+];
+
 // The headline maturity measure: how much of the work people hand to AI, one rung at a time.
 export const AUTONOMY = [
   option('none', 'I don’t use AI for work', 'Everything is done by hand.'),
@@ -296,8 +308,21 @@ export const SURVEY_V1: Survey = {
   ],
 };
 
-export const SURVEYS: Record<number, Survey> = { 1: SURVEY_V1 };
-export const LATEST_SURVEY = SURVEY_V1;
+// v2: asks for your Variant office first, so offices can be compared.
+export const SURVEY_V2: Survey = {
+  ...SURVEY_V1,
+  version: 2,
+  steps: SURVEY_V1.steps.map((step) => (step.key === 'you'
+    ? {
+      ...step,
+      intro: 'No names. These answers let us compare offices and roles, not people.',
+      questions: [{ kind: 'single', name: 'office', prompt: 'Which Variant office do you belong to?', options: OFFICES, display: 'chips', required: true }, ...step.questions],
+    }
+    : step)),
+};
+
+export const SURVEYS: Record<number, Survey> = { 1: SURVEY_V1, 2: SURVEY_V2 };
+export const LATEST_SURVEY = SURVEY_V2;
 export const surveyFor = (version: number) => SURVEYS[version] ?? LATEST_SURVEY;
 
 // A matrix row is its own answer, `<question>_<row>`; "Other" options add a short text answer, `<question>_other`.

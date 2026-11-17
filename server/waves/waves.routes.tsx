@@ -52,7 +52,7 @@ const status = (to: WaveStatus) => formAction({
   view: ({ wave: _wave, ...props }) => <WavesPage {...props} />,
 });
 
-// Results: submitted answers only, `?role=` (repeatable) for some roles'.
+// Results: submitted answers only, `?office=` and `?role=` (repeatable) for some offices' and roles'.
 async function results(c: Context<AppEnv>) {
   const store = c.get('store');
   const group = groupOf(c);
@@ -60,8 +60,9 @@ async function results(c: Context<AppEnv>) {
   if (!wave) return c.notFound();
   const responses = await listResponses(store, wave.id);
   const roles = (c.req.queries('role') ?? []).filter(Boolean);
-  const summary = summarize(surveyFor(wave.version), responses, { roles });
-  return c.render(<ResultsPage group={group} wave={wave} roles={roles} opened={await countOpened(store, wave.id)} drafts={responses.filter((response) => !response.submittedAt).length} {...summary} />);
+  const offices = (c.req.queries('office') ?? []).filter(Boolean);
+  const summary = summarize(surveyFor(wave.version), responses, { roles, offices });
+  return c.render(<ResultsPage group={group} wave={wave} roles={roles} offices={offices} opened={await countOpened(store, wave.id)} drafts={responses.filter((response) => !response.submittedAt).length} {...summary} />);
 }
 
 async function csv(c: Context<AppEnv>) {

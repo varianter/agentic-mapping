@@ -1,11 +1,11 @@
 import type { Group } from '../domain/groups';
 import { type QuestionResult, type Section, type Share, type Tally } from '../domain/surveyResults';
-import { phrase, ROLES, type Subject } from '../domain/survey';
+import { OFFICES, phrase, ROLES, surveyFor, type Option, type Subject } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
-export type ResultsProps = { group: Group; wave: Wave; roles: string[]; n: number; opened: number; drafts: number; sections: Section[] };
+export type ResultsProps = { group: Group; wave: Wave; roles: string[]; offices: string[]; n: number; opened: number; drafts: number; sections: Section[] };
 
 const percent = (count: number, of: number) => (of ? Math.round((count / of) * 100) : 0);
 
@@ -99,10 +99,25 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
   );
 }
 
-// A wave's results for interviewers: submitted answers only, filterable by roles.
-export function ResultsPage({ group, wave, roles, n, opened, drafts, sections }: ResultsProps) {
+const labels = (options: Option[], values: string[]) => values.map((value) => options.find((item) => item.value === value)?.label ?? value).join(', ');
+
+// One filter: tick none for everyone.
+function Filter({ legend, name, options, picked }: { legend: string; name: string; options: Option[]; picked: string[] }) {
+  return (
+    <fieldset>
+      <legend class="lbl">{legend} <span class="hint">(none for everyone)</span></legend>
+      <div class="chips">
+        {options.map((item) => <label class="chip"><input type="checkbox" name={name} value={item.value} checked={picked.includes(item.value)} /><span>{item.label}</span></label>)}
+      </div>
+    </fieldset>
+  );
+}
+
+// A wave's results for interviewers: submitted answers only, filterable by offices (from v2) and roles.
+export function ResultsPage({ group, wave, roles, offices, n, opened, drafts, sections }: ResultsProps) {
   const base = `/${group.slug}/waves/${wave.id}`;
-  const from = roles.map((value) => ROLES.find((item) => item.value === value)?.label ?? value).join(', ');
+  const asksOffice = surveyFor(wave.version).steps.some((step) => step.questions.some((question) => question.name === 'office'));
+  const from = [labels(OFFICES, offices), labels(ROLES, roles)].filter(Boolean).join(' · ');
   return (
     <Layout title={`Results · ${wave.name}`}>
       <main class="groups-page results-page">
@@ -114,12 +129,8 @@ export function ResultsPage({ group, wave, roles, n, opened, drafts, sections }:
 
         <nav class="group-row-links" aria-label="Wave">
           <form method="get" action={base} class="results-filter">
-            <fieldset>
-              <legend class="lbl">Role <span class="hint">(none for everyone)</span></legend>
-              <div class="chips">
-                {ROLES.map((item) => <label class="chip"><input type="checkbox" name="role" value={item.value} checked={roles.includes(item.value)} /><span>{item.label}</span></label>)}
-              </div>
-            </fieldset>
+            {asksOffice && <Filter legend="Office" name="office" options={OFFICES} picked={offices} />}
+            <Filter legend="Role" name="role" options={ROLES} picked={roles} />
             <button type="submit" class="btn" data-variant="small">Filter</button>
           </form>
           <a class="btn" data-variant="small" href={`${base}.csv`} download>Download CSV</a>

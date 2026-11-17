@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { SURVEY_V1 } from '../server/domain/survey';
+import { SURVEY_V1, SURVEY_V2 } from '../server/domain/survey';
 import { summarize } from '../server/domain/surveyResults';
 import type { SurveyResponse } from '../server/domain/waves';
 import { groupWithWave, setup } from './helpers';
@@ -36,6 +36,20 @@ test('results count submitted answers per option, split context answers by subje
   expect(summarize(SURVEY_V1, responses, { roles: ['ux', 'developer'] })).toMatchObject({ n: 6 });
 });
 
+test('results filter by offices, together with roles', () => {
+  const responses = [
+    ...many(3, { office: 'oslo', role: 'developer' }),
+    ...many(2, { office: 'bergen', role: 'developer' }),
+    ...many(1, { office: 'oslo', role: 'ux' }),
+    ...many(1, { office: 'group', role: 'ux' }),
+  ];
+  expect(summarize(SURVEY_V2, responses, { offices: ['oslo'] })).toMatchObject({ n: 4 });
+  expect(summarize(SURVEY_V2, responses, { offices: ['oslo', 'group'] })).toMatchObject({ n: 5 });
+  expect(summarize(SURVEY_V2, responses, { offices: ['oslo'], roles: ['developer'] })).toMatchObject({ n: 3 });
+  const office = question(summarize(SURVEY_V2, responses), 'About you', 'office');
+  expect(office.kind === 'choice' && office.tallies.map((item) => item.count)).toEqual([4, 2, 0, 0, 0, 0, 0, 1]);
+});
+
 test('interviewers read a wave’s results; drafts are counted apart and never shown', async () => {
   const { owner, browser, send, store } = setup();
   await groupWithWave(owner);
@@ -58,6 +72,11 @@ test('interviewers read a wave’s results; drafts are counted apart and never s
   expect(both).toContain('5 answers from UX, Developer');
   expect(both).toMatch(/value="developer" checked/);
   expect(both).toContain('Synthetic wish');
+  // Waves from v2 filter by office too.
+  expect(page).toContain('name="office" value="group"');
+  const oslo = await (await owner(`/company-a/waves/${waveId}?office=oslo&role=developer`)).text();
+  expect(oslo).toContain('0 answers from Oslo · Developer');
+  expect(oslo).toMatch(/value="oslo" checked/);
   expect((await owner('/company-a/waves/00000000-0000-0000-0000-000000000000')).status).toBe(404);
 });
 
@@ -75,7 +94,7 @@ test('the CSV has one row per submitted response, one column per answer, and is 
   const lines = (await download.text()).trimEnd().split('\r\n');
   expect(lines).toHaveLength(2);
   const header = lines[0].split(',');
-  expect(header.slice(0, 4)).toEqual(['version', 'submitted', 'role', 'experience']);
+  expect(header.slice(0, 4)).toEqual(['version', 'submitted', 'office', 'role']);
   expect(header).toContain('task_code');
   expect(header).toContain('models_other');
   expect(header.slice(-2)).toEqual(['wish', 'workplace']);

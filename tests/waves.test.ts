@@ -23,7 +23,7 @@ test('interviewers open one wave at a time in a group, close and reopen it; nobo
   const [key] = await store.keys('wave:company-a:');
   const id = key.split(':').pop()!;
   expect((await owner(`/company-a/waves/${id}/close`, { method: 'POST', form: {} })).status).toBe(303);
-  expect(await store.get(key)).toMatchObject({ status: 'closed', version: 1 });
+  expect(await store.get(key)).toMatchObject({ status: 'closed', version: 2 });
   const closed = await (await owner('/company-a/waves')).text();
   expect(closed).toContain('id="wave-create"');
   expect(closed).toContain('Reopen');

@@ -1,6 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { Group } from '../domain/groups';
-import { AUTONOMY, labelOf, type ReadAnswer, otherField, phrase, readAnswers, rowField, rowsFor, groupTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
+import { AUTONOMY, labelOf, missingRequired, type ReadAnswer, otherField, phrase, readAnswers, rowField, rowsFor, groupTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import type { FormState } from '../framework/formAction';
@@ -32,9 +32,10 @@ export function IntroPage({ group, wave, survey, revision }: SurveyProps) {
       <main class="survey" id="survey-intro">
         <Head group={group} title="AI at work" />
         <p class="survey-lead">Survey on how you currently use AI in your work. This is ment for quantatative data collection on usage and how AI is used, individually and with customer / internally.</p>
+        <p class="survey-lead">The goal of this is to gather knowledge, not to evaluate people on any way. It is anonymous, but in offices with few consultants, it can be easy to segment.</p>
         <ul class="survey-facts">
           <li><strong>{`About ${survey.minutes} minutes`}</strong><span>{`${survey.steps.length} steps`}</span></li>
-          <li><strong>Anonymous</strong><span>No names are stored but state is saved locally.</span></li>
+          <li><strong>Anonymous</strong><span>No names, but keep in mind that office is collected so segmentation could be done. </span></li>
           <li><strong>Saved as you go</strong><span>This browser finds your answers again and you can change your answers until the survey closes.</span></li>
         </ul>
         <p class="hint">{`Wave: ${wave.name}`}</p>
@@ -288,11 +289,21 @@ export function DonePage({ group, wave, survey, answers }: SurveyProps) {
   };
   const rung = AUTONOMY.findIndex((item) => item.value === answers.autonomy);
   const next = rung >= 0 ? AUTONOMY[rung + 1] : undefined;
+  // A required question added to the wave after you submitted, such as your office: ask for it, linked.
+  const incomplete = survey.steps.findIndex((step) => missingRequired(step, answers).length);
+  const missing = incomplete >= 0 ? missingRequired(survey.steps[incomplete], answers).map((name) => questions.find((item) => item.name === name)!.prompt) : [];
   return (
     <Layout title="Thank you">
       <main class="survey" id="survey-done">
         <Head group={group} title="Thank you" />
         <p class="survey-lead">{`Your answers are in for ${wave.name}. Here is where you are, as you described it.`}</p>
+        {missing.length > 0 && (
+          <p class="form-error" id="survey-missing">
+            {'We’ve added a question since you answered: '}
+            <a href={`${path}/${incomplete + 1}`}>{missing.map((prompt) => phrase(prompt, subjectOf(answers))).join(' ')}</a>
+            {' Your other answers are kept.'}
+          </p>
+        )}
         {rung >= 0 && (
           <section class="survey-question" aria-labelledby="ladder-label">
             <h2 class="survey-prompt" id="ladder-label">How you work with AI</h2>

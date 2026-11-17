@@ -8,7 +8,7 @@ const revisionOf = async (me: Send, n: number) => Number(/name="revision" value=
 
 // One full answer, step by step, as a browser without JS sends it.
 async function answerAll(me: Send, { context = 'customer', autonomy = 'handoff' } = {}) {
-  expect((await step(me, 1, { revision: String(await revisionOf(me, 1)), role: 'developer', context }, 'next')).headers.get('Location')).toBe('/company-a/survey/2');
+  expect((await step(me, 1, { revision: String(await revisionOf(me, 1)), office: 'trondheim', role: 'developer', context }, 'next')).headers.get('Location')).toBe('/company-a/survey/2');
   await step(me, 2, { revision: String(await revisionOf(me, 2)), frequency: 'daily', task_code: 'default' }, 'next');
   await step(me, 3, { revision: String(await revisionOf(me, 3)), models: ['claude', 'gpt'], tools: 'claude-code', main_tool: 'claude-code', autonomy, pays: ['customer', 'me'] }, 'next');
   await step(me, 4, { revision: String(await revisionOf(me, 4)), agree_enjoy: '5', time_saved: '3-8', blocker: 'time' }, 'next');
@@ -70,6 +70,7 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   expect(missingHtml).toMatch(/value="ux" checked/);
   // The error is in the title, linked from the summary and said with the question it belongs to.
   expect(missingHtml).toContain('<title>Error: About you · Step 1 of 6');
+  expect(missingHtml).toContain('href="#question-office"');
   expect(missingHtml).toContain('href="#question-context"');
   expect(missingHtml).toMatch(/<legend[^>]*id="q-context-label">[^]*?Error: Answer this to go on\.[^]*?<\/legend>/);
   expect(missingHtml).not.toMatch(/<legend[^>]*id="q-role-label">[^<]*<span class="survey-required"> \(required\)<\/span><span class="survey-error">/);
@@ -78,7 +79,7 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   expect(submitted.headers.get('Location')).toBe('/company-a/survey/done');
   const [key] = await store.keys('response:');
   const response = await store.get(key);
-  expect(response).toMatchObject({ version: 1, answers: { role: 'developer', models: ['claude', 'gpt'], tools: ['claude-code'], pays: ['customer', 'me'], autonomy: 'handoff', wish: 'Synthetic wish', workplace: 'Synthetic licences' } });
+  expect(response).toMatchObject({ version: 2, answers: { office: 'trondheim', role: 'developer', models: ['claude', 'gpt'], tools: ['claude-code'], pays: ['customer', 'me'], autonomy: 'handoff', wish: 'Synthetic wish', workplace: 'Synthetic licences' } });
   expect(response.submittedAt).toBeNumber();
   // Nothing in the store names the browser.
   const token = /^am_respondent=([a-f0-9]{64});/.exec(submitted.headers.get('Set-Cookie') ?? '')![1];
@@ -102,6 +103,14 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   await step(me, 3, { revision: String(await revisionOf(me, 3)), autonomy: 'parallel' }, 'next');
   expect((await store.keys('response:')).length).toBe(1);
   expect(await store.get(key)).toMatchObject({ answers: { autonomy: 'parallel', models: [] }, submittedAt: response.submittedAt });
+  expect(summary).not.toContain('survey-missing');
+  // A required question added after submitting (a v1 answer moved to v2: no office) is asked for, then kept submitted.
+  await store.set(key, { ...(await store.get(key)), answers: { ...(await store.get(key)).answers, office: undefined } });
+  const asked = await (await me('/company-a/survey/done')).text();
+  expect(asked).toMatch(/id="survey-missing">[^]*?<a href="\/company-a\/survey\/1">Which Variant office do you belong to\?<\/a>/);
+  await step(me, 1, { revision: String(await revisionOf(me, 1)), office: 'stavanger', role: 'developer', context: 'customer' }, 'next');
+  expect(await (await me('/company-a/survey/done')).text()).not.toContain('survey-missing');
+  expect(await store.get(key)).toMatchObject({ answers: { office: 'stavanger' }, submittedAt: response.submittedAt });
   // Another browser answers separately and has no summary yet.
   const other = browser();
   expect((await other('/company-a/survey/done')).headers.get('Location')).toBe('/company-a/survey');
@@ -112,7 +121,7 @@ test('steps follow earlier answers: tasks by role, the context step by who you w
   const { owner, browser, store } = setup();
   await groupWithWave(owner);
   const designer = browser();
-  await step(designer, 1, { revision: '0', role: 'ui', context: 'own' }, 'next');
+  await step(designer, 1, { revision: '0', office: 'oslo', role: 'ui', context: 'own' }, 'next');
   const tasks = await (await designer('/company-a/survey/2')).text();
   expect(tasks).toContain('name="task_visual"');
   expect(tasks).not.toContain('name="task_code"');
@@ -126,13 +135,13 @@ test('steps follow earlier answers: tasks by role, the context step by who you w
   }
   // Switching who you work for clears the answers about the one before.
   await step(designer, 5, { revision: String(await revisionOf(designer, 5)), expectation: 'encourages', maturity_policy: 'emerging', industry: 'energy', size: '50-200' }, 'next');
-  await step(designer, 1, { revision: String(await revisionOf(designer, 1)), role: 'ui', context: 'customer' }, 'next');
+  await step(designer, 1, { revision: String(await revisionOf(designer, 1)), office: 'oslo', role: 'ui', context: 'customer' }, 'next');
   const [key] = await store.keys('response:');
   const answers = (await store.get(key)).answers;
   expect(answers).toMatchObject({ role: 'ui', context: 'customer' });
   for (const name of ['expectation', 'maturity_policy', 'industry', 'size']) expect(answers[name]).toBeUndefined();
   const consultant = browser();
-  await step(consultant, 1, { revision: '0', role: 'developer', context: 'between' }, 'next');
+  await step(consultant, 1, { revision: '0', office: 'group', role: 'developer', context: 'between' }, 'next');
   expect(await (await consultant('/company-a/survey/5')).text()).toContain('How does your customer expect you to use AI?');
 });
 
@@ -180,7 +189,7 @@ test('the model split shows every family without JS and holds you on the step un
   const { owner, browser, store } = setup();
   await groupWithWave(owner);
   const me = browser();
-  await step(me, 1, { revision: '0', role: 'developer', context: 'customer' }, 'next');
+  await step(me, 1, { revision: '0', office: 'bergen', role: 'developer', context: 'customer' }, 'next');
   const page = await (await me('/company-a/survey/3')).text();
   expect(page).toContain('<model-shares from="models">');
   expect(page).toMatch(/<tool-list><textarea id="q-tools_other" name="tools_other"/);

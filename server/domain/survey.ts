@@ -12,7 +12,8 @@ export type Tier = { key: string; label: string; size?: Size };
 export type TierGroup = { option: string; label: string; tiers: Tier[] };
 type Base = { name: string; prompt: string; hint?: string; required?: boolean };
 export type Question =
-  | Base & { kind: 'single'; options: Option[]; display?: 'cards' | 'chips' | 'select'; other?: boolean }
+  // `scale`: the options are ordered, low to high (any "Don’t know" sits off the scale), so an answer reads as a step on it.
+  | Base & { kind: 'single'; options: Option[]; display?: 'cards' | 'chips' | 'select'; other?: boolean; scale?: boolean }
   // `other: 'list'` asks for the others one per line (a chip list with <tool-list>), not as one short text.
   | Base & { kind: 'multi'; options: Option[]; display?: 'cards' | 'chips'; other?: boolean | 'list' }
   | Base & { kind: 'matrix'; rows: Row[]; options: Option[]; legend?: boolean }
@@ -94,7 +95,7 @@ export const SURVEY_V1: Survey = {
       questions: [
         { kind: 'single', name: 'role', prompt: 'What is your main role?', options: ROLES, display: 'chips', required: true },
         {
-          kind: 'single', name: 'experience', prompt: 'How long have you worked in product development?', display: 'chips',
+          kind: 'single', name: 'experience', scale: true, prompt: 'How long have you worked in product development?', display: 'chips',
           options: [option('lt3', 'Under 3 years'), option('3-7', '3–7 years'), option('8-15', '8–15 years'), option('gt15', 'Over 15 years')],
         },
         {
@@ -114,7 +115,7 @@ export const SURVEY_V1: Survey = {
       intro: 'Think of the last two weeks, not your best or worst day.',
       questions: [
         {
-          kind: 'single', name: 'frequency', prompt: 'In the last two weeks, how often did you use AI at work?',
+          kind: 'single', name: 'frequency', scale: true, prompt: 'In the last two weeks, how often did you use AI at work?',
           options: [
             option('none', 'Not at all'),
             option('rarely', 'Once or twice'),
@@ -182,7 +183,7 @@ export const SURVEY_V1: Survey = {
         },
         { kind: 'multi', name: 'tools', prompt: 'Which tools did you use?', options: TOOLS, other: 'list' },
         { kind: 'single', name: 'main_tool', prompt: 'Which one is your main tool?', options: TOOLS, display: 'select' },
-        { kind: 'single', name: 'autonomy', prompt: 'Which best describes how you usually work with AI?', hint: 'Pick your usual day, not what you’ve tried once.', options: AUTONOMY },
+        { kind: 'single', name: 'autonomy', scale: true, prompt: 'Which best describes how you usually work with AI?', hint: 'Pick your usual day, not what you’ve tried once.', options: AUTONOMY },
         {
           kind: 'multi', name: 'pays', prompt: 'Who pays for your AI tools?', hint: 'Tick all that apply: it can differ from tool to tool.', display: 'chips',
           options: [option('customer', 'The customer'), option('employer', 'My employer'), option('me', 'I do'), option('free', 'Free tiers')],
@@ -206,7 +207,7 @@ export const SURVEY_V1: Survey = {
           ],
         },
         {
-          kind: 'single', name: 'time_saved', prompt: 'How much time does AI save you in a normal week?', display: 'chips',
+          kind: 'single', name: 'time_saved', scale: true, prompt: 'How much time does AI save you in a normal week?', display: 'chips',
           options: [option('none', 'None'), option('lt1', 'Under an hour'), option('1-3', '1–3 hours'), option('3-8', '3–8 hours'), option('gt8', 'More than 8 hours')],
         },
         {
@@ -228,7 +229,7 @@ export const SURVEY_V1: Survey = {
       intro: 'Your view from where you sit. “Don’t know” is a useful answer.',
       questions: [
         {
-          kind: 'single', name: 'expectation', prompt: 'How does {subject} expect you to use AI?',
+          kind: 'single', name: 'expectation', scale: true, prompt: 'How does {subject} expect you to use AI?',
           options: [
             option('forbids', 'Forbids it', 'Not allowed in our work.'),
             option('tolerates', 'Tolerates it quietly', 'Allowed if nobody has to talk about it.'),
@@ -275,7 +276,7 @@ export const SURVEY_V1: Survey = {
           ],
         },
         {
-          kind: 'single', name: 'size', prompt: 'How many people work on product development at {subject}?', hint: 'Developers, designers, product and data, not everyone employed.', display: 'chips',
+          kind: 'single', name: 'size', scale: true, prompt: 'How many people work on product development at {subject}?', hint: 'Developers, designers, product and data, not everyone employed.', display: 'chips',
           options: [option('lt10', 'Under 10'), option('10-50', '10–50'), option('50-200', '50–200'), option('200-1000', '200–1000'), option('gt1000', 'Over 1000'), option('unknown', 'Don’t know')],
         },
       ],
@@ -379,3 +380,49 @@ export const missingRequired = (step: Step, answers: SurveyAnswers) => step.ques
 export const unevenShares = (step: Step, answers: SurveyAnswers) => step.questions.flatMap((question) => (question.kind === 'shares'
   ? tickedGroups(question, answers).map((group) => ({ name: question.name, group: group.label, total: groupTotal(question, group, answers) })).filter(({ total }) => total !== 0 && total !== 100)
   : []));
+
+// A respondent's own answers, step by step, shaped to be drawn: a step on a scale, picked chips, matrix rows on
+// their scale, splits as percentages, or free text. Labels, not values. Unanswered questions are left out, and a
+// step with none still shows, so it can be filled in.
+type Placed = { label: string; at: number; of: number };
+export type ReadAnswer = { prompt: string } & (
+  | { kind: 'text'; text: string }
+  | { kind: 'chips'; items: string[] }
+  // `at` counts from 1; 0 is off the scale, such as "Don’t know".
+  | { kind: 'scale' } & Placed
+  | { kind: 'rows'; rows: (Placed & { row: string })[] }
+  | { kind: 'split'; groups: { label: string; tiers: { label: string; percent: number }[] }[] });
+export type ReadStep = { title: string; answers: ReadAnswer[] };
+
+const place = (options: Option[], value: string): Placed => {
+  const steps = options.filter((item) => item.value !== 'unknown');
+  return { label: options.find((item) => item.value === value)?.label ?? value, at: steps.findIndex((item) => item.value === value) + 1, of: steps.length };
+};
+
+export function readAnswers(survey: Survey, answers: SurveyAnswers): ReadStep[] {
+  const subject = subjectOf(answers);
+  const one = (name: string) => (typeof answers[name] === 'string' ? (answers[name] as string).trim() : '');
+  const read = (question: Question): ReadAnswer | undefined => {
+    const prompt = phrase(question.prompt, subject);
+    if (question.kind === 'text') return one(question.name) ? { prompt, kind: 'text', text: one(question.name) } : undefined;
+    if (question.kind === 'matrix') {
+      const rows = rowsFor(question, answers).filter((row) => one(rowField(question, row)))
+        .map((row) => ({ row: phrase(row.label, subject), ...place(question.options, one(rowField(question, row))) }));
+      return rows.length ? { prompt, kind: 'rows', rows } : undefined;
+    }
+    if (question.kind === 'shares') {
+      const groups = tickedGroups(question, answers).filter((group) => groupTotal(question, group, answers) > 0)
+        .map((group) => ({ label: group.label, tiers: group.tiers.map((item) => ({ label: item.label, percent: Number(one(tierField(question, item))) || 0 })).filter((item) => item.percent > 0) }));
+      return groups.length ? { prompt, kind: 'split', groups } : undefined;
+    }
+    if (question.kind === 'single' && question.scale && one(question.name)) return { prompt, kind: 'scale', ...place(question.options, one(question.name)) };
+    const other = question.other === 'list' ? listItems(one(otherField(question))) : [one(otherField(question))].filter(Boolean);
+    const items = [answers[question.name] ?? []].flat().filter(Boolean)
+      .flatMap((value) => (value === 'other' && other.length ? other : [labelOf(question, value)]));
+    return items.length ? { prompt, kind: 'chips', items } : undefined;
+  };
+  return survey.steps.map((step) => ({
+    title: phrase(step.title, subject),
+    answers: step.questions.map(read).filter((answer) => answer !== undefined),
+  }));
+}

@@ -748,6 +748,41 @@
     & dt { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--grey-200); }
     & dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; }
   }
+  .survey-answers {
+    display: flex; flex-direction: column; gap: 8px;
+    & > h2 { margin-block-end: 4px; }
+  }
+  .survey-answers-step {
+    border-radius: var(--radius-lg); background: var(--white);
+    display: flex; flex-direction: column; gap: 12px; padding: 20px 24px;
+    & header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    & h3 { margin: 0; font-size: 18px; font-weight: 600; }
+    & > p { margin: 0; }
+  }
+  .survey-answers-list {
+    display: grid; gap: 18px; margin: 0;
+    & dt { font-weight: 600; }
+    & dd { margin: 6px 0 0; }
+  }
+  .answer-chips {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none;
+    & span { display: inline-block; border: 2px solid var(--ink); border-radius: var(--radius-pill); padding: 3px 12px; font-size: 14px; line-height: 1.4; background: var(--yellow); }
+  }
+  .answer-scale { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .pips {
+    display: inline-flex; gap: 4px;
+    & span { inline-size: 22px; block-size: 12px; border: 1.5px solid var(--ink); border-radius: var(--radius-pill); background: var(--paper); }
+    & span[data-on] { background: var(--yellow); }
+    /* Not by colour alone: forced colours would drop the fill. */
+    @media (forced-colors: active) { & span[data-on] { forced-color-adjust: none; background: CanvasText; } }
+  }
+  .answer-rows {
+    display: grid; gap: 8px; margin: 0; padding: 0; list-style: none;
+    & li { display: grid; grid-template-columns: minmax(0, 16rem) minmax(0, 1fr); align-items: center; gap: 12px; }
+  }
+  .answer-split { display: grid; gap: 12px; }
+  .answer-split-head { font-weight: 600; display: block !important; }
+  .answer-quote { margin: 0; padding: 8px 0 8px 16px; border-inline-start: 4px solid var(--yellow); font-size: 18px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
 
   /* ---------- Survey results ---------- */
 
@@ -830,6 +865,8 @@
   @media (max-width: 560px) {
     .survey-head { grid-template-columns: minmax(0, 1fr); & .sheet-logo { grid-row: 1; inline-size: 96px; } & h1 { font-size: 32px; } }
     .survey-question { padding: 16px; }
+    .survey-answers-step { padding: 16px; }
+    .answer-rows li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   }
 }
 

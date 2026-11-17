@@ -87,6 +87,17 @@ test('a browser answers step by step, submits, sees its own summary and can chan
   expect(summary).toContain('I hand off a whole task and review the result');
   expect(summary).toContain('Next rung: “I run several agents at once”');
   expect(summary).toContain('3–8 hours');
+  // Every answer can be read back, step by step, with a way to change each step, and no detour to My map.
+  expect(summary).toContain('Your answers');
+  expect(summary).toContain('Synthetic wish');
+  expect(summary).toContain('href="/company-a/survey/3"');
+  expect(summary).not.toContain('My map');
+  // Answers are drawn: a scale as pips up to the answer, picks as chips, free text as a quote.
+  expect(summary).toMatch(/<span class="pips" aria-hidden="true">(<span data-on=""><\/span>){4}<span><\/span><\/span><span>3–8 hours<span class="visually-hidden">, 4 of 5<\/span>/);
+  expect(summary).toContain('<ul class="answer-chips"><li><span>Claude Code</span></li></ul>');
+  expect(summary).toContain('<blockquote class="answer-quote">Synthetic wish</blockquote>');
+  // Coming back after submitting shows the summary, not the start.
+  expect((await me('/company-a/survey')).headers.get('Location')).toBe('/company-a/survey/done');
   // Changing an answer keeps one response, still submitted.
   await step(me, 3, { revision: String(await revisionOf(me, 3)), autonomy: 'parallel' }, 'next');
   expect((await store.keys('response:')).length).toBe(1);

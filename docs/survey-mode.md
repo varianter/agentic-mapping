@@ -34,9 +34,9 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 
 | Route | Who | What |
 | --- | --- | --- |
-| `/<group>/survey` | Anyone | Intro for the open wave, or "no survey open" |
+| `/<group>/survey` | Anyone | Intro for the open wave (the summary once submitted), or "no survey open" |
 | `/<group>/survey/:step` | Anyone | One step; POST saves; `?go=` next, back or submit moves on |
-| `/<group>/survey/done` | Anyone | The mirror after Submit |
+| `/<group>/survey/done` | Anyone | The mirror after Submit, then every answer per step with a link to change it |
 | `/<group>/waves` | Admin | Waves list, open a new one, the survey link |
 | `/<group>/waves/:id` | Admin | Results, close/reopen |
 | `/<group>/waves/:id.csv` | Admin | CSV of submitted responses |

@@ -1,6 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { Group } from '../domain/groups';
-import { AUTONOMY, labelOf, otherField, phrase, rowField, rowsFor, groupTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
+import { AUTONOMY, labelOf, type ReadAnswer, otherField, phrase, readAnswers, rowField, rowsFor, groupTotal, subjectOf, tierField, type Question, type Subject, type Survey, type SurveyAnswers } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import type { FormState } from '../framework/formAction';
@@ -24,8 +24,8 @@ function Head({ group, title, children }: { group: Group; title: string; childre
   );
 }
 
-// The start: what it is, how long it takes, and what happens to the answers.
-export function IntroPage({ group, wave, survey, submitted, revision }: SurveyProps) {
+// The start: what it is, how long it takes, and what happens to the answers. Once submitted, the summary instead.
+export function IntroPage({ group, wave, survey, revision }: SurveyProps) {
   const path = surveyPath(group);
   return (
     <Layout title="Survey">
@@ -39,14 +39,7 @@ export function IntroPage({ group, wave, survey, submitted, revision }: SurveyPr
         </ul>
         <p class="hint">{`Wave: ${wave.name}`}</p>
         <div class="actions survey-start">
-          {submitted ? (
-            <>
-              <a class="btn" data-variant="primary" href={`${path}/done`}>See your summary</a>
-              <a class="btn" href={`${path}/1`}>Change your answers</a>
-            </>
-          ) : (
-            <a class="btn" data-variant="primary" href={`${path}/1`} id="survey-start">{revision ? 'Continue' : 'Start'}</a>
-          )}
+          <a class="btn" data-variant="primary" href={`${path}/1`} id="survey-start">{revision ? 'Continue' : 'Start'}</a>
         </div>
       </main>
     </Layout>
@@ -59,7 +52,6 @@ export function NoSurveyPage({ group }: { group: Group }) {
       <main class="notice">
         <h1>No survey is open right now</h1>
         <p>{`${group.name} has no open survey. Use the same link again when you’re asked to answer.`}</p>
-        <p><a class="btn" href={`/${group.slug}`}>Go to My map</a></p>
       </main>
     </Layout>
   );
@@ -247,7 +239,45 @@ export function StepPage({ group, wave, survey, answers, revision, index, form }
   );
 }
 
-// After Submit: the respondent's own answers mirrored back, with the next rung to reach for. No comparisons.
+// A step on a scale: filled pips up to the answer, then the answer in words. Off the scale ("Don’t know"), just the words.
+function Pips({ label, at, of }: { label: string; at: number; of: number }) {
+  if (!at) return <span class="answer-chips"><span>{label}</span></span>;
+  return (
+    <span class="answer-scale">
+      <span class="pips" aria-hidden="true">{Array.from({ length: of }, (_, i) => <span data-on={i < at ? '' : undefined} />)}</span>
+      <span>{label}<span class="visually-hidden">{`, ${at} of ${of}`}</span></span>
+    </span>
+  );
+}
+
+// One answer drawn by its shape, the same way every time, so answers can be scanned.
+function Drawn({ answer }: { answer: ReadAnswer }) {
+  if (answer.kind === 'text') return <blockquote class="answer-quote">{answer.text}</blockquote>;
+  if (answer.kind === 'scale') return <Pips {...answer} />;
+  if (answer.kind === 'chips') return <ul class="answer-chips">{answer.items.map((item) => <li><span>{item}</span></li>)}</ul>;
+  if (answer.kind === 'rows') {
+    return <ul class="answer-rows">{answer.rows.map((row) => <li><span>{row.row}</span><Pips {...row} /></li>)}</ul>;
+  }
+  return (
+    <div class="answer-split">
+      {answer.groups.map((group) => (
+        <ul class="results-bars" aria-label={group.label}>
+          <li class="answer-split-head">{group.label}</li>
+          {group.tiers.map((item) => (
+            <li>
+              <span class="results-label">{item.label}</span>
+              <progress max="100" value={item.percent} aria-label={`${group.label}, ${item.label}: ${item.percent}%`}>{`${item.percent}%`}</progress>
+              <span class="results-count">{`${item.percent}%`}</span>
+            </li>
+          ))}
+        </ul>
+      ))}
+    </div>
+  );
+}
+
+// After Submit, and on coming back: the respondent's own answers mirrored back, with the next rung to reach for,
+// then every answer step by step, all shown, each step with a link to change it. No comparisons.
 export function DonePage({ group, wave, survey, answers }: SurveyProps) {
   const path = surveyPath(group);
   const questions = survey.steps.flatMap((step) => step.questions);
@@ -284,9 +314,29 @@ export function DonePage({ group, wave, survey, answers }: SurveyProps) {
           {answer('blocker') && <div><dt>What holds you back</dt><dd>{answer('blocker')}</dd></div>}
           {answer('expectation') && <div><dt>{subjectOf(answers) === 'own' ? 'Your organization' : 'Your customer'}</dt><dd>{answer('expectation')}</dd></div>}
         </dl>
+        <section class="survey-answers" aria-labelledby="answers-label">
+          <h2 class="survey-prompt" id="answers-label">Your answers</h2>
+          {readAnswers(survey, answers).map((step, i) => (
+            <section class="survey-answers-step" aria-labelledby={`answers-step-${i + 1}`}>
+              <header>
+                <h3 id={`answers-step-${i + 1}`}>{step.title}</h3>
+                <a class="btn" href={`${path}/${i + 1}`} aria-label={`Change “${step.title}”`}>Change</a>
+              </header>
+              {step.answers.length > 0 ? (
+                <dl class="survey-answers-list">
+                  {step.answers.map((answer) => (
+                    <div>
+                      <dt>{answer.prompt}</dt>
+                      <dd><Drawn answer={answer} /></dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : <p class="hint">Nothing answered.</p>}
+            </section>
+          ))}
+        </section>
         <div class="actions survey-start">
           <a class="btn" href={`${path}/1`}>Change your answers</a>
-          <a class="btn" href={`/${group.slug}`}>Go to My map</a>
         </div>
       </main>
     </Layout>

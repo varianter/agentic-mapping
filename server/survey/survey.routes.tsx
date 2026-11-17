@@ -93,6 +93,8 @@ async function step(c: Context<AppEnv>) {
 async function intro(c: Context<AppEnv>) {
   const loaded = await load(c);
   if (loaded instanceof Response) return loaded;
+  // Once submitted, coming back shows the summary, with the answers and a way to change them.
+  if (loaded.submitted) return c.redirect(`/${loaded.group.slug}/survey/done`, 303);
   return c.render(<IntroPage {...loaded} />);
 }
 

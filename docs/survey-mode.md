@@ -11,7 +11,7 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 - **Steps.** Six short pages, each a real URL that saves on Next/Back (plain form posts; `<autosave-form>` saves as you go). Submit marks the response complete; only submitted responses count.
 - **Pedagogic form.** Behaviourally anchored options tied to a recent time window, not bare 1–5 scales. Every option is a sentence describing a concrete state. After Submit, a mirror shows the respondent's rung on the autonomy ladder and what the next rung looks like.
 - **Customer or own organization.** Step 1 asks who you mainly work for. The context step then asks about "your customer" or "your organization", stored with the response so results never mix the two. Only industry and product-development size, never names.
-- **Results** per wave for admins: distributions per question, filter by role, hidden below 5 responses; free text listed. CSV export of submitted responses.
+- **Results** per wave for admins: distributions per question, filter by role; free text listed. CSV export of submitted responses.
 - English only. Comparing waves is a later step.
 
 ## Questionnaire (v1)

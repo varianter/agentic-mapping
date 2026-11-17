@@ -2,21 +2,17 @@ import { groupTotal, otherField, phrase, rowField, SIZES, surveyFields, tierFiel
 import { listItems } from './fields';
 import type { SurveyResponse } from './waves';
 
-// Fewer answers than this are never shown, so a filter can't single out one person.
-export const MIN_RESPONSES = 5;
-
 export type Tally = Option & { count: number };
 export type QuestionResult =
   | { kind: 'choice'; question: Question; multi: boolean; answered: number; tallies: Tally[]; others: string[] }
-  // A row some roles skip can have fewer answers than its section: it's hidden on its own, counts and all.
-  | { kind: 'matrix'; question: Question; rows: { label: string; answered: number; hidden: boolean; tallies: Tally[] }[] }
+  | { kind: 'matrix'; question: Question; rows: { label: string; answered: number; tallies: Tally[] }[] }
   | { kind: 'text'; question: Question; answers: string[] }
   | { kind: 'shares'; question: Question; answered: number; providers: Provider[]; sizes: Share[] };
 // The average share over the splits that add up to 100; `users` is how many of them gave it more than 0%.
 export type Provider = { label: string; answered: number; tiers: Share[] };
 export type Share = { label: string; users: number; average: number };
 // The context step is split by who it's about, so customers and own organizations never mix.
-export type Section = { title: string; subject: Subject; n: number; hidden: boolean; questions: QuestionResult[] };
+export type Section = { title: string; subject: Subject; n: number; questions: QuestionResult[] };
 
 const values = (answers: SurveyAnswers, name: string) => [answers[name] ?? []].flat().filter(Boolean);
 const tally = (options: Option[], picked: string[][]): Tally[] => options.map((item) => ({ ...item, count: picked.filter((list) => list.includes(item.value)).length }));
@@ -63,8 +59,7 @@ function result(question: Question, responses: SurveyResponse[], subject: Subjec
       kind: 'matrix', question,
       rows: question.rows.map((row) => {
         const picked = responses.map((response) => values(response.answers, rowField(question, row))).filter((list) => list.length);
-        const hidden = picked.length > 0 && picked.length < MIN_RESPONSES;
-        return { label: phrase(row.label, subject), answered: hidden ? 0 : picked.length, hidden, tallies: tally(question.options, hidden ? [] : picked) };
+        return { label: phrase(row.label, subject), answered: picked.length, tallies: tally(question.options, picked) };
       }),
     };
   }
@@ -74,7 +69,7 @@ function result(question: Question, responses: SurveyResponse[], subject: Subjec
 }
 
 const section = (step: Step, responses: SurveyResponse[], subject: Subject, title = phrase(step.title, subject)): Section => ({
-  title, subject, n: responses.length, hidden: responses.length < MIN_RESPONSES, questions: step.questions.map((question) => result(question, responses, subject)),
+  title, subject, n: responses.length, questions: step.questions.map((question) => result(question, responses, subject)),
 });
 
 // Submitted responses only, optionally one role's. Context questions are worded for who they're about.
@@ -84,7 +79,7 @@ export function summarize(survey: Survey, responses: SurveyResponse[], { role }:
   const sections = survey.steps.flatMap((step) => (step.key === 'context'
     ? [section(step, about('customer'), 'customer', 'About customers'), section(step, about('own'), 'own', 'About their own organization')]
     : [section(step, included, 'customer')]));
-  return { n: included.length, hidden: included.length < MIN_RESPONSES, sections };
+  return { n: included.length, sections };
 }
 
 // One row per submitted response, one column per answer, in questionnaire order. Lists are joined with "; ".

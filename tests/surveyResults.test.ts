@@ -11,27 +11,27 @@ const response = (answers: SurveyResponse['answers'], submitted = true): SurveyR
 const many = (count: number, answers: SurveyResponse['answers']) => Array.from({ length: count }, () => response(answers));
 const question = (summary: ReturnType<typeof summarize>, title: string, name: string) => summary.sections.find((section) => section.title === title)!.questions.find((result) => result.question.name === name)!;
 
-test('results count submitted answers per option, split context answers by subject and hide small groups', () => {
+test('results count submitted answers per option, split context answers by subject and show small groups', () => {
   const responses = [
     ...many(4, { role: 'developer', context: 'customer', autonomy: 'handoff', models: ['claude', 'gpt'], expectation: 'expects' }),
     ...many(2, { role: 'ux', context: 'own', autonomy: 'chat', models: ['gpt'], expectation: 'neutral' }),
     response({ role: 'ux', autonomy: 'workflow' }, false),
   ];
   const summary = summarize(SURVEY_V1, responses);
-  expect(summary).toMatchObject({ n: 6, hidden: false });
+  expect(summary).toMatchObject({ n: 6 });
   const autonomy = question(summary, 'Models and tools', 'autonomy');
   expect(autonomy.kind === 'choice' && autonomy.tallies.filter((item) => item.count).map((item) => [item.value, item.count])).toEqual([['chat', 2], ['handoff', 4]]);
   const models = question(summary, 'Models and tools', 'models');
   expect(models.kind === 'choice' && models.tallies.find((item) => item.value === 'gpt')!.count).toBe(6);
   const customers = summary.sections.find((section) => section.title === 'About customers')!;
   const own = summary.sections.find((section) => section.title === 'About their own organization')!;
-  expect([customers.n, customers.hidden, own.n, own.hidden]).toEqual([4, true, 2, true]);
-  // A row only some roles answer is hidden on its own when fewer than five did.
+  expect([customers.n, own.n]).toEqual([4, 2]);
+  // A row only some roles answer shows its own count, however few did.
   const tasks = question(summarize(SURVEY_V1, [...many(1, { role: 'developer', task_code: 'default' }), ...many(4, { role: 'ui', task_visual: 'regular' })]), 'How often', 'task');
-  expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')).toMatchObject({ hidden: true, answered: 0 });
-  expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')!.tallies.every((item) => !item.count)).toBe(true);
-  // A role filter under five answers hides everything.
-  expect(summarize(SURVEY_V1, responses, { role: 'ux' })).toMatchObject({ n: 2, hidden: true });
+  expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')).toMatchObject({ answered: 1 });
+  expect(tasks.kind === 'matrix' && tasks.rows.find((row) => row.label === 'Writing code')!.tallies.find((item) => item.value === 'default')!.count).toBe(1);
+  // A role filter with few answers still shows them.
+  expect(summarize(SURVEY_V1, responses, { role: 'ux' })).toMatchObject({ n: 2 });
 });
 
 test('interviewers read a wave’s results; drafts are counted apart and never shown', async () => {
@@ -50,7 +50,7 @@ test('interviewers read a wave’s results; drafts are counted apart and never s
   expect(page).toContain('I run several agents at once: 5 of 5');
   expect(page).toContain('Synthetic wish');
   const filtered = await (await owner(`/company-a/waves/${waveId}?role=ux`)).text();
-  expect(filtered).toContain('id="results-hidden"');
+  expect(filtered).not.toContain('Fewer than');
   expect(filtered).not.toContain('Synthetic wish');
   expect((await owner('/company-a/waves/00000000-0000-0000-0000-000000000000')).status).toBe(404);
 });

@@ -1,14 +1,13 @@
 import type { Group } from '../domain/groups';
-import { MIN_RESPONSES, type QuestionResult, type Section, type Share, type Tally } from '../domain/surveyResults';
+import { type QuestionResult, type Section, type Share, type Tally } from '../domain/surveyResults';
 import { phrase, ROLES, type Subject } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
-export type ResultsProps = { group: Group; wave: Wave; role: string; n: number; opened: number; drafts: number; hidden: boolean; sections: Section[] };
+export type ResultsProps = { group: Group; wave: Wave; role: string; n: number; opened: number; drafts: number; sections: Section[] };
 
 const percent = (count: number, of: number) => (of ? Math.round((count / of) * 100) : 0);
-const tooFew = `Fewer than ${MIN_RESPONSES} answers: hidden, so nobody can be singled out.`;
 
 // One bar per option, in the questionnaire's order: the scales are ordered, so sorting by count would hide that.
 function Bars({ tallies, of }: { tallies: Tally[]; of: number }) {
@@ -80,12 +79,8 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
               {result.rows.map((row) => (
                 <tr>
                   <th scope="row">{row.label}</th>
-                  {row.hidden
-                    ? <td colspan={row.tallies.length + 1}>{`Fewer than ${MIN_RESPONSES} answers: hidden.`}</td>
-                    : <>
-                      {row.tallies.map((item) => <td data-share={Math.min(4, Math.ceil(percent(item.count, row.answered) / 25))}>{row.answered ? `${percent(item.count, row.answered)}%` : '–'}</td>)}
-                      <td>{row.answered}</td>
-                    </>}
+                  {row.tallies.map((item) => <td data-share={Math.min(4, Math.ceil(percent(item.count, row.answered) / 25))}>{row.answered ? `${percent(item.count, row.answered)}%` : '–'}</td>)}
+                  <td>{row.answered}</td>
                 </tr>
               ))}
             </tbody>
@@ -104,8 +99,8 @@ function Result({ result, subject }: { result: QuestionResult; subject: Subject 
   );
 }
 
-// A wave's results for interviewers: submitted answers only, filterable by role, small groups hidden.
-export function ResultsPage({ group, wave, role, n, opened, drafts, hidden, sections }: ResultsProps) {
+// A wave's results for interviewers: submitted answers only, filterable by role.
+export function ResultsPage({ group, wave, role, n, opened, drafts, sections }: ResultsProps) {
   const base = `/${group.slug}/waves/${wave.id}`;
   return (
     <Layout title={`Results · ${wave.name}`}>
@@ -131,10 +126,10 @@ export function ResultsPage({ group, wave, role, n, opened, drafts, hidden, sect
           </form>
         </nav>
 
-        {hidden ? <p class="empty-note" id="results-hidden">{tooFew}</p> : sections.map((section) => (
+        {sections.map((section) => (
           <section class="results-section" aria-label={section.title}>
             <h2>{section.title} <span class="hint">{`${section.n} ${section.n === 1 ? 'answer' : 'answers'}`}</span></h2>
-            {section.hidden ? <p class="empty-note">{tooFew}</p> : section.questions.map((result) => <Result result={result} subject={section.subject} />)}
+            {section.questions.map((result) => <Result result={result} subject={section.subject} />)}
           </section>
         ))}
 

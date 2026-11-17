@@ -732,7 +732,7 @@
   model-shares:not([data-ready]) .share-group:not([data-ticked]) legend::after { content: " (only if you ticked it above)"; font-weight: 400; color: var(--grey-600); }
 
   /* Next comes first in the form (Enter moves on) and on screen, so the focus order matches. */
-  .survey-nav { display: flex; gap: 12px; margin-block-start: 8px; }
+  .survey-nav { display: flex; justify-content: space-between; gap: 12px; margin-block-start: 8px; }
 
   .ladder {
     display: flex; flex-direction: column-reverse; gap: 6px; margin: 0; padding: 0; list-style: none;

@@ -174,7 +174,8 @@ function Options({ question, values, subject }: { question: Question; values: Su
 }
 
 // One step: a real form that saves on Next and Back (and as you type, with <autosave-form>).
-// Next comes first in the form, so pressing Enter moves on, and first on screen, so focus follows what you see.
+// Back sits left and Next right, in that DOM order, so the buttons follow the direction of travel and focus follows what you see.
+// A hidden copy of Next comes first in the form, so it is the default button and pressing Enter moves on, not back.
 // After a refused Next, the title says so, the summary links each question in error and each question says why.
 export function StepPage({ group, wave, survey, answers, revision, index, form }: SurveyProps & { index: number; form: FormState }) {
   const step = survey.steps[index];
@@ -185,6 +186,8 @@ export function StepPage({ group, wave, survey, answers, revision, index, form }
   const path = surveyPath(group);
   const action = `${path}/${index + 1}`;
   const last = index === survey.steps.length - 1;
+  const forward = last ? 'submit' : 'next';
+  const forwardLabel = last ? 'Submit answers' : 'Next';
   const invalid = step.questions.filter((question) => form.fieldErrors[question.name]);
   const title = `${form.formError ? 'Error: ' : ''}${phrase(step.title, subject)} · Step ${index + 1} of ${survey.steps.length}`;
   return (
@@ -231,10 +234,9 @@ export function StepPage({ group, wave, survey, answers, revision, index, form }
                   );
                 })}
                 <div class="survey-nav">
-                  {last
-                    ? <button type="submit" class="btn" data-variant="primary" formaction={`${action}?go=submit`}>Submit answers</button>
-                    : <button type="submit" class="btn" data-variant="primary" formaction={`${action}?go=next`}>Next</button>}
+                  <button type="submit" class="visually-hidden" formaction={`${action}?go=${forward}`} tabindex={-1} aria-hidden="true">{forwardLabel}</button>
                   <button type="submit" class="btn" formaction={`${action}?go=back`} formnovalidate>Back</button>
+                  <button type="submit" class="btn" data-variant="primary" formaction={`${action}?go=${forward}`}>{forwardLabel}</button>
                 </div>
               </form>
             </autosave-form>

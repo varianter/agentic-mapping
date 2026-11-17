@@ -202,3 +202,15 @@ test('the model split shows every family without JS and holds you on the step un
   expect(await submit.text()).toContain('Step 3, “Models and tools”, has a split that doesn’t add up to 100%');
   expect((await store.get(key)).submittedAt).toBeUndefined();
 });
+
+test('Back sits before Next, and Enter still moves on', async () => {
+  const { owner, browser } = setup();
+  await groupWithWave(owner);
+  const me = browser();
+  for (const [n, forward] of [[1, 'next'], [6, 'submit']] as const) {
+    const html = await (await me(`/company-a/survey/${n}`)).text();
+    const gos = [...html.matchAll(/formaction="[^"]*\?go=(\w+)"/g)].map((match) => match[1]);
+    // The first submit button is the form's default, so Enter goes forward; on screen Back is left of the forward button.
+    expect(gos).toEqual([forward, 'back', forward]);
+  }
+});

@@ -31,11 +31,11 @@ export function IntroPage({ group, wave, survey, submitted, revision }: SurveyPr
     <Layout title="Survey">
       <main class="survey" id="survey-intro">
         <Head group={group} title="AI at work" />
-        <p class="survey-lead">How do you use AI in your work, and how far has the place you work for come? Your answers, together with everyone else’s, show where we are today; the next wave shows what changed.</p>
+        <p class="survey-lead">Survey on how you currently use AI in your work. This is ment for quantatative data collection on usage and how AI is used, individually and with customer / internally.</p>
         <ul class="survey-facts">
-          <li><strong>{`About ${survey.minutes} minutes`}</strong><span>{`${survey.steps.length} short steps, one page each.`}</span></li>
-          <li><strong>Anonymous</strong><span>No names: not yours, not your customer’s.</span></li>
-          <li><strong>Saved as you go</strong><span>This browser finds your answers again, so you can change them until the survey closes.</span></li>
+          <li><strong>{`About ${survey.minutes} minutes`}</strong><span>{`${survey.steps.length} steps`}</span></li>
+          <li><strong>Anonymous</strong><span>No names are stored but state is saved locally.</span></li>
+          <li><strong>Saved as you go</strong><span>This browser finds your answers again and you can change your answers until the survey closes.</span></li>
         </ul>
         <p class="hint">{`Wave: ${wave.name}`}</p>
         <div class="actions survey-start">
@@ -82,15 +82,15 @@ function Options({ question, values, subject }: { question: Question; values: Su
           <fieldset class="share-group" data-option={group.option} data-ticked={ticked.includes(group.option) ? '' : undefined}>
             <legend>{group.label}</legend>
             <div class="share-tiers">
-            {group.tiers.map((item) => {
-              const name = tierField(question, item);
-              return (
-                <label class="share-tier">
-                  <span>{item.label}</span>
-                  <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="1" inputmode="numeric" placeholder="0" /><span>%</span></span>
-                </label>
-              );
-            })}
+              {group.tiers.map((item) => {
+                const name = tierField(question, item);
+                return (
+                  <label class="share-tier">
+                    <span>{item.label}</span>
+                    <span class="share-input"><input type="number" name={name} value={text(values[name])} min="0" max="100" step="1" inputmode="numeric" placeholder="0" /><span>%</span></span>
+                  </label>
+                );
+              })}
             </div>
             <p class="share-total">Total: <output>{groupTotal(question, group, values)}</output>% of 100%</p>
           </fieldset>

@@ -1,5 +1,5 @@
 import { groupPrefix } from '../domain/groups';
-import { coverageCaption, groupLabel, preamble, summaryLine, toolsCaption, tooFewText, waveMeta, type Answer, type Insights, type Person } from '../domain/insights';
+import { coverageCaption, groupLabel, preamble, summaryLine, toolsCaption, waveMeta, type Answer, type Insights, type Person } from '../domain/insights';
 import { asset } from '../framework/assets';
 import { Layout } from '../shell/Layout';
 
@@ -161,7 +161,7 @@ export function InsightsPage({ insights }: { insights: Insights }) {
               <article class="insights-person" aria-labelledby={`wave-${i + 1}-heading`}>
                 <h3 id={`wave-${i + 1}-heading`}>{wave.name}</h3>
                 <p class="hint">{`${waveMeta(wave)}.`}</p>
-                {wave.hidden ? <p class="empty-note">{tooFewText}</p> : wave.questions.map((question) => (
+                {wave.questions.map((question) => (
                   <div class="insights-part">
                     <h4>{question.prompt}</h4>
                     {question.answers.length ? <ul class="results-texts">{question.answers.map((answer) => <li class="insights-text">{answer}</li>)}</ul> : <p class="hint">No answers.</p>}

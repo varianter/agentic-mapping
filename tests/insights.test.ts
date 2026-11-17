@@ -62,7 +62,7 @@ test('at a glance counts people per grid cell and the tools they list most', () 
   expect(stats.tools).toEqual([{ name: 'Claude Code', people: 2 }, { name: 'Figma', people: 2 }, { name: 'Aider', people: 1 }, { name: 'Cursor', people: 1 }, { name: 'Warp', people: 1 }]);
 });
 
-test('survey free text comes from submitted responses only, per wave, hidden under five', () => {
+test('survey free text comes from submitted responses only, per wave, however few', () => {
   const small = wave('2026 Q3', 1);
   const large = wave('2026 Q4', 2);
   const insights = compileInsights({
@@ -73,11 +73,8 @@ test('survey free text comes from submitted responses only, per wave, hidden und
       { wave: small, responses: responses(small.id, 4) },
     ],
   });
-  expect(insights.waves.map(({ name, n, hidden }) => ({ name, n, hidden }))).toEqual([
-    { name: '2026 Q3', n: 4, hidden: true },
-    { name: '2026 Q4', n: 5, hidden: false },
-  ]);
-  expect(insights.waves[0].questions).toEqual([]);
+  expect(insights.waves.map(({ name, n }) => ({ name, n }))).toEqual([{ name: '2026 Q3', n: 4 }, { name: '2026 Q4', n: 5 }]);
+  expect(insights.waves[0].questions[0].answers).toEqual(['Synthetic wish 1', 'Synthetic wish 2', 'Synthetic wish 3', 'Synthetic wish 4']);
   const [wish, workplace] = insights.waves[1].questions;
   expect(wish).toEqual({ prompt: 'One thing that would help you get more out of AI', answers: ['Synthetic wish 1', 'Synthetic wish 2', 'Synthetic wish 3', 'Synthetic wish 4', 'Synthetic wish 5'] });
   expect(workplace.answers).toEqual(Array(5).fill('Synthetic licences'));
@@ -130,7 +127,7 @@ test('interviewers read a group’s insights and download them as Markdown; nobo
   expect(html).toContain('Interview 1');
   expect(html).toContain('Self-submitted map 1');
   expect(html).toContain('Synthetic &lt;b&gt;surprise&lt;/b&gt;');
-  expect(html).toContain(`Hidden: fewer than 5 submitted responses`);
+  expect(html).not.toContain('Hidden: fewer than');
   expect(html).not.toContain('Synthetic answer elsewhere');
   // At a glance: counts, the grid as a table with row and column headers, and the tools as labelled bars.
   expect(html).toContain('<a href="#glance">At a glance</a>');

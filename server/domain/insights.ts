@@ -3,7 +3,6 @@ import { answersOf, DIMENSIONS, gridField, hasAnswers, LEVELS, listItems, QUESTI
 import type { Group } from './groups';
 import { listSheets, sourceOf, type Sheet } from './sheets';
 import { surveyFor } from './survey';
-import { MIN_RESPONSES } from './surveyResults';
 import { listResponses, listWaves, type SurveyResponse, type Wave } from './waves';
 
 // A group's qualitative answers in one place, for reading on screen and for an LLM outside the app: interviews and
@@ -12,7 +11,7 @@ import { listResponses, listWaves, type SurveyResponse, type Wave } from './wave
 export type Answer = { label?: string; text: string } | { label?: string; items: string[] };
 export type Part = { title: string; answers: Answer[] };
 export type Person = { title: string; parts: Part[] };
-export type WaveText = { name: string; version: number; status: Wave['status']; n: number; hidden: boolean; questions: { prompt: string; answers: string[] }[] };
+export type WaveText = { name: string; version: number; status: Wave['status']; n: number; questions: { prompt: string; answers: string[] }[] };
 // At a glance: how many people, which grid cells they answered (per dimension and level), the tools most listed.
 export type Stats = { people: number; responses: number; coverage: { dimension: string; levels: { level: string; people: number }[] }[]; tools: { name: string; people: number }[] };
 export type Insights = { group: Group | null; exportedAt: number; stats: Stats; interviews: Person[]; maps: Person[]; waves: WaveText[] };
@@ -56,15 +55,13 @@ const people = (sheets: Sheet[], noun: string) => sheets
   .toSorted((a, b) => a.createdAt - b.createdAt)
   .map((sheet, i) => person(`${noun} ${i + 1}`, sheet));
 
-// Only submitted responses, and only the survey's free-text questions. A wave under MIN_RESPONSES keeps its count
-// but not its text: a few answers can say who wrote them.
+// Only submitted responses, and only the survey's free-text questions.
 function waveText(wave: Wave, responses: SurveyResponse[]): WaveText {
   const submitted = responses.filter((response) => response.submittedAt).toSorted((a, b) => a.createdAt - b.createdAt);
-  const hidden = submitted.length < MIN_RESPONSES;
   const questions = surveyFor(wave.version).steps.flatMap((step) => step.questions).filter((question) => question.kind === 'text');
   return {
-    name: wave.name, version: wave.version, status: wave.status, n: submitted.length, hidden,
-    questions: hidden ? [] : questions.map((question) => ({
+    name: wave.name, version: wave.version, status: wave.status, n: submitted.length,
+    questions: questions.map((question) => ({
       prompt: question.prompt,
       answers: submitted.map((response) => response.answers[question.name]).filter((value): value is string => typeof value === 'string' && Boolean(value.trim())).map((value) => value.trim()),
     })),
@@ -128,7 +125,6 @@ const plural = (count: number, one: string, many = `${one}s`) => `${count} ${cou
 const day = (time: number) => new Date(time).toISOString().slice(0, 10);
 export const groupLabel = (group: Group | null) => group?.name ?? 'No group';
 export const insightsFileName = (insights: Insights) => `${insights.group?.slug ?? 'no-group'}-insights-${day(insights.exportedAt)}.md`;
-export const tooFewText = `Hidden: fewer than ${MIN_RESPONSES} submitted responses, so nobody can be singled out.`;
 export const waveMeta = (wave: WaveText) => `${wave.status === 'open' ? 'Open' : 'Closed'} wave, questionnaire v${wave.version}, ${plural(wave.n, 'submitted response')}`;
 
 // What the file holds and how to read it, built from the field tables so it never drifts from the sheet.
@@ -202,9 +198,9 @@ export function insightsMarkdown(insights: Insights) {
     ...section('Self-submitted maps', insights.maps, 'No self-submitted maps with answers.'),
     ...(insights.group ? ['## Survey free text', '', ...(insights.waves.length ? insights.waves.flatMap((wave) => [
       `### ${wave.name}`, '', `${waveMeta(wave)}.`, '',
-      ...(wave.hidden ? [tooFewText, ''] : wave.questions.flatMap((question) => [
+      ...wave.questions.flatMap((question) => [
         `#### ${question.prompt}`, '', ...(question.answers.length ? question.answers.map((answer) => `- ${indent(answer)}`) : ['No answers.']), '',
-      ])),
+      ]),
     ]) : ['No survey waves.', ''])] : []),
   ];
   return `${lines.join('\n').trimEnd()}\n`;

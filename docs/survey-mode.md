@@ -16,7 +16,7 @@ A short, repeatable, anonymous survey on AI and agentic adoption, beside the int
 
 ## Questionnaire (v2)
 
-As v1, with one required question first in **About you**: which Variant office you belong to (Oslo, Bergen, Trondheim, Stavanger, Stockholm, Göteborg, Linköping, or Group for the Variant Group). It makes offices comparable, such as industries per office. v1 waves keep v1. An open v1 wave can move to v2 by setting its `version` to 2 in the store (v2 only adds a question); anyone who already submitted sees the new question asked for on their summary page, and answering it keeps them submitted.
+As v1, with one required question first in **About you**: which Variant office you belong to (Oslo, Bergen, Trondheim, Stavanger, Stockholm, Göteborg, Linköping, or Group for the Variant Group). It makes offices comparable, such as industries per office. v1 waves keep v1. A v1 wave moves to v2 with **Move to v2: ask your office** on the waves page (v2 declares it only adds to v1, so no answer is lost); anyone who already submitted sees the new question asked for on their summary page, and answering it keeps them submitted.
 
 ## Questionnaire (v1)
 

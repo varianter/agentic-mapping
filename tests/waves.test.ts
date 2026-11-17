@@ -37,3 +37,24 @@ test('interviewers open one wave at a time in a group, close and reopen it; nobo
   expect(await (await owner('/company-a/interviews')).text()).toContain('href="/company-a/waves"');
   expect(await (await owner('/interviews')).text()).not.toContain('id="survey-link"');
 });
+
+test('an open v1 wave moves to v2, keeping its answers, so the survey asks for the office; nobody else can move it', async () => {
+  const { owner, send, store } = setup();
+  await groupWithWave(owner);
+  const [key] = await store.keys('wave:company-a:');
+  const id = key.split(':').pop()!;
+  await store.set(key, { ...(await store.get(key)), version: 1 });
+  await store.set(`response:${id}:a`, { id: 'a', waveId: id, version: 1, answers: { role: 'ux', context: 'own' }, createdAt: 1, updatedAt: 1, submittedAt: 1, revision: 1 });
+  const before = await (await owner('/company-a/waves')).text();
+  expect(before).toContain('questionnaire v1');
+  expect(before).toContain('Move to v2: ask your office');
+  expect((await send(`/company-a/waves/${id}/upgrade`, { method: 'POST', form: {} })).status).toBe(401);
+  expect((await owner(`/company-a/waves/${id}/upgrade`, { method: 'POST', form: {} })).status).toBe(303);
+  expect(await store.get(key)).toMatchObject({ version: 2, status: 'open' });
+  expect(await store.get(`response:${id}:a`)).toMatchObject({ answers: { role: 'ux', context: 'own' }, submittedAt: 1 });
+  const after = await (await owner('/company-a/waves')).text();
+  expect(after).toContain('questionnaire v2');
+  expect(after).not.toContain('Move to v2');
+  expect((await owner(`/company-a/waves/${id}/upgrade`, { method: 'POST', form: {} })).status).toBe(409);
+  expect(await (await owner(`/company-a/waves/${id}`)).text()).toContain('name="office"');
+});

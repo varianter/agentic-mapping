@@ -21,7 +21,8 @@ export type Question =
   | Base & { kind: 'shares'; from: string; groups: TierGroup[] }
   | Base & { kind: 'text' };
 export type Step = { key: string; title: string; intro: string; questions: Question[] };
-export type Survey = { version: number; minutes: number; steps: Step[] };
+// `upgrades`: an earlier version this one only adds questions to, so a wave on it can move here without losing answers.
+export type Survey = { version: number; minutes: number; steps: Step[]; upgrades?: { from: number; adds: string } };
 
 export type SurveyAnswers = Record<string, string | string[]>;
 // Who the context questions are about: the customer you mainly work for, or your own organization.
@@ -312,6 +313,7 @@ export const SURVEY_V1: Survey = {
 export const SURVEY_V2: Survey = {
   ...SURVEY_V1,
   version: 2,
+  upgrades: { from: 1, adds: 'your office' },
   steps: SURVEY_V1.steps.map((step) => (step.key === 'you'
     ? {
       ...step,
@@ -324,6 +326,8 @@ export const SURVEY_V2: Survey = {
 export const SURVEYS: Record<number, Survey> = { 1: SURVEY_V1, 2: SURVEY_V2 };
 export const LATEST_SURVEY = SURVEY_V2;
 export const surveyFor = (version: number) => SURVEYS[version] ?? LATEST_SURVEY;
+// The version a wave on `version` can move to, if any.
+export const upgradeFor = (version: number) => Object.values(SURVEYS).find((survey) => survey.upgrades?.from === version);
 
 // A matrix row is its own answer, `<question>_<row>`; "Other" options add a short text answer, `<question>_other`.
 export const rowField = (question: Question, row: Row) => `${question.name}_${row.key}`;

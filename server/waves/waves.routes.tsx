@@ -4,11 +4,12 @@ import type { Group } from '../domain/groups';
 import { waveSchema } from '../domain/schemas';
 import { surveyFor } from '../domain/survey';
 import { summarize, toCsv } from '../domain/surveyResults';
-import { countOpened, createWave, defaultWaveName, getWave, listResponses, listWaves, setWaveStatus, type Wave, type WaveStatus } from '../domain/waves';
+import { countOpened, createWave, defaultWaveName, getWave, listResponses, listWaves, setWaveStatus, upgradeWave, type Wave, type WaveResult } from '../domain/waves';
 import { requireAdmin } from '../framework/auth';
 import type { AppEnv } from '../framework/env';
 import { formAction } from '../framework/formAction';
 import { resolveGroup } from '../framework/group';
+import type { Store } from '../store';
 import { ResultsPage } from './results.view';
 import { WavesPage, type WaveRow } from './waves.view';
 
@@ -38,7 +39,7 @@ const create = formAction({
   view: WavesPage,
 });
 
-const status = (to: WaveStatus) => formAction({
+const change = (to: (store: Store, wave: Wave) => Promise<WaveResult>) => formAction({
   schema: z.strictObject({}),
   loader: async (c) => {
     const wave = await getWave(c.get('store'), groupOf(c).slug, c.req.param('id'));
@@ -46,7 +47,7 @@ const status = (to: WaveStatus) => formAction({
   },
   page,
   onSubmit: async (c, _data, { group, wave }: { group: Group; wave: Wave }) => {
-    const changed = await setWaveStatus(c.get('store'), wave, to);
+    const changed = await to(c.get('store'), wave);
     return changed.ok ? { redirect: `/${group.slug}/waves` } : { formError: changed.error, status: 409 };
   },
   view: ({ wave: _wave, ...props }) => <WavesPage {...props} />,
@@ -80,5 +81,6 @@ export const waveRoutes = new Hono<AppEnv>()
   .on(['GET', 'POST'], '/', create)
   .get('/:file{[0-9a-fA-F-]{36}\\.csv}', csv)
   .get('/:id', results)
-  .post('/:id/close', status('closed'))
-  .post('/:id/reopen', status('open'));
+  .post('/:id/close', change((store, wave) => setWaveStatus(store, wave, 'closed')))
+  .post('/:id/reopen', change((store, wave) => setWaveStatus(store, wave, 'open')))
+  .post('/:id/upgrade', change(upgradeWave));

@@ -1,6 +1,6 @@
 import type { Store } from '../store';
 import { hashCredential, isToken, newToken } from './credentials';
-import { LATEST_SURVEY, type SurveyAnswers } from './survey';
+import { LATEST_SURVEY, upgradeFor, type SurveyAnswers } from './survey';
 import { validId } from './sheets';
 
 // A wave is one round of the survey in a group: `wave:<group>:<id>` = { id, group, name, version, status, ... }.
@@ -58,6 +58,16 @@ export async function setWaveStatus(store: Store, wave: Wave, status: WaveStatus
   }
   const { closedAt: _closedAt, ...rest } = wave;
   const updated: Wave = status === 'closed' ? { ...rest, status, closedAt: Date.now() } : { ...rest, status };
+  await store.set(waveKey(wave.group, wave.id), updated);
+  return { ok: true, wave: updated };
+}
+
+// Moves a wave to the version that only adds questions to its own, such as asking the office in an open v1 wave.
+// Answers stay as they are; anyone who submitted is asked for the new required answers on their summary page.
+export async function upgradeWave(store: Store, wave: Wave): Promise<WaveResult> {
+  const next = upgradeFor(wave.version);
+  if (!next) return { ok: false, error: `${wave.name} is already on the latest questionnaire.` };
+  const updated: Wave = { ...wave, version: next.version };
   await store.set(waveKey(wave.group, wave.id), updated);
   return { ok: true, wave: updated };
 }

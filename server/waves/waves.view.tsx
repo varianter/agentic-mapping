@@ -1,4 +1,5 @@
 import type { Group } from '../domain/groups';
+import { upgradeFor } from '../domain/survey';
 import type { Wave } from '../domain/waves';
 import { asset } from '../framework/assets';
 import type { FormState } from '../framework/formAction';
@@ -49,11 +50,13 @@ export function WavesPage({ group, rows, origin, defaultName, form }: { group: G
 
         {rows.length > 0 && (
           <ul class="group-list" id="wave-list" aria-label="Waves">
-            {rows.map(({ wave, opened, submitted, drafts }) => (
+            {rows.map(({ wave, opened, submitted, drafts }) => {
+              const upgrade = upgradeFor(wave.version);
+              return (
               <li id={`wave-${wave.id}`}>
                 <div class="group-row-head">
                   <h2>{wave.name} <span class="pill" data-variant={wave.status}>{wave.status === 'open' ? 'Open' : 'Closed'}</span></h2>
-                  <p class="hint">{[`Opened ${day(wave.createdAt)}`, wave.closedAt && `closed ${day(wave.closedAt)}`, plural(opened, 'person opened it', 'people opened it'), plural(submitted, 'answer', 'answers'), drafts && `${drafts} in progress`].filter(Boolean).join(' · ')}</p>
+                  <p class="hint">{[`Opened ${day(wave.createdAt)}`, `questionnaire v${wave.version}`, wave.closedAt && `closed ${day(wave.closedAt)}`, plural(opened, 'person opened it', 'people opened it'), plural(submitted, 'answer', 'answers'), drafts && `${drafts} in progress`].filter(Boolean).join(' · ')}</p>
                 </div>
                 <nav class="group-row-links" aria-label={wave.name}>
                   <a class="btn" data-variant="small" href={`/${group.slug}/waves/${wave.id}`}>Results</a>
@@ -61,9 +64,15 @@ export function WavesPage({ group, rows, origin, defaultName, form }: { group: G
                   <form method="post" action={`/${group.slug}/waves/${wave.id}/${wave.status === 'open' ? 'close' : 'reopen'}`}>
                     <button type="submit" class="btn" data-variant="small">{wave.status === 'open' ? 'Close wave' : 'Reopen'}</button>
                   </form>
+                  {upgrade && (
+                    <form method="post" action={`/${group.slug}/waves/${wave.id}/upgrade`}>
+                      <button type="submit" class="btn" data-variant="small">{`Move to v${upgrade.version}: ask ${upgrade.upgrades!.adds}`}</button>
+                    </form>
+                  )}
                 </nav>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 

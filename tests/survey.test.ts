@@ -26,6 +26,14 @@ test('v2 asks for your Variant office first, and requires it; v1 stays as it was
   expect(surveyFields(SURVEY_V2)).toEqual(['office', ...surveyFields(SURVEY_V1)]);
 });
 
+test('a version that upgrades another keeps every question it had, with the same options', () => {
+  for (const survey of Object.values(SURVEYS)) {
+    if (!survey.upgrades) continue;
+    const later = new Map(survey.steps.flatMap((item) => item.questions).map((question) => [question.name, question]));
+    for (const question of SURVEYS[survey.upgrades.from].steps.flatMap((item) => item.questions)) expect(later.get(question.name)).toEqual(question);
+  }
+});
+
 test('a step accepts only its own questions and their options', () => {
   const schema = surveyStepSchema(step('tools'));
   expect(schema.safeParse({ revision: '0', wave: 'w', models: ['claude', 'gpt'], models_other: 'Synthetic', autonomy: 'handoff' }).data)
